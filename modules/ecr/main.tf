@@ -3,7 +3,7 @@ data "aws_region" "current" {}
 
 locals {
   default_settings = {
-    repository_force_delete         = true
+    repository_force_delete         = false
     repository_type                 = "private"
     repository_image_tag_mutability = "MUTABLE"
     repository_encryption_type      = null
@@ -45,7 +45,6 @@ EOF
   env_default_settings = {
     prod = merge(local.default_settings,
       {
-        repository_force_delete = false
     })
   }
 
