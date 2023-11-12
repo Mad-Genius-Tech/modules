@@ -59,10 +59,10 @@ variable "s3_buckets" {
     website = optional(object({
       index_document = optional(string)
       error_document = optional(string)
-      redirect_all_requests_to = optional(object({
-        host_name = optional(string)
-        protocol  = optional(string)
-      }))
+      # redirect_all_requests_to = optional(object({
+      #   host_name = optional(string)
+      #   protocol  = optional(string)
+      # }))
       routing_rules = optional(list(object({
         condition = optional(object({
           http_error_code_returned_equals = optional(string)
