@@ -60,7 +60,7 @@ resource "aws_elasticache_parameter_group" "parameter_group" {
   for_each    = local.redis_map
   name        = each.value.identifier
   description = "ElastiCache parameter group for ${each.value.identifier}"
-  family      = substr(each.value.engine_version, 0, 1) < 6 ? "redis${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}" : (substr(each.value.engine_version, 0, 1) ==6 ? "redis${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}.x" : "redis${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}")
+  family      = substr(each.value.engine_version, 0, 1) < 6 ? "redis${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}" : "redis${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}.x"
   dynamic "parameter" {
     for_each = each.value.parameters
     content {
