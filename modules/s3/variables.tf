@@ -63,19 +63,19 @@ variable "s3_buckets" {
       #   host_name = optional(string)
       #   protocol  = optional(string)
       # }))
-      routing_rules = optional(list(object({
-        condition = optional(object({
-          http_error_code_returned_equals = optional(string)
-          key_prefix_equals               = optional(string)
-        }))
-        redirect = optional(object({
-          host_name               = optional(string)
-          http_redirect_code      = optional(string)
-          protocol                = optional(string)
-          replace_key_prefix_with = optional(string)
-          replace_key_with        = optional(string)
-        }))
-      })))
+      # routing_rules = optional(list(object({
+      #   condition = optional(object({
+      #     http_error_code_returned_equals = optional(string)
+      #     key_prefix_equals               = optional(string)
+      #   }))
+      #   redirect = optional(object({
+      #     host_name               = optional(string)
+      #     http_redirect_code      = optional(string)
+      #     protocol                = optional(string)
+      #     replace_key_prefix_with = optional(string)
+      #     replace_key_with        = optional(string)
+      #   }))
+      # })))
     }))
     tags = optional(map(string))
   }))
