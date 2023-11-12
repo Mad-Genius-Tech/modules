@@ -2,7 +2,6 @@
 locals {
   default_role = [
     "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/terraform",
-    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/devops",
   ]
 
   default_settings = {
