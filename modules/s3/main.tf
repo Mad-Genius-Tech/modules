@@ -58,18 +58,18 @@ locals {
           {
             id      = "clear-versioned-assets"
             enabled = true
-            noncurrent_version_transition = [
-              {
-                days          = 30
-                storage_class = "STANDARD_IA"
-              },
-              {
-                days          = 60
-                storage_class = "ONEZONE_IA"
-              }
-            ]
+            # noncurrent_version_transition = [
+            #   {
+            #     days          = 30
+            #     storage_class = "STANDARD_IA"
+            #   },
+            #   {
+            #     days          = 60
+            #     storage_class = "ONEZONE_IA"
+            #   }
+            # ]
             noncurrent_version_expiration = {
-              days = 90
+              days = 30
             }
           }
         ]
