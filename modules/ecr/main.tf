@@ -3,6 +3,7 @@ data "aws_region" "current" {}
 
 locals {
   default_settings = {
+    repository_force_delete         = true
     repository_type                 = "private"
     repository_image_tag_mutability = "MUTABLE"
     repository_encryption_type      = null
@@ -44,6 +45,7 @@ EOF
   env_default_settings = {
     prod = merge(local.default_settings,
       {
+        repository_force_delete = false
     })
   }
 
@@ -53,6 +55,7 @@ EOF
     for k, v in var.ecr_repositories : k => {
       "identifier"                      = "${module.context.id}-${k}"
       "create"                          = coalesce(lookup(v, "create", null), true)
+      "repository_force_delete"         = try(coalesce(lookup(v, "repository_force_delete", null), local.merged_default_settings.repository_force_delete), local.merged_default_settings.repository_force_delete)
       "repository_type"                 = try(coalesce(lookup(v, "repository_type", null), local.merged_default_settings.repository_type), local.merged_default_settings.repository_type)
       "repository_image_tag_mutability" = try(coalesce(lookup(v, "repository_image_tag_mutability", null), local.merged_default_settings.repository_image_tag_mutability), local.merged_default_settings.repository_image_tag_mutability)
       "repository_encryption_type"      = try(coalesce(lookup(v, "repository_encryption_type", null), local.merged_default_settings.repository_encryption_type), local.merged_default_settings.repository_encryption_type)
@@ -73,6 +76,7 @@ module "ecr_repository" {
   version                         = "~> 1.6.0"
   create                          = each.value.create
   create_repository               = each.value.create
+  repository_force_delete         = each.value.repository_force_delete
   repository_name                 = each.key
   repository_type                 = each.value.repository_type
   repository_image_tag_mutability = each.value.repository_image_tag_mutability
