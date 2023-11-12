@@ -15,7 +15,7 @@ data "aws_region" "current" {}
 
 locals {
   lambda_layer = {
-    "us-east-1" =	"arn:aws:lambda:us-east-1:668099181075:layer:AWSLambda-Python-AWS-SDK:4"
+    "us-east-1" = "arn:aws:lambda:us-east-1:668099181075:layer:AWSLambda-Python-AWS-SDK:4"
     "us-west-2" = "arn:aws:lambda:us-west-2:420165488524:layer:AWSLambda-Python-AWS-SDK:5"
   }
 }

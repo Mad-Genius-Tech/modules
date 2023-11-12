@@ -17,9 +17,9 @@ module "server" {
     LAMBDA_CONFIG_AWS_REGION   = data.aws_region.current.name
     HOME                       = "/tmp"
   }
-  package_type  = "Image"
-  image_uri     = var.image_uri
-  tags          = local.tags
+  package_type = "Image"
+  image_uri    = var.image_uri
+  tags         = local.tags
 }
 
 resource "aws_cloudwatch_event_rule" "cron" {

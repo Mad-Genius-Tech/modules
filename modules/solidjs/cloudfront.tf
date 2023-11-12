@@ -133,12 +133,12 @@ resource "aws_cloudfront_distribution" "website_distribution" {
     viewer_protocol_policy = "redirect-to-https"
   }
   default_cache_behavior {
-    allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
-    cached_methods           = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id         = local.server_function_origin
-    compress                 = true
-    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
-    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    target_origin_id       = local.server_function_origin
+    compress               = true
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
+    viewer_protocol_policy = "redirect-to-https"
   }
 
 }

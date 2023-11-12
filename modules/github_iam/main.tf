@@ -3,8 +3,8 @@ data "aws_caller_identity" "current" {}
 
 locals {
   default_settings = {
-    github_org_name = "Mad-Genius-Tech"
-    policy          = {}
+    github_org_name        = ""
+    policy                 = {}
     enable_ecs_task_policy = false
   }
 
@@ -18,11 +18,11 @@ locals {
 
   github_map = {
     for k, v in var.github_repos : k => {
-      "identifier"       = "${module.context.id}-${k}"
-      "create"           = coalesce(lookup(v, "create", null), true)
-      "github_org_name"  = coalesce(lookup(v, "github_org_name", null), local.merged_default_settings.github_org_name)
-      "github_repo_name" = v.github_repo_name
-      "policy"           = coalesce(lookup(v, "policy", null), local.merged_default_settings.policy)
+      "identifier"             = "${module.context.id}-${k}"
+      "create"                 = coalesce(lookup(v, "create", null), true)
+      "github_org_name"        = v.github_org_name
+      "github_repo_name"       = v.github_repo_name
+      "policy"                 = coalesce(lookup(v, "policy", null), local.merged_default_settings.policy)
       "enable_ecs_task_policy" = coalesce(lookup(v, "enable_ecs_task_policy", null), local.merged_default_settings.enable_ecs_task_policy)
     } if coalesce(lookup(v, "create", null), true)
   }
@@ -129,7 +129,7 @@ resource "aws_iam_role_policy_attachment" "ecs_policy_attachment" {
 }
 
 resource "aws_iam_policy" "ecs_policy" {
-  for_each   = { for k, v in local.github_map : k => v if v.create && v.enable_ecs_task_policy }
+  for_each    = { for k, v in local.github_map : k => v if v.create && v.enable_ecs_task_policy }
   name        = "${each.value.identifier}-ecs"
   path        = "/"
   description = "Github ECS task update policy"
