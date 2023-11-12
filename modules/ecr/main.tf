@@ -1,12 +1,16 @@
-locals {
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
+locals {
   default_settings = {
     repository_type                 = "private"
     repository_image_tag_mutability = "MUTABLE"
     repository_encryption_type      = null
     repository_image_scan_on_push   = false
     attach_repository_policy        = false
-    repository_policy               = <<EOF
+    repository_policy               = null
+    enable_lambda_download          = false
+    lamda_repository_policy         = <<EOF
 {
   "Version": "2008-10-17",
   "Statement": [
@@ -25,7 +29,7 @@ locals {
       ],
       "Condition": {
         "StringLike": {
-          "aws:sourceArn": "arn:aws:lambda:us-west-2:984354004683:function:*"
+          "aws:sourceArn": "arn:aws:${data.aws_region.current.name}:lambda::${data.aws_caller_identity.current.account_id}:function:*"
         }
       }
     }
@@ -55,6 +59,7 @@ EOF
       "repository_image_scan_on_push"   = try(coalesce(lookup(v, "repository_image_scan_on_push", null), local.merged_default_settings.repository_image_scan_on_push), local.merged_default_settings.repository_image_scan_on_push)
       "attach_repository_policy"        = try(coalesce(lookup(v, "attach_repository_policy", null), local.merged_default_settings.attach_repository_policy), local.merged_default_settings.attach_repository_policy)
       "repository_policy"               = try(coalesce(lookup(v, "repository_policy", null), local.merged_default_settings.repository_policy), local.merged_default_settings.repository_policy)
+      "enable_lambda_download"          = try(coalesce(lookup(v, "enable_lambda_download", null), false), false)
       "create_repository_policy"        = try(coalesce(lookup(v, "create_repository_policy", null), local.merged_default_settings.create_repository_policy), local.merged_default_settings.create_repository_policy)
       "create_lifecycle_policy"         = try(coalesce(lookup(v, "create_lifecycle_policy", null), local.merged_default_settings.create_lifecycle_policy), local.merged_default_settings.create_lifecycle_policy)
       "repository_lifecycle_policy"     = try(coalesce(lookup(v, "repository_lifecycle_policy", null), local.merged_default_settings.repository_lifecycle_policy), local.merged_default_settings.repository_lifecycle_policy)
@@ -74,7 +79,7 @@ module "ecr_repository" {
   repository_encryption_type      = each.value.repository_encryption_type
   repository_image_scan_on_push   = each.value.repository_image_scan_on_push
   attach_repository_policy        = each.value.attach_repository_policy
-  repository_policy               = each.value.repository_policy
+  repository_policy               = each.value.enable_lambda_download ? local.default_settings.lamda_repository_policy : each.value.repository_policy
   create_repository_policy        = each.value.create_repository_policy
   create_lifecycle_policy         = each.value.create_lifecycle_policy
   repository_lifecycle_policy     = each.value.repository_lifecycle_policy
