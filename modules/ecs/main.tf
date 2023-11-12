@@ -75,14 +75,14 @@ locals {
 
   ecs_map = {
     for k, v in var.ecs_services : k => {
-      "identifier"                             = "${module.context.id}-${k}"
-      "create"                                 = coalesce(lookup(v, "create", null), true)
-      "desired_count"                          = try(coalesce(lookup(v, "desired_count", null), local.merged_default_settings.desired_count), local.merged_default_settings.desired_count)
-      "fluentbit_cpu"                          = try(coalesce(lookup(v, "fluentbit_cpu", null), local.merged_default_settings.fluentbit_cpu), local.merged_default_settings.fluentbit_cpu)
-      "fluentbit_memory"                       = try(coalesce(lookup(v, "fluentbit_memory", null), local.merged_default_settings.fluentbit_memory), local.merged_default_settings.fluentbit_memory)
-      "container_image"                        = v.container_image
-      "container_cpu"                          = try(coalesce(lookup(v, "container_cpu", null), local.merged_default_settings.container_cpu), local.merged_default_settings.container_cpu)
-      "container_memory"                       = try(coalesce(lookup(v, "container_memory", null), local.merged_default_settings.container_memory), local.merged_default_settings.container_memory)
+      "identifier"       = "${module.context.id}-${k}"
+      "create"           = coalesce(lookup(v, "create", null), true)
+      "desired_count"    = try(coalesce(lookup(v, "desired_count", null), local.merged_default_settings.desired_count), local.merged_default_settings.desired_count)
+      "fluentbit_cpu"    = try(coalesce(lookup(v, "fluentbit_cpu", null), local.merged_default_settings.fluentbit_cpu), local.merged_default_settings.fluentbit_cpu)
+      "fluentbit_memory" = try(coalesce(lookup(v, "fluentbit_memory", null), local.merged_default_settings.fluentbit_memory), local.merged_default_settings.fluentbit_memory)
+      "container_image"  = v.container_image
+      "container_cpu"    = try(coalesce(lookup(v, "container_cpu", null), local.merged_default_settings.container_cpu), local.merged_default_settings.container_cpu)
+      "container_memory" = try(coalesce(lookup(v, "container_memory", null), local.merged_default_settings.container_memory), local.merged_default_settings.container_memory)
       # "memory_reservation"                     = try(coalesce(lookup(v, "memory_reservation", null), local.merged_default_settings.memory_reservation), local.merged_default_settings.memory_reservation)
       "container_port"                         = try(coalesce(lookup(v, "container_port", null), local.merged_default_settings.container_port), local.merged_default_settings.container_port)
       "cloudwatch_log_group_retention_in_days" = try(coalesce(lookup(v, "cloudwatch_log_group_retention_in_days", null), local.merged_default_settings.cloudwatch_log_group_retention_in_days), local.merged_default_settings.cloudwatch_log_group_retention_in_days)
