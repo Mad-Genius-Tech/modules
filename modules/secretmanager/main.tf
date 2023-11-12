@@ -5,7 +5,7 @@ locals {
 
 resource "aws_secretsmanager_secret" "secret" {
   for_each = { for k, v in local.secrets_content : k => v if var.create }
-  name     = "${local.secret_prefix}/${each.key}"
+  name     = var.use_prefix ? "${local.secret_prefix}/${each.key}" : each.key
   tags     = local.tags
 }
 
