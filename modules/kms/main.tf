@@ -53,8 +53,4 @@ creation_rules:
     kms: "${module.kms["sops"].key_arn}"
 EOF
   depends_on = [module.kms]
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
