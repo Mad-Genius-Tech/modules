@@ -45,8 +45,8 @@ locals {
 }
 
 resource "local_file" "sops" {
-  count      = contains(keys(local.kms_map), "sops") ? length(local.sops_dir) : 0
-  filename   = "${local.sops_dir[count.index]}/.sops.yaml"
+  for_each   = { for i in local.sops_dir : i => i if contains(keys(local.kms_map), "sops") && (not fileexists("${v}/.sops.yaml")) }
+  filename   = "${each.key}/.sops.yaml"
   content    = <<EOF
 creation_rules:
   - path_regex: .*\.yaml$
