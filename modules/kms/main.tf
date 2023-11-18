@@ -45,7 +45,7 @@ locals {
 }
 
 resource "local_file" "sops" {
-  for_each   = { for i in local.sops_dir : i => i if contains(keys(local.kms_map), "sops") && (not fileexists("${v}/.sops.yaml")) }
+  for_each   = { for i in local.sops_dir : i => i if contains(keys(local.kms_map), "sops") && !fileexists("${i}/.sops.yaml") }
   filename   = "${each.key}/.sops.yaml"
   content    = <<EOF
 creation_rules:
