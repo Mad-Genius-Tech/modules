@@ -23,7 +23,7 @@ locals {
 module "discord" {
   #source                                 = "ganexcloud/lambda-notifications/aws"
   #version                                = "~> 1.0.7"
-  source                                 = "git@github.com:debu99/terraform-aws-lambda-notifications.git"
+  source                                 = "git::https://github.com/debu99/terraform-aws-lambda-notifications.git"
   create                                 = var.create && var.discord_webhook_url != ""
   create_sns_topic                       = false
   lambda_function_name                   = "${module.context.id}-discord"
