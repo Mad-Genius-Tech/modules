@@ -73,3 +73,17 @@ variable "ecs_services" {
   }))
 }
 
+variable "sns_topic_cloudwatch_alarm_arn" {
+  type    = string
+  default = ""
+}
+
+variable "high_reservation_alert" {
+  type    = bool
+  default = true
+}
+
+variable "low_reservation_alert" {
+  type    = bool
+  default = false
+}
