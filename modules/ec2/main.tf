@@ -165,7 +165,7 @@ resource "aws_key_pair" "key_pair" {
 }
 
 resource "local_file" "private_key" {
-  for_each        = var.output_private_key ? (var.key_per_instance ? { for k, v in local.ec2_map : k => v.identifier } : { 1 = 1 }) : 0
+  for_each        = var.output_private_key ? (var.key_per_instance ? { for k, v in local.ec2_map : k => v.identifier } : { 1 = 1 }) : {}
   content         = tls_private_key.rsa[each.key].private_key_pem
   filename        = var.key_per_instance ? "${var.terragrunt_directory}/${each.value.identifier}-key.pem" : "${var.terragrunt_directory}/${module.context.id}-key.pem"
   file_permission = "0600"
