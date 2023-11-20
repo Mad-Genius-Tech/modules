@@ -1,5 +1,5 @@
 resource "aws_cloudwatch_metric_alarm" "ecs_high_cpu_reservation" {
-  count               = var.high_reservation_alert ? 1 : 0
+  count               = var.high_reservation_alert && var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
   alarm_name          = "${module.ecs_cluster.name}-high-cpu-reservation"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   period              = "60"
@@ -21,7 +21,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_high_cpu_reservation" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "ecs_low_cpu_reservation" {
-  count               = var.low_reservation_alert ? 1 : 0
+  count               = var.low_reservation_alert && var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
   alarm_name          = "${module.ecs_cluster.name}-low-cpu-reservation"
   comparison_operator = "LessThanThreshold"
   period              = "300"
@@ -43,7 +43,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_low_cpu_reservation" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "ecs_high_mem_reservation" {
-  count               = var.high_reservation_alert ? 1 : 0
+  count               = var.high_reservation_alert && var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
   alarm_name          = "${module.ecs_cluster.name}-high-mem-reservation"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   period              = "60"
@@ -65,7 +65,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_high_mem_reservation" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "ecs_low_mem_reservation" {
-  count               = var.low_reservation_alert ? 1 : 0
+  count               = var.low_reservation_alert && var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
   alarm_name          = "${module.ecs_cluster.name}-low-mem-reservation"
   comparison_operator = "LessThanThreshold"
   period              = "300"
@@ -171,6 +171,7 @@ resource "aws_cloudwatch_event_rule" "ecs_task_stopped" {
 }
 
 resource "aws_cloudwatch_event_target" "ecs_task_stopped" {
+  count = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
   rule  = aws_cloudwatch_event_rule.ecs_task_stopped.name
   arn   = var.sns_topic_cloudwatch_alarm_arn
   input = "{ \"message\": \"Essential container in task exited\", \"account_id\": \"${data.aws_caller_identity.current.account_id}\", \"cluster\": \"${module.ecs_cluster.name}\"}"
@@ -178,6 +179,7 @@ resource "aws_cloudwatch_event_target" "ecs_task_stopped" {
 
 
 resource "aws_cloudwatch_event_target" "ecs_task_failure" {
+  count = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
   rule = aws_cloudwatch_event_rule.ecs_task_failure.name
   arn  = var.sns_topic_cloudwatch_alarm_arn
   input_transformer {
@@ -214,8 +216,7 @@ resource "aws_cloudwatch_event_rule" "ecs_events" {
     "source"      = ["aws.ecs"],
     "detail-type" = ["ECS Task State Change", "ECS Container Instance State Change"],
     "detail" = {
-      "clusterArn" = [module.ecs_cluster.arn],
-      #"group"      = ["service:${each.value.identifier}"]
+      "clusterArn" = [module.ecs_cluster.arn]
     }
   })
 }
