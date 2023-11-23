@@ -95,6 +95,9 @@ module "s3_bucket" {
       enabled                                = true
       abort_incomplete_multipart_upload_days = 1
       noncurrent_version_expiration = {
+        days = 1
+      }
+      expiration = {
         days = 3
       }
     }
