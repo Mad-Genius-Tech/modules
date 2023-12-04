@@ -28,7 +28,7 @@ locals {
     prod = merge(local.default_settings,
       {
         skip_final_snapshot          = false
-        backup_retention_period      = 7
+        backup_retention_period      = 35
         performance_insights_enabled = true
         monitoring_interval          = 60
         deletion_protection          = true
