@@ -11,7 +11,6 @@ locals {
     billing_mode                          = "PROVISIONED"
     write_capacity                        = 5
     read_capacity                         = 5
-    autoscaling_enabled                   = true
     ignore_changes_global_secondary_index = true
     autoscaling_read_enabled              = true
     autoscaling_read_scale_in_cooldown    = 50
@@ -30,7 +29,6 @@ locals {
     ttl_attribute_name                    = ""
     point_in_time_recovery_enabled        = false
     tags                                  = {}
-
   }
 
   env_default_settings = {
@@ -59,7 +57,6 @@ locals {
       "server_side_encryption_enabled"        = try(coalesce(lookup(v, "server_side_encryption_enabled", null), local.merged_default_settings.server_side_encryption_enabled), local.merged_default_settings.server_side_encryption_enabled)
       "global_secondary_indexes"              = try(coalesce(lookup(v, "global_secondary_indexes", null), local.merged_default_settings.global_secondary_indexes), local.merged_default_settings.global_secondary_indexes)
       "deletion_protection_enabled"           = try(coalesce(lookup(v, "deletion_protection_enabled", null), local.merged_default_settings.deletion_protection_enabled), local.merged_default_settings.deletion_protection_enabled)
-      "autoscaling_enabled"                   = try(coalesce(lookup(v, "autoscaling_enabled", null), local.merged_default_settings.autoscaling_enabled), local.merged_default_settings.autoscaling_enabled)
       "ignore_changes_global_secondary_index" = try(coalesce(lookup(v, "ignore_changes_global_secondary_index", null), local.merged_default_settings.ignore_changes_global_secondary_index), local.merged_default_settings.ignore_changes_global_secondary_index)
       "autoscaling_read_enabled"              = try(coalesce(lookup(v, "autoscaling_read_enabled", null), local.merged_default_settings.autoscaling_read_enabled), local.merged_default_settings.autoscaling_read_enabled)
       "autoscaling_read_scale_in_cooldown"    = try(coalesce(lookup(v, "autoscaling_read_scale_in_cooldown", null), local.merged_default_settings.autoscaling_read_scale_in_cooldown), local.merged_default_settings.autoscaling_read_scale_in_cooldown)
@@ -85,7 +82,7 @@ locals {
 
 module "dynamodb_table" {
   source                         = "terraform-aws-modules/dynamodb-table/aws"
-  version                        = "~> 3.3.0"
+  version                        = "~> 4.0.0"
   for_each                       = local.dynamodb_map
   name                           = each.value.table_name
   table_class                    = each.value.table_class
@@ -101,22 +98,22 @@ module "dynamodb_table" {
   point_in_time_recovery_enabled = each.value.point_in_time_recovery_enabled
   stream_enabled                 = each.value.stream_enabled
   stream_view_type               = each.value.stream_enabled ? each.value.stream_view_type : null
-
+  autoscaling_enabled            = each.value.billing_mode == "PROVISIONED" && (each.value.autoscaling_read_enabled || each.value.autoscaling_write_enabled) ? true : false
   autoscaling_read = each.value.autoscaling_read_enabled ? {
     scale_in_cooldown  = each.value.autoscaling_read_scale_in_cooldown
     scale_out_cooldown = each.value.autoscaling_read_scale_out_cooldown
     target_value       = each.value.autoscaling_read_target_value
     max_capacity       = each.value.autoscaling_read_max_capacity
-  } : null
+  } : {}
 
   autoscaling_write = each.value.autoscaling_write_enabled ? {
     scale_in_cooldown  = each.value.autoscaling_write_scale_in_cooldown
     scale_out_cooldown = each.value.autoscaling_write_scale_out_cooldown
     target_value       = each.value.autoscaling_write_target_value
     max_capacity       = each.value.autoscaling_write_max_capacity
-  } : null
+  } : {}
 
-  autoscaling_indexes = length(each.value.autoscaling_indexes) > 0 ? each.value.autoscaling_indexes : null
+  autoscaling_indexes = length(each.value.autoscaling_indexes) > 0 ? each.value.autoscaling_indexes : {}
 
   tags = merge(local.tags, each.value.tags)
 }
