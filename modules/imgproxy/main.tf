@@ -49,6 +49,29 @@ module "imgproxy" {
   maximum_event_age_in_seconds      = local.merged_default_settings.maximum_event_age_in_seconds
   create_lambda_function_url        = local.merged_default_settings.create_lambda_function_url
   cors                              = var.cors
+  attach_policy                     = true
+  policy                            = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  attach_policy_jsons               = true
+  policy_jsons = [
+    <<-EOT
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "ecr:GetDownloadUrlForLayer",
+            "ecr:BatchGetImage",
+            "ecr:DescribeImages",
+            "ecr:GetAuthorizationToken",
+            "ecr:BatchCheckLayerAvailability"
+          ],
+          "Resource": ["*"]
+        }
+      ]
+    }
+    EOT
+  ]
   environment_variables = merge(
     var.environment_variables,
     {
