@@ -6,7 +6,7 @@ variable "github_repos" {
   type = map(object({
     create                 = optional(bool)
     github_org_name        = string
-    github_repo_name       = string
+    github_repo_names      = list(string)
     enable_ecs_task_policy = optional(bool)
     policy = optional(map(object({
       resources_arn = list(string)

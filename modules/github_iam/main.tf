@@ -21,7 +21,7 @@ locals {
       "identifier"             = "${module.context.id}-${k}"
       "create"                 = coalesce(lookup(v, "create", null), true)
       "github_org_name"        = v.github_org_name
-      "github_repo_name"       = v.github_repo_name
+      "github_repo_names"      = v.github_repo_names
       "policy"                 = coalesce(lookup(v, "policy", null), local.merged_default_settings.policy)
       "enable_ecs_task_policy" = coalesce(lookup(v, "enable_ecs_task_policy", null), local.merged_default_settings.enable_ecs_task_policy)
     } if coalesce(lookup(v, "create", null), true)
@@ -65,7 +65,9 @@ data "aws_iam_policy_document" "github_actions_assume_role_policy" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${each.value.github_org_name}/${each.value.github_repo_name}:*"]
+      values   = [
+        for repo in each.value.github_repo_names : "repo:${each.value.github_org_name}/${repo}:*"
+      ]
     }
   }
 }
