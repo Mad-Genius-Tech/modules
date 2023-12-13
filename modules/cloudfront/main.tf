@@ -13,7 +13,7 @@ locals {
     enable_upload_to_s3_origin             = false
     custom_error_response                  = [{}]
     origin_domain_name                     = ""
-    default_root_object                    = "index.html"
+    default_root_object                    = null
     custom_origin_config = {
       http_port              = 80
       https_port             = 443
@@ -49,6 +49,7 @@ locals {
       "origin_domain_name"                     = try(coalesce(lookup(v, "origin_domain_name", null), local.merged_default_settings.origin_domain_name), local.merged_default_settings.origin_domain_name)
       "custom_origin_config"                   = { for k, v in merge(local.merged_default_settings.custom_origin_config, coalesce(lookup(v, "custom_origin_config", null), local.merged_default_settings.custom_origin_config)) : k => v != null ? v : local.merged_default_settings.custom_origin_config[k] }
       "enable_upload_to_s3_origin"             = try(coalesce(lookup(v, "enable_upload_to_s3_origin", null), local.merged_default_settings.enable_upload_to_s3_origin), local.merged_default_settings.enable_upload_to_s3_origin)
+      "default_root_object"                    = try(coalesce(lookup(v, "default_root_object", null), local.merged_default_settings.default_root_object), local.merged_default_settings.default_root_object)
     } if coalesce(lookup(v, "create", null), true)
   }
 }
