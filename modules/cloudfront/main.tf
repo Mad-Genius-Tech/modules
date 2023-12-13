@@ -13,6 +13,7 @@ locals {
     enable_upload_to_s3_origin             = false
     custom_error_response                  = [{}]
     origin_domain_name                     = ""
+    default_root_object                    = "index.html"
     custom_origin_config = {
       http_port              = 80
       https_port             = 443
@@ -79,6 +80,7 @@ module "cloudfront" {
   comment                       = each.value.s3_bucket != "" ? "CloudFront for S3 bucket ${each.value.s3_bucket}" : "CloudFront for domain ${each.value.origin_domain_name}"
   enabled                       = each.value.enabled
   price_class                   = each.value.price_class
+  default_root_object           = each.value.default_root_object
   create_origin_access_identity = false
   origin_access_identities = {
     "${each.value.s3_bucket}" = each.value.s3_bucket
