@@ -154,11 +154,11 @@ module "ecs_service" {
   task_exec_ssm_param_arns = []
   container_definitions = {
     (each.key) = {
-      essential          = true
-      cpu                = each.value.container_cpu
-      memory             = each.value.container_memory
-      memory_reservation = each.value.container_memory / 2
-      image              = each.value.container_image == null ? data.external.current_image[each.key].result["IMAGE_NAME"] : each.value.container_image
+      essential              = true
+      cpu                    = each.value.container_cpu
+      memory                 = each.value.container_memory
+      memory_reservation     = each.value.container_memory / 2
+      image                  = each.value.container_image == null ? data.external.current_image[each.key].result["IMAGE_NAME"] : each.value.container_image
       repository_credentials = each.value.container_image != null && strcontains(coalesce(each.value.container_image, "null_value"), "ecr.${data.aws_region.current.name}.amazonaws.com") ? {} : each.value.repository_credentials
       health_check = {
         "command"     = ["CMD-SHELL", "curl -f http://localhost:${each.value.health_check_port == null ? each.value.container_port : each.value.health_check_port}${each.value.health_check_path} || exit 1"]

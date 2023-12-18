@@ -1,4 +1,10 @@
 
+
+data "aws_lambda_function" "existing_lambda" {
+  count         = var.image_uri == "" ? 1 : 0
+  function_name = "${local.name}-server"
+}
+
 module "server" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 6.0.1"
@@ -12,13 +18,13 @@ module "server" {
   ignore_source_code_hash           = true
   create_lambda_function_url        = true
   cors                              = var.cors
-  environment_variables = {
+  environment_variables = merge({
     LAMBDA_CONFIG_PROJECT_NAME = "${module.context.id}-backend"
     LAMBDA_CONFIG_AWS_REGION   = data.aws_region.current.name
     HOME                       = "/tmp"
-  }
+  }, var.environment_variables)
   package_type = "Image"
-  image_uri    = var.image_uri
+  image_uri    = var.image_uri == "" ? data.aws_lambda_function.existing_lambda[0].image_uri : var.image_uri
   tags         = local.tags
 }
 

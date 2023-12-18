@@ -1,5 +1,6 @@
 variable "image_uri" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "environment_variables" {

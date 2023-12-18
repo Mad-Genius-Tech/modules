@@ -180,8 +180,8 @@ resource "aws_cloudwatch_event_target" "ecs_task_stopped" {
 
 resource "aws_cloudwatch_event_target" "ecs_task_failure" {
   count = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
-  rule = aws_cloudwatch_event_rule.ecs_task_failure.name
-  arn  = var.sns_topic_cloudwatch_alarm_arn
+  rule  = aws_cloudwatch_event_rule.ecs_task_failure.name
+  arn   = var.sns_topic_cloudwatch_alarm_arn
   input_transformer {
     input_paths = {
       "AZ"              = "$.detail.availabilityZone"
