@@ -4,7 +4,7 @@ locals {
     recording_configuration_thumbnail_target_interval_seconds = 10
     thumbnail_configuration = [
       {
-        recording_mode          = "INTERVAL"
+        recording_mode          = "DISABLED"
         target_interval_seconds = 10
       }
     ]
@@ -42,7 +42,7 @@ resource "aws_ivs_recording_configuration" "recording_configuration" {
     for_each = each.value.thumbnail_configuration
     content {
       recording_mode          = lookup(thumbnail_configuration.value, "recording_mode")
-      target_interval_seconds = lookup(thumbnail_configuration.value, "target_interval_seconds")
+      target_interval_seconds = lookup(thumbnail_configuration.value, "recording_mode") == "INTERVAL" ? lookup(thumbnail_configuration.value, "target_interval_seconds") : null
     }
   }
   tags = local.tags
