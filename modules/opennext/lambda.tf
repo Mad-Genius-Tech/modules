@@ -27,7 +27,8 @@ module "server" {
     },
     var.enable_dynamodb_cache ? {
       "CACHE_DYNAMO_TABLE" : aws_dynamodb_table.revalidation[0].name
-    } : {}
+    } : {},
+    var.environment_variables
   )
   attach_policy_json = true
 
