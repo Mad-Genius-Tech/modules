@@ -50,8 +50,9 @@ variable "ecs_services" {
       value = string
     })))
     secrets = optional(list(object({
-      name      = string
-      valueFrom = string
+      name        = string
+      secret_path = string
+      secret_key  = string
     })))
     security_group_rules = optional(map(object({
       type        = string

@@ -107,10 +107,6 @@ locals {
   }
 }
 
-# output "test" {
-#   value = local.ecs_map
-# }
-
 module "ecs_cluster" {
   source       = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/cluster?ref=v5.5.0"
   cluster_name = local.cluster_name
@@ -138,6 +134,37 @@ data "external" "current_image" {
   for_each = { for k, v in local.ecs_map : k => v if v.create && v.container_image == null }
   program  = ["bash", "${path.module}/scripts/ecs_task.sh", each.value.identifier, data.aws_region.current.name]
 }
+
+locals {
+  secret_vars_map = merge([
+    for k, v in local.ecs_map : { for s in v.secrets : "${k}|${s.name}" => {
+      name        = s.name
+      secret_path = s.secret_path
+      secret_key  = s.secret_key
+      }
+    }
+  ]...)
+}
+
+data "aws_secretsmanager_secret" "secret" {
+  for_each = local.secret_vars_map
+  name     = each.value.secret_path
+}
+
+locals {
+  secrets_output = {
+    for k, v in local.ecs_map : k => [
+      for s in v.secrets : {
+        name      = s.name
+        valueFrom = "${data.aws_secretsmanager_secret.secret["${k}|${s.name}"].arn}:${s.secret_key}::"
+      } if v.secrets != null && length(v.secrets) > 0
+    ]
+  }
+}
+
+# output "test" {
+#   value = local.secrets_output
+# }
 
 module "ecs_service" {
   source                   = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v5.5.0"
@@ -171,7 +198,7 @@ module "ecs_service" {
       # interactive        = true
       # pseudo_terminal    = true
       environment = each.value.environment
-      secrets     = each.value.secrets
+      secrets     = lookup(local.secrets_output, each.key, null)
       port_mappings = each.value.multiple_ports ? [
         {
           protocol      = "tcp"
