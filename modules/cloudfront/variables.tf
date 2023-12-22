@@ -13,6 +13,7 @@ variable "cloudfront" {
     viewer_protocol_policy                 = optional(string)
     enable_upload_to_s3_origin             = optional(bool)
     default_root_object                    = optional(string)
+    viewer_request_function_code           = optional(string)
     custom_error_response = optional(list(object({
       error_code            = number
       response_code         = number
