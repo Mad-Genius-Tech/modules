@@ -1,9 +1,11 @@
 variable "vpc_id" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "subnet_ids" {
-  type = list(any)
+  type    = list(any)
+  default = []
 }
 
 variable "lambda" {
@@ -39,6 +41,15 @@ variable "lambda" {
     db_instance_port                   = optional(number)
     db_security_group_id               = optional(string)
     layers                             = optional(list(string))
+    create_lambda_function_url         = optional(bool)
+    cors                               = optional(object({
+      allow_origins     = optional(list(string))
+      allow_methods     = optional(list(string))
+      allow_headers     = optional(list(string))
+      expose_headers    = optional(list(string))
+      max_age_seconds   = optional(number)
+      allow_credentials = optional(bool)
+    }))
     dynamodb_tables = optional(map(object({
       enabled                        = optional(bool)
       table_name                     = string

@@ -20,6 +20,15 @@ locals {
     "dynamodb_tables"                   = {}
     "secret_vars"                       = {}
     "cloudwatch_events"                 = {}
+    "create_lambda_function_url"        = false
+    "cors"                              = {
+      allow_origins     = null
+      allow_methods     = null
+      allow_headers     = null
+      expose_headers    = null
+      max_age_seconds   = null
+      allow_credentials = null
+    }
   }
 
   env_default_settings = {
@@ -63,7 +72,9 @@ locals {
       "cloudwatch_logs_retention_in_days" = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
       "provisioned_concurrent_executions" = coalesce(lookup(v, "provisioned_concurrent_executions", null), local.merged_default_settings.provisioned_concurrent_executions)
       "keep_warm"                         = coalesce(lookup(v, "keep_warm", null), local.merged_default_settings.keep_warm)
+      "create_lambda_function_url"        = coalesce(lookup(v, "create_lambda_function_url", null), local.merged_default_settings.create_lambda_function_url)
       "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
+      "cors"                              = coalesce(lookup(v, "cors", null), local.merged_default_settings.cors)
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }
@@ -152,6 +163,8 @@ module "lambda" {
   maximum_event_age_in_seconds      = each.value.maximum_event_age_in_seconds
   architectures                     = each.value.architectures
   create_package                    = false
+  create_lambda_function_url        = each.value.create_lambda_function_url
+  cors                              = each.value.cors
   s3_existing_package = {
     bucket = module.s3_bucket[each.key].s3_bucket_id
     key    = aws_s3_object.s3_object[each.key].id
@@ -165,9 +178,9 @@ module "lambda" {
     },
     lookup(local.secret_vars_env, each.key, {})
   )
-  vpc_subnet_ids           = var.subnet_ids
-  vpc_security_group_ids   = [module.lambda_sg[each.key].security_group_id]
-  attach_network_policy    = true
+  vpc_subnet_ids           = var.vpc_id == "" ? null : var.subnet_ids
+  vpc_security_group_ids   = var.vpc_id == "" ? [] : [module.lambda_sg[each.key].security_group_id]
+  attach_network_policy    = var.vpc_id == "" ? false : true
   attach_policy_statements = length(each.value.policy_statements) > 0 ? true : false
   policy_statements        = each.value.policy_statements
   attach_policies          = length(each.value.policies) > 0 ? true : false
@@ -217,6 +230,7 @@ module "lambda_sg" {
   for_each    = local.lambda_map
   source      = "terraform-aws-modules/security-group/aws"
   version     = "~> 5.1.0"
+  create      = var.vpc_id == "" ? false : true
   name        = "${each.value.identifier}-sg"
   description = "Lambda ${each.value.identifier} Security group"
   egress_with_cidr_blocks = [

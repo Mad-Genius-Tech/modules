@@ -173,7 +173,7 @@ module "ecs_service" {
   desired_count            = each.value.desired_count
   autoscaling_min_capacity = each.value.enable_autoscaling ? each.value.desired_count : 1
   cluster_arn              = module.ecs_cluster.arn
-  cpu                      = ceil(each.value.container_cpu / 256) * 256
+  cpu                      = ceil(each.value.container_cpu / 128) * 128
   memory                   = ceil(each.value.container_memory / 512) * 512
   enable_autoscaling       = each.value.enable_autoscaling
   enable_execute_command   = true
