@@ -1,3 +1,4 @@
 **/node_modules/*
 **/.terraform
 .terraform.lock.hcl
+modules/README.md
