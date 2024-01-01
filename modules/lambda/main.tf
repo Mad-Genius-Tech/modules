@@ -21,7 +21,7 @@ locals {
     "secret_vars"                       = {}
     "cloudwatch_events"                 = {}
     "create_lambda_function_url"        = false
-    "cors"                              = {
+    "cors" = {
       allow_origins     = null
       allow_methods     = null
       allow_headers     = null

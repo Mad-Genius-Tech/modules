@@ -42,7 +42,7 @@ variable "lambda" {
     db_security_group_id               = optional(string)
     layers                             = optional(list(string))
     create_lambda_function_url         = optional(bool)
-    cors                               = optional(object({
+    cors = optional(object({
       allow_origins     = optional(list(string))
       allow_methods     = optional(list(string))
       allow_headers     = optional(list(string))

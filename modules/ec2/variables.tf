@@ -20,6 +20,7 @@ variable "ec2" {
     subnet_id                   = optional(string)
     associate_public_ip_address = optional(bool)
     disable_api_stop            = optional(bool)
+    disable_api_termination     = optional(bool)
     create_iam_instance_profile = optional(bool)
     iam_role_policies           = optional(map(string))
     policy = optional(map(object({

@@ -173,8 +173,8 @@ module "ecs_service" {
   desired_count            = each.value.desired_count
   autoscaling_min_capacity = each.value.enable_autoscaling ? each.value.desired_count : 1
   cluster_arn              = module.ecs_cluster.arn
-  cpu                      = ceil(each.value.container_cpu / 128) * 128
-  memory                   = ceil(each.value.container_memory / 512) * 512
+  cpu                      = max(ceil(each.value.container_cpu / 256) * 256, 256)
+  memory                   = max(ceil(each.value.container_memory / 512) * 512, 512)
   enable_autoscaling       = each.value.enable_autoscaling
   enable_execute_command   = true
   task_exec_secret_arns    = each.value.task_exec_secret_arns
@@ -182,9 +182,9 @@ module "ecs_service" {
   container_definitions = {
     (each.key) = {
       essential              = true
-      cpu                    = each.value.container_cpu
-      memory                 = each.value.container_memory
-      memory_reservation     = each.value.container_memory / 2
+      cpu                    = max(ceil(each.value.container_cpu / 256) * 256, 256)
+      memory                 = max(ceil(each.value.container_memory / 512) * 512, 512)
+      memory_reservation     = max(ceil(each.value.container_memory / 512) * 512, 512) / 2
       image                  = each.value.container_image == null ? data.external.current_image[each.key].result["IMAGE_NAME"] : each.value.container_image
       repository_credentials = each.value.container_image != null && strcontains(coalesce(each.value.container_image, "null_value"), "ecr.${data.aws_region.current.name}.amazonaws.com") ? {} : each.value.repository_credentials
       health_check = {

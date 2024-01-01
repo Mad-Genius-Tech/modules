@@ -6,6 +6,7 @@ locals {
     ignore_ami_changes          = true
     associate_public_ip_address = false
     disable_api_stop            = false
+    disable_api_termination     = false
     create_iam_instance_profile = true
     assign_eip                  = false
     iam_role_policies = {
@@ -44,6 +45,7 @@ locals {
         enable_cloudwatch_alarm     = true
         cpu_credits                 = "unlimited"
         disable_api_stop            = true
+        disable_api_termination     = true
         associate_public_ip_address = true
     })
   }
@@ -59,6 +61,7 @@ locals {
       "subnet_id"                   = try(coalesce(lookup(v, "subnet_id", null), local.merged_default_settings.subnet_id), local.merged_default_settings.subnet_id)
       "associate_public_ip_address" = coalesce(lookup(v, "associate_public_ip_address", null), local.merged_default_settings.associate_public_ip_address)
       "disable_api_stop"            = coalesce(lookup(v, "disable_api_stop", null), local.merged_default_settings.disable_api_stop)
+      "disable_api_termination"     = coalesce(lookup(v, "disable_api_termination", null), local.merged_default_settings.disable_api_termination)
       "create_iam_instance_profile" = coalesce(lookup(v, "create_iam_instance_profile", null), local.merged_default_settings.create_iam_instance_profile)
       "iam_role_policies"           = merge(coalesce(lookup(v, "iam_role_policies", null), local.merged_default_settings.iam_role_policies), local.merged_default_settings.iam_role_policies)
       "key_name"                    = try(coalesce(lookup(v, "key_name", null), local.merged_default_settings.key_name), local.merged_default_settings.key_name)
@@ -117,6 +120,7 @@ module "ec2" {
   subnet_id                   = each.value.subnet_id == "" ? (each.value.associate_public_ip_address ? random_shuffle.public_subnet[each.key].result[0] : random_shuffle.private_subnet[each.key].result[0]) : each.value.subnet_id
   associate_public_ip_address = each.value.associate_public_ip_address
   disable_api_stop            = each.value.disable_api_stop
+  disable_api_termination     = each.value.disable_api_termination
   create_iam_instance_profile = each.value.create_iam_instance_profile
   iam_role_description        = "IAM role for EC2 ${each.value.identifier}"
   iam_role_policies = merge(

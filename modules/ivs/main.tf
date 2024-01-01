@@ -3,7 +3,7 @@ locals {
     recording_configuration_thumbnail_recording_mode          = "INTERVAL"
     recording_configuration_thumbnail_target_interval_seconds = 10
     thumbnail_configuration = [{
-      recording_mode          = "INTERVAL"
+      recording_mode = "INTERVAL"
       #storage                 = ["LATEST"]
       target_interval_seconds = 10
     }]

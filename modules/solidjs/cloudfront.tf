@@ -51,10 +51,10 @@ locals {
 
 locals {
   ordered_cache_paths = [
-    "images/*", 
-    "assets/*", 
-    "*.css", 
-    "*.ico", 
+    "images/*",
+    "assets/*",
+    "*.css",
+    "*.ico",
     "*.json",
   ]
 }

@@ -77,10 +77,10 @@ data "aws_acm_certificate" "non_wildcard" {
 
 resource "aws_cloudfront_function" "function" {
   for_each = { for k, v in local.cloudfront_map : k => v if length(v.viewer_request_function_code) > 0 }
-  name    = replace(each.value.identifier, ".", "-")
-  runtime = "cloudfront-js-2.0"
-  publish = true
-  code    = each.value.viewer_request_function_code
+  name     = replace(each.value.identifier, ".", "-")
+  runtime  = "cloudfront-js-2.0"
+  publish  = true
+  code     = each.value.viewer_request_function_code
 }
 
 
@@ -133,10 +133,10 @@ module "cloudfront" {
     cache_policy_id            = data.aws_cloudfront_cache_policy.cache_policy.id
     origin_request_policy_id   = length(try(coalesce(each.value.origin_request_policy, ""), "")) > 0 ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null
     response_headers_policy_id = length(try(coalesce(each.value.response_headers_policy, ""), "")) > 0 ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null
-  
+
     function_association = each.value.viewer_request_function_code != "" ? {
       # Valid keys: viewer-request, viewer-response
-      viewer-request =  {
+      viewer-request = {
         function_arn = aws_cloudfront_function.function[each.key].arn
       }
     } : {}
