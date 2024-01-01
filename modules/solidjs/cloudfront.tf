@@ -49,6 +49,16 @@ locals {
   server_function_domain_name = trimsuffix(trimprefix(module.server.lambda_function_url, "https://"), "/")
 }
 
+locals {
+  ordered_cache_paths = [
+    "images/*", 
+    "assets/*", 
+    "*.css", 
+    "*.ico", 
+    "*.json",
+  ]
+}
+
 resource "aws_cloudfront_distribution" "website_distribution" {
   enabled         = true
   comment         = "CloudFront for ${local.name}"
@@ -87,51 +97,75 @@ resource "aws_cloudfront_distribution" "website_distribution" {
     }
   }
 
-  ordered_cache_behavior {
-    path_pattern           = "images/*"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id       = local.s3_origin_id
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
+  dynamic "ordered_cache_behavior" {
+    for_each = local.ordered_cache_paths
+
+    content {
+      path_pattern           = ordered_cache_behavior.value
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD", "OPTIONS"]
+      target_origin_id       = local.s3_origin_id
+      cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+      compress               = true
+      viewer_protocol_policy = "redirect-to-https"
+    }
   }
-  ordered_cache_behavior {
-    path_pattern           = "assets/*"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id       = local.s3_origin_id
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-  }
-  ordered_cache_behavior {
-    path_pattern           = "*.css"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id       = local.s3_origin_id
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-  }
-  ordered_cache_behavior {
-    path_pattern           = "*.ico"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id       = local.s3_origin_id
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-  }
-  ordered_cache_behavior {
-    path_pattern           = "*.json"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id       = local.s3_origin_id
-    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-  }
+
+  # ordered_cache_behavior {
+  #   path_pattern           = "images/*"
+  #   allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+  #   cached_methods         = ["GET", "HEAD", "OPTIONS"]
+  #   target_origin_id       = local.s3_origin_id
+  #   cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+  #   compress               = true
+  #   viewer_protocol_policy = "redirect-to-https"
+  # }
+  # ordered_cache_behavior {
+  #   path_pattern           = "assets/*"
+  #   allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+  #   cached_methods         = ["GET", "HEAD", "OPTIONS"]
+  #   target_origin_id       = local.s3_origin_id
+  #   cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+  #   compress               = true
+  #   viewer_protocol_policy = "redirect-to-https"
+  # }
+  # ordered_cache_behavior {
+  #   path_pattern           = "*.css"
+  #   allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+  #   cached_methods         = ["GET", "HEAD", "OPTIONS"]
+  #   target_origin_id       = local.s3_origin_id
+  #   cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+  #   compress               = true
+  #   viewer_protocol_policy = "redirect-to-https"
+  # }
+  # ordered_cache_behavior {
+  #   path_pattern           = "*.ico"
+  #   allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+  #   cached_methods         = ["GET", "HEAD", "OPTIONS"]
+  #   target_origin_id       = local.s3_origin_id
+  #   cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+  #   compress               = true
+  #   viewer_protocol_policy = "redirect-to-https"
+  # }
+  # ordered_cache_behavior {
+  #   path_pattern           = "*.json"
+  #   allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+  #   cached_methods         = ["GET", "HEAD", "OPTIONS"]
+  #   target_origin_id       = local.s3_origin_id
+  #   cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+  #   compress               = true
+  #   viewer_protocol_policy = "redirect-to-https"
+  # }
+
+  # ordered_cache_behavior {
+  #   path_pattern           = "api/*"
+  #   allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+  #   cached_methods         = ["GET", "HEAD", "OPTIONS"]
+  #   target_origin_id       = local.server_function_origin
+  #   compress               = true
+  #   cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
+  #   viewer_protocol_policy = "redirect-to-https"
+  # }
   default_cache_behavior {
     allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
     cached_methods         = ["GET", "HEAD", "OPTIONS"]

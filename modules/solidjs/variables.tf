@@ -28,3 +28,23 @@ variable "cors" {
   })
   default = {}
 }
+
+variable "policy_statements" {
+  type = map(object({
+    effect    = string
+    actions   = list(string)
+    resources = list(string)
+  }))
+  default = {}
+
+}
+
+variable "policies" {
+  type    = list(string)
+  default = []
+}
+
+variable "schedule_expression" {
+  type    = string
+  default = "rate(15 minutes)"
+}

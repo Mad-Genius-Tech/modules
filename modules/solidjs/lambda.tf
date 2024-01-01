@@ -1,5 +1,3 @@
-
-
 data "aws_lambda_function" "existing_lambda" {
   count         = var.image_uri == "" ? 1 : 0
   function_name = "${local.name}-server"
@@ -23,14 +21,19 @@ module "server" {
     LAMBDA_CONFIG_AWS_REGION   = data.aws_region.current.name
     HOME                       = "/tmp"
   }, var.environment_variables)
-  package_type = "Image"
-  image_uri    = var.image_uri == "" ? data.aws_lambda_function.existing_lambda[0].image_uri : var.image_uri
-  tags         = local.tags
+  package_type             = "Image"
+  image_uri                = var.image_uri == "" ? data.aws_lambda_function.existing_lambda[0].image_uri : var.image_uri
+  attach_policy_statements = length(var.policy_statements) > 0 ? true : false
+  policy_statements        = var.policy_statements
+  attach_policies          = length(var.policies) > 0 ? true : false
+  policies                 = var.policies
+  number_of_policies       = length(var.policies)
+  tags                     = local.tags
 }
 
 resource "aws_cloudwatch_event_rule" "cron" {
   name                = "${local.name}-cron"
-  schedule_expression = "rate(5 minutes)"
+  schedule_expression = var.schedule_expression
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {
