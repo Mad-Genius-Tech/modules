@@ -2,7 +2,7 @@
 locals {
 
   default_settings = {
-    instance_type               = "t2.micro"
+    instance_type               = "t3a.nano"
     ignore_ami_changes          = true
     associate_public_ip_address = false
     disable_api_stop            = false
@@ -42,7 +42,6 @@ locals {
     prod = merge(local.default_settings,
       {
         enable_cloudwatch_alarm     = true
-        instance_type               = "t3.micro"
         cpu_credits                 = "unlimited"
         disable_api_stop            = true
         associate_public_ip_address = true
@@ -113,7 +112,7 @@ module "ec2" {
   for_each                    = local.ec2_map
   name                        = each.value.identifier
   instance_type               = each.value.instance_type
-  ami                         = each.value.use_ubuntu ? data.aws_ami.ubuntu.id : (each.value.use_amazon_linux_2 ? data.aws_ami.amazon_linux_2.id : data.aws_ami.amazon_linux.id)
+  ami                         = each.value.use_ubuntu ? data.aws_ami.ubuntu[each.key].id : (each.value.use_amazon_linux_2 ? data.aws_ami.amazon_linux_2[each.key].id : data.aws_ami.amazon_linux[each.key].id)
   ignore_ami_changes          = each.value.ignore_ami_changes
   subnet_id                   = each.value.subnet_id == "" ? (each.value.associate_public_ip_address ? random_shuffle.public_subnet[each.key].result[0] : random_shuffle.private_subnet[each.key].result[0]) : each.value.subnet_id
   associate_public_ip_address = each.value.associate_public_ip_address
@@ -226,6 +225,7 @@ module "iam_policy" {
 
 
 data "aws_ami" "amazon_linux" {
+  for_each    = { for k, v in local.ec2_map : k => v if v.create && !v.use_amazon_linux_2 }
   most_recent = true
   owners      = ["amazon"]
   filter {
@@ -235,6 +235,7 @@ data "aws_ami" "amazon_linux" {
 }
 
 data "aws_ami" "ubuntu" {
+  for_each    = { for k, v in local.ec2_map : k => v if v.create && v.use_ubuntu }
   most_recent = true
   owners      = ["099720109477"]
   filter {
@@ -246,6 +247,7 @@ data "aws_ami" "ubuntu" {
 
 
 data "aws_ami" "amazon_linux_2" {
+  for_each    = { for k, v in local.ec2_map : k => v if v.create && v.use_amazon_linux_2 }
   most_recent = true
   filter {
     name   = "owner-alias"
