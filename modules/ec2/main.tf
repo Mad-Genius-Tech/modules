@@ -287,6 +287,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
     var.sns_topic_arn,
     each.value.cloudwatch_alarm_action
   ])
+  ok_actions = compact([
+    var.sns_topic_arn,
+    each.value.cloudwatch_alarm_action
+  ])
 }
 
 
