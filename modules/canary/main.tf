@@ -99,7 +99,7 @@ resource "aws_cloudwatch_metric_alarm" "canary_alarm" {
   treat_missing_data  = "missing" # breaching/missing
   alarm_actions       = var.sns_topic_cloudwatch_alarm_arn == "" ? [] : [var.sns_topic_cloudwatch_alarm_arn]
   ok_actions          = var.sns_topic_cloudwatch_alarm_arn == "" ? [] : [var.sns_topic_cloudwatch_alarm_arn]
-  alarm_description = "${each.value.url} - SuccessPercent LessThanThreshold 90"
+  alarm_description   = "${each.value.url} - SuccessPercent LessThanThreshold 90"
   dimensions = {
     CanaryName = aws_synthetics_canary.canary[each.key].name
   }

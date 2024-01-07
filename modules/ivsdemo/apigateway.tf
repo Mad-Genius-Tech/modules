@@ -76,10 +76,10 @@ resource "aws_api_gateway_method" "api_method" {
 }
 
 resource "aws_api_gateway_integration" "api_integration" {
-  for_each                = { for k, v in local.api_paths : k => v if var.create }
-  rest_api_id             = aws_api_gateway_rest_api.rest_api[0].id
-  resource_id             = aws_api_gateway_resource.api_resource[each.key].id
-  http_method             = aws_api_gateway_method.api_method[each.key].http_method
+  for_each    = { for k, v in local.api_paths : k => v if var.create }
+  rest_api_id = aws_api_gateway_rest_api.rest_api[0].id
+  resource_id = aws_api_gateway_resource.api_resource[each.key].id
+  http_method = aws_api_gateway_method.api_method[each.key].http_method
   # Lambda function can only be invoked via POST method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
@@ -173,11 +173,11 @@ resource "aws_api_gateway_deployment" "api_deployment" {
 }
 
 resource "aws_lambda_permission" "lambda_permission" {
-  for_each      = { for k, v in local.api_paths : k => v if var.create }
-  statement_id_prefix  = "AllowExecutionFromRestAPI"
-  action        = "lambda:InvokeFunction"
-  function_name = each.value.function_name
-  principal     = "apigateway.amazonaws.com"
+  for_each            = { for k, v in local.api_paths : k => v if var.create }
+  statement_id_prefix = "AllowExecutionFromRestAPI"
+  action              = "lambda:InvokeFunction"
+  function_name       = each.value.function_name
+  principal           = "apigateway.amazonaws.com"
 
   #--------------------------------------------------------------------------------
   # Per deployment
@@ -192,6 +192,6 @@ resource "aws_lambda_permission" "lambda_permission" {
   # within API Gateway REST API.
   # source_arn    = "${aws_api_gateway_rest_api.example.execution_arn}/*/*/*"
   #source_arn    = "${aws_api_gateway_rest_api.rest_api[0].execution_arn}/*/${each.value.http_method}/${each.key}"
-  source_arn     = "${aws_api_gateway_deployment.api_deployment[0].execution_arn}*/*"
+  source_arn = "${aws_api_gateway_deployment.api_deployment[0].execution_arn}*/*"
 }
 

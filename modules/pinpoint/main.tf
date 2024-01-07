@@ -49,15 +49,15 @@ resource "aws_pinpoint_gcm_channel" "gcm" {
 }
 
 data "aws_ses_email_identity" "ses_identity" {
-  for_each       = { for k, v in local.pinpoint_map : k => v if v.email_from_address != null }
-  email          = each.value.email_from_address
+  for_each = { for k, v in local.pinpoint_map : k => v if v.email_from_address != null }
+  email    = each.value.email_from_address
 }
 
 resource "aws_pinpoint_email_channel" "email" {
-  for_each         = { for k, v in local.pinpoint_map : k => v if v.email_from_address != null }
-  application_id   = aws_pinpoint_app.app[each.key].application_id
-  from_address     = each.value.email_from_address
-  identity         = data.aws_ses_email_identity.ses_identity[each.key].arn
+  for_each       = { for k, v in local.pinpoint_map : k => v if v.email_from_address != null }
+  application_id = aws_pinpoint_app.app[each.key].application_id
+  from_address   = each.value.email_from_address
+  identity       = data.aws_ses_email_identity.ses_identity[each.key].arn
 }
 
 

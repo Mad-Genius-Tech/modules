@@ -28,7 +28,7 @@ locals {
       priority = 1
     }]
     email_configuration = [{}]
-    lambda_config = [{}]
+    lambda_config       = [{}]
     string_schemas = [{
       attribute_data_type      = "String"
       mutable                  = true
@@ -218,7 +218,7 @@ resource "aws_cognito_user_pool" "pool" {
   dynamic "lambda_config" {
     for_each = each.value.lambda_config
     content {
-      custom_message = lookup(lambda_config.value, "custom_message", null)
+      custom_message    = lookup(lambda_config.value, "custom_message", null)
       post_confirmation = lookup(lambda_config.value, "post_confirmation", null)
     }
   }
