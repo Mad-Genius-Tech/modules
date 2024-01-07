@@ -1,4 +1,32 @@
 
+locals {
+  default_settings = {
+    server_memory_size                      = 512
+    image_optimisation_memory_size          = 512
+    server_cloudwatch_log_retention_in_days = 1
+    # This represents the maximum number of concurrent instances allocated to your function. When a function has reserved concurrency, no other function can use that concurrency. Configuring reserved concurrency for a function incurs no additional charges.
+    # A value of 0 disables Lambda Function from being triggered
+    # -1 removes any concurrency limitations. Defaults to Unreserved Concurrency Limits -1
+    reserved_concurrent_executions = -1
+    schedule_expression            = "rate(15 minutes)"
+  }
+
+  env_default_settings = {
+    prod = merge(local.default_settings,
+      {
+        server_memory_size                      = 1024
+        image_optimisation_memory_size          = 1024
+        server_cloudwatch_log_retention_in_days = 5
+        reserved_concurrent_executions          = 10
+        schedule_expression                     = "rate(5 minutes)"
+      }
+    )
+  }
+
+  merged_default_settings = can(local.env_default_settings[var.stage_name]) ? lookup(local.env_default_settings, var.stage_name, local.default_settings) : local.default_settings
+
+}
+
 module "server" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 6.0.1"
@@ -6,9 +34,9 @@ module "server" {
   description                       = "Open Next Server Function"
   handler                           = "index.handler"
   runtime                           = "nodejs18.x"
-  memory_size                       = 1024
-  timeout                           = 10 # 30
-  cloudwatch_logs_retention_in_days = 1
+  memory_size                       = local.merged_default_settings.server_memory_size
+  timeout                           = 15 # 30
+  cloudwatch_logs_retention_in_days = local.merged_default_settings.server_cloudwatch_log_retention_in_days
   architectures                     = ["arm64"]
   create_package                    = false
   ignore_source_code_hash           = true
@@ -30,8 +58,9 @@ module "server" {
     } : {},
     var.environment_variables
   )
-  attach_policy_json = true
-
+  attach_policy_statements = length(var.policy_statements) > 0 ? true : false
+  policy_statements        = var.policy_statements
+  attach_policy_json       = true
   policy_json = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -73,27 +102,28 @@ module "server" {
       {
         Effect = "Allow",
         Action = [
-          "ivs:*",
-          "ivschat:*",
-          # "ivs:GetStreamSession",
-          # "ivs:GetChannel",
-          # "ivs:GetParticipant",
-          # "ivs:BatchGetChannel",
-          # "ivs:ListStreamSessions",
-          # "ivs:GetStreamKey",
-          # "ivs:ListStreams",
-          # "ivschat:ListRooms",
-          # "ivschat:DeleteMessage",
-          # "ivs:ListChannels",
-          # "ivschat:CreateChatToken",
-          # "ivs:ListParticipants",
-          # "ivschat:DisconnectUser",
-          # "ivs:GetStream",
-          # "ivs:ListParticipantEvents",
-          # "ivschat:GetRoom",
-          # "ivs:BatchGetStreamKey",
-          # "ivs:ListStreamKeys",
-          # "ivschat:SendEvent"
+          "ivs:BatchGetChannel",
+          "ivs:BatchGetStreamKey",
+          "ivs:CreateRecordingConfiguration",
+          "ivs:GetChannel",
+          "ivs:GetParticipant",
+          "ivs:GetRecordingConfiguration",
+          "ivs:GetStream",
+          "ivs:GetStreamKey",
+          "ivs:GetStreamSession",
+          "ivs:ListChannels",
+          "ivs:ListParticipantEvents",
+          "ivs:ListParticipants",
+          "ivs:ListRecordingConfigurations",
+          "ivs:ListStreamKeys",
+          "ivs:ListStreamSessions",
+          "ivs:ListStreams",
+          "ivschat:CreateChatToken",
+          "ivschat:DeleteMessage",
+          "ivschat:DisconnectUser",
+          "ivschat:GetRoom",
+          "ivschat:ListRooms",
+          "ivschat:SendEvent",
         ],
         Resource = "*"
       }
@@ -105,6 +135,7 @@ module "server" {
 data "aws_iam_policy_document" "server_lambda_cloudfront" {
   statement {
     actions = [
+      "cloudfront:GetInvalidation",
       "cloudfront:CreateInvalidation"
     ]
     resources = [
@@ -158,9 +189,10 @@ module "image_optimisation" {
   description                       = "Open Next Image Optimization Function"
   handler                           = "index.handler"
   runtime                           = "nodejs18.x"
-  memory_size                       = 1536 # default 1024 MB
+  memory_size                       = local.merged_default_settings.image_optimisation_memory_size # 1536
   timeout                           = 25
   cloudwatch_logs_retention_in_days = 1
+  reserved_concurrent_executions    = local.merged_default_settings.reserved_concurrent_executions
   architectures                     = ["arm64"]
   create_package                    = false
   ignore_source_code_hash           = true
@@ -203,14 +235,16 @@ module "image_optimisation" {
 resource "aws_sqs_queue" "revalidation_queue" {
   name                        = "${local.name}-isr-queue.fifo"
   fifo_queue                  = true
-  content_based_deduplication = false
-  receive_wait_time_seconds   = 20
+  content_based_deduplication = true
+  # https://github.com/sst/sst/blob/master/packages/sst/src/constructs/NextjsSite.ts#L424
+  receive_wait_time_seconds = 20
 }
 
 resource "aws_lambda_event_source_mapping" "revalidation_queue_source" {
   function_name    = module.revalidation.lambda_function_arn
   event_source_arn = aws_sqs_queue.revalidation_queue.arn
-  batch_size       = 5
+  # https://github.com/sst/sst/blob/master/packages/sst/src/constructs/NextjsSite.ts#L436
+  batch_size = 5
 }
 
 module "revalidation_insert" {
@@ -271,6 +305,7 @@ module "revalidation" {
   memory_size                       = 128
   timeout                           = 30
   cloudwatch_logs_retention_in_days = 1
+  architectures                     = ["arm64"]
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = false
@@ -307,7 +342,7 @@ module "revalidation" {
   tags               = local.tags
 }
 
-# https://github.com/sst/sst/blob/master/packages/sst/src/constructs/SsrSite.ts#L677
+# https://github.com/sst/sst/blob/master/packages/sst/src/constructs/SsrSite.ts#L729
 module "warmer" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 6.0.1"
@@ -357,7 +392,7 @@ module "warmer" {
 
 resource "aws_cloudwatch_event_rule" "cron" {
   name                = "${local.name}-cron"
-  schedule_expression = "rate(5 minutes)"
+  schedule_expression = local.merged_default_settings.schedule_expression
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {

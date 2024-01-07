@@ -10,6 +10,8 @@ variable "cloudfront" {
     default_cache_behavior_allowed_methods = optional(list(string))
     origin_request_policy                  = optional(string)
     response_headers_policy                = optional(string)
+    cache_policy                           = optional(string)
+    compress                               = optional(bool)
     viewer_protocol_policy                 = optional(string)
     enable_upload_to_s3_origin             = optional(bool)
     default_root_object                    = optional(string)

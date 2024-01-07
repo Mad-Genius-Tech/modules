@@ -35,7 +35,6 @@ variable "rds" {
       value        = string
       apply_method = optional(string)
     })))
-
     options = optional(list(object({
       option_name = string
       option_settings = list(object({
@@ -43,10 +42,27 @@ variable "rds" {
         value = string
       }))
     })))
+    enable_cloudwatch_alarm = optional(bool)
+    alarms = optional(map(object({
+      metric_name             = string
+      comparison_operator     = optional(string)
+      dimensions              = optional(map(string), {})
+      threshold               = number
+      evaluation_periods      = number
+      period                  = number
+      statistic               = optional(string)
+      namespace               = optional(string)
+      cloudwatch_alarm_action = optional(string)
+    })))
   }))
 }
 
 variable "enable_secret_manager" {
   type    = bool
   default = true
+}
+
+variable "sns_topic_arn" {
+  type    = string
+  default = ""
 }

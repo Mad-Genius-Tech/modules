@@ -9,8 +9,10 @@ locals {
     default_cache_behavior_allowed_methods = ["GET", "HEAD"]
     viewer_protocol_policy                 = "redirect-to-https"
     origin_request_policy                  = ""
+    cache_policy                           = ""
     response_headers_policy                = ""
     enable_upload_to_s3_origin             = false
+    compress                               = true
     custom_error_response                  = [{}]
     viewer_request_function_code           = ""
     origin_domain_name                     = ""
@@ -46,11 +48,13 @@ locals {
       "origin_request_policy"                  = try(coalesce(lookup(v, "origin_request_policy", null), local.merged_default_settings.origin_request_policy), local.merged_default_settings.origin_request_policy)
       "response_headers_policy"                = try(coalesce(lookup(v, "response_headers_policy", null), local.merged_default_settings.response_headers_policy), local.merged_default_settings.response_headers_policy)
       "custom_error_response"                  = coalesce(lookup(v, "custom_error_response", null), local.merged_default_settings.custom_error_response)
+      "cache_policy"                           = try(coalesce(lookup(v, "cache_policy", null), local.merged_default_settings.cache_policy), local.merged_default_settings.cache_policy)
       "viewer_protocol_policy"                 = try(coalesce(lookup(v, "viewer_protocol_policy", null), local.merged_default_settings.viewer_protocol_policy), local.merged_default_settings.viewer_protocol_policy)
       "origin_domain_name"                     = try(coalesce(lookup(v, "origin_domain_name", null), local.merged_default_settings.origin_domain_name), local.merged_default_settings.origin_domain_name)
       "viewer_request_function_code"           = try(coalesce(lookup(v, "viewer_request_function_code", null), local.merged_default_settings.viewer_request_function_code), local.merged_default_settings.viewer_request_function_code)
       "custom_origin_config"                   = { for k, v in merge(local.merged_default_settings.custom_origin_config, coalesce(lookup(v, "custom_origin_config", null), local.merged_default_settings.custom_origin_config)) : k => v != null ? v : local.merged_default_settings.custom_origin_config[k] }
       "enable_upload_to_s3_origin"             = try(coalesce(lookup(v, "enable_upload_to_s3_origin", null), local.merged_default_settings.enable_upload_to_s3_origin), local.merged_default_settings.enable_upload_to_s3_origin)
+      "compress"                               = try(coalesce(lookup(v, "compress", null), local.merged_default_settings.compress), local.merged_default_settings.compress)
       "default_root_object"                    = try(coalesce(lookup(v, "default_root_object", null), local.merged_default_settings.default_root_object), local.merged_default_settings.default_root_object)
     } if coalesce(lookup(v, "create", null), true)
   }
@@ -128,9 +132,9 @@ module "cloudfront" {
     allowed_methods            = each.value.default_cache_behavior_allowed_methods
     cached_methods             = contains(each.value.default_cache_behavior_allowed_methods, "OPTIONS") ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD"]
     cache_methods              = ["GET", "HEAD"]
-    compress                   = true
+    compress                   = each.value.compress
     use_forwarded_values       = false
-    cache_policy_id            = data.aws_cloudfront_cache_policy.cache_policy.id
+    cache_policy_id            = try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
     origin_request_policy_id   = length(try(coalesce(each.value.origin_request_policy, ""), "")) > 0 ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null
     response_headers_policy_id = length(try(coalesce(each.value.response_headers_policy, ""), "")) > 0 ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null
 
@@ -158,6 +162,11 @@ module "cloudfront" {
 
 data "aws_cloudfront_cache_policy" "cache_policy" {
   name = "Managed-CachingOptimized"
+}
+
+data "aws_cloudfront_cache_policy" "customized_cache_policy" {
+  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.cache_policy, ""), "")) > 0 }
+  name     = each.value.cache_policy
 }
 
 data "aws_cloudfront_origin_request_policy" "request_policy" {

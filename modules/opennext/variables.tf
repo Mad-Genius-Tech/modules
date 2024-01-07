@@ -4,7 +4,7 @@ variable "domain_names" {
 
 variable "enable_dynamodb_cache" {
   type    = bool
-  default = false
+  default = true
 }
 
 variable "wildcard_domain" {
@@ -14,5 +14,14 @@ variable "wildcard_domain" {
 
 variable "environment_variables" {
   type    = map(string)
+  default = {}
+}
+
+variable "policy_statements" {
+  type = map(object({
+    effect    = string
+    actions   = list(string)
+    resources = list(string)
+  }))
   default = {}
 }

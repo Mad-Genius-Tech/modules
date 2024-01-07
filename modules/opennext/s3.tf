@@ -2,7 +2,7 @@
 module "s3_bucket" {
   source        = "terraform-aws-modules/s3-bucket/aws"
   version       = "~> 3.15.0"
-  bucket        = "${local.name}-frontend-builds"
+  bucket        = "${local.name}-assets"
   force_destroy = false
   server_side_encryption_configuration = {
     rule = {

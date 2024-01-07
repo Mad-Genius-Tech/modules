@@ -1,4 +1,3 @@
-
 resource "aws_dynamodb_table" "revalidation" {
   count        = var.enable_dynamodb_cache ? 1 : 0
   name         = "${local.name}-revalidation"

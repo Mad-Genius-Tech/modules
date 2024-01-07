@@ -28,6 +28,7 @@ locals {
       priority = 1
     }]
     email_configuration = [{}]
+    lambda_config = [{}]
     string_schemas = [{
       attribute_data_type      = "String"
       mutable                  = true
@@ -94,6 +95,8 @@ locals {
       id_token      = "minutes"
       refresh_token = "days"
     }]
+
+    allow_unauthenticated_identities = true
   }
 
   env_default_settings = {
@@ -118,6 +121,7 @@ locals {
       "recovery_mechanisms"                           = try(coalesce(lookup(v, "recovery_mechanisms", null), local.merged_default_settings.recovery_mechanisms), local.merged_default_settings.recovery_mechanisms)
       "string_schemas"                                = try(coalesce(lookup(v, "string_schemas", null), local.merged_default_settings.string_schemas), local.merged_default_settings.string_schemas)
       "email_configuration"                           = try(coalesce(lookup(v, "email_configuration", null), local.merged_default_settings.email_configuration), local.merged_default_settings.email_configuration)
+      "lambda_config"                                 = try(coalesce(lookup(v, "lambda_config", null), local.merged_default_settings.lambda_config), local.merged_default_settings.lambda_config)
       "explicit_auth_flows"                           = try(coalesce(lookup(v, "explicit_auth_flows", null), local.merged_default_settings.explicit_auth_flows), local.merged_default_settings.explicit_auth_flows)
       "prevent_user_existence_errors"                 = try(coalesce(lookup(v, "prevent_user_existence_errors", null), local.merged_default_settings.prevent_user_existence_errors), local.merged_default_settings.prevent_user_existence_errors)
       "enable_token_revocation"                       = try(coalesce(lookup(v, "enable_token_revocation", null), local.merged_default_settings.enable_token_revocation), local.merged_default_settings.enable_token_revocation)
@@ -131,6 +135,7 @@ locals {
       "read_attributes"                               = try(coalesce(lookup(v, "read_attributes", null), local.merged_default_settings.read_attributes), local.merged_default_settings.read_attributes)
       "write_attributes"                              = try(coalesce(lookup(v, "write_attributes", null), local.merged_default_settings.write_attributes), local.merged_default_settings.write_attributes)
       "token_validity_units"                          = try(coalesce(lookup(v, "token_validity_units", null), local.merged_default_settings.token_validity_units), local.merged_default_settings.token_validity_units)
+      "allow_unauthenticated_identities"              = try(coalesce(lookup(v, "allow_unauthenticated_identities", null), local.merged_default_settings.allow_unauthenticated_identities), local.merged_default_settings.allow_unauthenticated_identities)
     } if coalesce(lookup(v, "create", true), true)
   }
 }
@@ -209,7 +214,22 @@ resource "aws_cognito_user_pool" "pool" {
       }
     }
   }
+
+  dynamic "lambda_config" {
+    for_each = each.value.lambda_config
+    content {
+      custom_message = lookup(lambda_config.value, "custom_message", null)
+      post_confirmation = lookup(lambda_config.value, "post_confirmation", null)
+    }
+  }
+
   tags = local.tags
+
+  lifecycle {
+    ignore_changes = [
+      #lambda_config
+    ]
+  }
 }
 
 resource "aws_cognito_user_pool_client" "client" {
@@ -237,5 +257,6 @@ resource "aws_cognito_user_pool_client" "client" {
       refresh_token = lookup(token_validity_units.value, "refresh_token", null)
     }
   }
-
 }
+
+

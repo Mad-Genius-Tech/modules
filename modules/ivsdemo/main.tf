@@ -1,3 +1,5 @@
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
 
 resource "aws_lambda_layer_version" "ivs_chat_lambda_ref_layer" {
   count               = var.create ? 1 : 0
@@ -73,6 +75,17 @@ data "aws_iam_policy_document" "lambda_policy" {
     actions   = ["ivschat:*"]
     resources = ["*"]
   }
+  statement {
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = [
+      "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*",
+    ]
+  }
 }
 
 resource "aws_iam_policy" "lambda_policy" {
@@ -87,61 +100,61 @@ resource "aws_iam_role_policy_attachment" "lambda_policy_attach" {
   policy_arn = aws_iam_policy.lambda_policy[0].arn
 }
 
-module "api_gateway" {
-  source                 = "terraform-aws-modules/apigateway-v2/aws"
-  version                = "~> 2.2.2"
-  create                 = var.create
-  name                   = "${module.context.id}-apigateway"
-  description            = "${module.context.id} HTTP API Gateway"
-  protocol_type          = "HTTP"
-  create_api_domain_name = false
-  cors_configuration = {
-    allow_origins = var.allow_origins
-    allow_headers = ["*"]
-    allow_methods = ["*"]
-  }
-  default_route_settings = {
-    detailed_metrics_enabled = false
-    throttling_burst_limit   = 100
-    throttling_rate_limit    = 100
-  }
-  integrations = {
-    "GET /list" = {
-      lambda_arn = try(aws_lambda_function.chat_list_function[0].arn, null)
-    }
-    "POST /auth" = {
-      lambda_arn = try(aws_lambda_function.chat_auth_function[0].arn, null)
-    }
-    "POST /event" = {
-      lambda_arn = try(aws_lambda_function.chat_event_function[0].arn, null)
-    }
-  }
-  tags = local.tags
-}
+# module "api_gateway" {
+#   source                 = "terraform-aws-modules/apigateway-v2/aws"
+#   version                = "~> 2.2.2"
+#   create                 = var.create
+#   name                   = "${module.context.id}-apigateway"
+#   description            = "${module.context.id} HTTP API Gateway"
+#   protocol_type          = "HTTP"
+#   create_api_domain_name = false
+#   cors_configuration = {
+#     allow_origins = var.allow_origins
+#     allow_headers = ["*"]
+#     allow_methods = ["*"]
+#   }
+#   default_route_settings = {
+#     detailed_metrics_enabled = false
+#     throttling_burst_limit   = 100
+#     throttling_rate_limit    = 100
+#   }
+#   integrations = {
+#     "GET /list" = {
+#       lambda_arn = try(aws_lambda_function.chat_list_function[0].arn, null)
+#     }
+#     "POST /auth" = {
+#       lambda_arn = try(aws_lambda_function.chat_auth_function[0].arn, null)
+#     }
+#     "POST /event" = {
+#       lambda_arn = try(aws_lambda_function.chat_event_function[0].arn, null)
+#     }
+#   }
+#   tags = local.tags
+# }
 
-resource "aws_lambda_permission" "lambda_chat_auth_permission" {
-  count         = var.create ? 1 : 0
-  statement_id  = "AllowExecutionFromAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.chat_auth_function[0].function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.api_gateway.apigatewayv2_api_arn}/*/*"
-}
+# resource "aws_lambda_permission" "lambda_chat_auth_permission" {
+#   count         = var.create ? 1 : 0
+#   statement_id  = "AllowExecutionFromAPIGateway"
+#   action        = "lambda:InvokeFunction"
+#   function_name = aws_lambda_function.chat_auth_function[0].function_name
+#   principal     = "apigateway.amazonaws.com"
+#   source_arn    = "${module.api_gateway.apigatewayv2_api_arn}/*/*"
+# }
 
-resource "aws_lambda_permission" "lambda_chat_event_permission" {
-  count         = var.create ? 1 : 0
-  statement_id  = "AllowExecutionFromAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.chat_event_function[0].function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.api_gateway.apigatewayv2_api_arn}/*/*"
-}
+# resource "aws_lambda_permission" "lambda_chat_event_permission" {
+#   count         = var.create ? 1 : 0
+#   statement_id  = "AllowExecutionFromAPIGateway"
+#   action        = "lambda:InvokeFunction"
+#   function_name = aws_lambda_function.chat_event_function[0].function_name
+#   principal     = "apigateway.amazonaws.com"
+#   source_arn    = "${module.api_gateway.apigatewayv2_api_arn}/*/*"
+# }
 
-resource "aws_lambda_permission" "lambda_chat_list_permission" {
-  count         = var.create ? 1 : 0
-  statement_id  = "AllowExecutionFromAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.chat_list_function[0].function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${module.api_gateway.apigatewayv2_api_arn}/*/*"
-}
+# resource "aws_lambda_permission" "lambda_chat_list_permission" {
+#   count         = var.create ? 1 : 0
+#   statement_id  = "AllowExecutionFromAPIGateway"
+#   action        = "lambda:InvokeFunction"
+#   function_name = aws_lambda_function.chat_list_function[0].function_name
+#   principal     = "apigateway.amazonaws.com"
+#   source_arn    = "${module.api_gateway.apigatewayv2_api_arn}/*/*"
+# }

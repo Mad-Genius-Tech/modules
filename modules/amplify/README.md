@@ -8,31 +8,33 @@ No requirements.
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
-| <a name="provider_null"></a> [null](#provider\_null) | n/a |
 
 ## Modules
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_amplify_app"></a> [amplify\_app](#module\_amplify\_app) | cloudposse/amplify-app/aws | 1.0.0 |
 | <a name="module_context"></a> [context](#module\_context) | cloudposse/label/null | ~> 0.25.0 |
+| <a name="module_iam_role"></a> [iam\_role](#module\_iam\_role) | terraform-aws-modules/iam/aws//modules/iam-assumable-role | ~> 5.32.0 |
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [aws_amplify_webhook.webhook](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/amplify_webhook) | resource |
-| [null_resource.webhook_trigger](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
+| [aws_amplify_app.amplify](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/amplify_app) | resource |
+| [aws_amplify_backend_environment.backend_environment](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/amplify_backend_environment) | resource |
+| [aws_amplify_branch.branch](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/amplify_branch) | resource |
+| [aws_amplify_domain_association.domain_association](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/amplify_domain_association) | resource |
+| [aws_iam_policy.iam_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
+| [aws_iam_policy_document.iam_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_access_token"></a> [access\_token](#input\_access\_token) | n/a | `string` | `null` | no |
-| <a name="input_apps"></a> [apps](#input\_apps) | n/a | <pre>map(object({<br>    repository                  = string<br>    description                 = optional(string)<br>    branch_name                 = optional(string)<br>    platform                    = optional(string)<br>    oauth_token                 = optional(string)<br>    build_spec                  = optional(string)<br>    enable_auto_branch_creation = optional(bool)<br>    enable_branch_auto_build    = optional(bool)<br>    enable_branch_auto_deletion = optional(bool)<br>    environment_variables       = optional(map(string))<br>    iam_service_role_enabled    = optional(bool)<br>    stage                       = optional(string)<br>    domains = optional(map(object({<br>      enable_auto_sub_domain = optional(bool, false)<br>      wait_for_verification  = optional(bool, false)<br>      sub_domain = list(object({<br>        branch_name = string<br>        prefix      = string<br>      }))<br>    })))<br>    environments = optional(map(object({<br>      branch_name                   = optional(string)<br>      backend_enabled               = optional(bool, false)<br>      environment_name              = optional(string)<br>      deployment_artifacts          = optional(string)<br>      stack_name                    = optional(string)<br>      display_name                  = optional(string)<br>      description                   = optional(string)<br>      enable_auto_build             = optional(bool)<br>      enable_basic_auth             = optional(bool)<br>      enable_notification           = optional(bool)<br>      enable_performance_mode       = optional(bool)<br>      enable_pull_request_preview   = optional(bool)<br>      environment_variables         = optional(map(string))<br>      framework                     = optional(string)<br>      pull_request_environment_name = optional(string)<br>      stage                         = optional(string)<br>      ttl                           = optional(number)<br>      webhook_enabled               = optional(bool, false)<br>    })))<br>  }))</pre> | n/a | yes |
-| <a name="input_domain_config"></a> [domain\_config](#input\_domain\_config) | Amplify custom domain configuration | <pre>object({<br>    domain_name            = optional(string)<br>    enable_auto_sub_domain = optional(bool, false)<br>    wait_for_verification  = optional(bool, false)<br>    sub_domain = list(object({<br>      branch_name = string<br>      prefix      = string<br>    }))<br>  })</pre> | `null` | no |
-| <a name="input_domain_name"></a> [domain\_name](#input\_domain\_name) | n/a | `string` | `""` | no |
-| <a name="input_oauth_token"></a> [oauth\_token](#input\_oauth\_token) | n/a | `string` | `null` | no |
+| <a name="input_access_token"></a> [access\_token](#input\_access\_token) | n/a | `string` | n/a | yes |
+| <a name="input_apps"></a> [apps](#input\_apps) | n/a | <pre>map(object({<br>    repository                    = string<br>    domain_name                   = optional(string)<br>    description                   = optional(string)<br>    platform                      = optional(string)<br>    framework                     = optional(string)<br>    auto_branch_creation_patterns = optional(list(string))<br>    basic_auth_credentials        = optional(string)<br>    build_spec                    = optional(string)<br>    enable_auto_branch_creation   = optional(bool)<br>    enable_branch_auto_build      = optional(bool)<br>    enable_branch_auto_deletion   = optional(bool)<br>    enable_basic_auth             = optional(bool)<br>    environment_variables         = optional(map(string))<br>    auto_branch_creation_config = optional(object({<br>      basic_auth_credentials        = optional(string)<br>      build_spec                    = optional(string)<br>      enable_auto_build             = optional(bool)<br>      enable_basic_auth             = optional(bool)<br>      enable_performance_mode       = optional(bool)<br>      enable_pull_request_preview   = optional(bool)<br>      environment_variables         = optional(map(string))<br>      framework                     = optional(string)<br>      pull_request_environment_name = optional(string)<br>      stage                         = optional(string)<br>    }))<br>    custom_rules = optional(list(object({<br>      condition = optional(string)<br>      source    = string<br>      status    = optional(string)<br>      target    = string<br>    })))<br>    enable_auto_sub_domain = optional(bool)<br>    wait_for_verification  = optional(bool)<br>    backend_environments = optional(map(object({<br>      environment_name     = optional(string)<br>      deployment_artifacts = optional(string)<br>      stack_name           = optional(string)<br>    })))<br>    frontend_branches = optional(map(object({<br>      description                   = optional(string)<br>      branch_name                   = optional(string)<br>      ttl                           = optional(number)<br>      enable_basic_auth             = optional(bool)<br>      enable_auto_build             = optional(bool)<br>      enable_pull_request_preview   = optional(bool)<br>      enable_performance_mode       = optional(bool)<br>      enable_notification           = optional(bool)<br>      environment_variables         = optional(map(string))<br>      pull_request_environment_name = optional(string)<br>      backend_enabled               = optional(bool)<br>      sub_domain_name               = optional(string)<br>      webhook_enabled               = optional(bool)<br>    })))<br>  }))</pre> | n/a | yes |
+| <a name="input_create_iam_role"></a> [create\_iam\_role](#input\_create\_iam\_role) | n/a | `bool` | `true` | no |
+| <a name="input_iam_service_role_actions"></a> [iam\_service\_role\_actions](#input\_iam\_service\_role\_actions) | n/a | `list(string)` | `[]` | no |
 | <a name="input_org_name"></a> [org\_name](#input\_org\_name) | n/a | `string` | n/a | yes |
 | <a name="input_service_name"></a> [service\_name](#input\_service\_name) | n/a | `string` | n/a | yes |
 | <a name="input_stage_name"></a> [stage\_name](#input\_stage\_name) | n/a | `string` | n/a | yes |
@@ -41,9 +43,5 @@ No requirements.
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
-| <a name="output_apps_amplify_domainname"></a> [apps\_amplify\_domainname](#output\_apps\_amplify\_domainname) | n/a |
-| <a name="output_apps_info"></a> [apps\_info](#output\_apps\_info) | n/a |
-| <a name="output_apps_webhook"></a> [apps\_webhook](#output\_apps\_webhook) | n/a |
+No outputs.
 <!-- END_TF_DOCS -->

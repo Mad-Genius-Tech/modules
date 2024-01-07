@@ -2,7 +2,7 @@
 
 locals {
   default_settings = {
-    schedule_expression      = "rate(5 minute)"
+    schedule_expression      = "rate(5 minutes)"
     take_screenshot          = true
     runtime_version          = "syn-python-selenium-2.0"
     handler                  = "canary.handler"
@@ -76,6 +76,7 @@ resource "aws_synthetics_canary" "canary" {
     environment_variables = {
       "URL"             = each.value.url
       "TAKE_SCREENSHOT" = each.value.take_screenshot ? "true" : "false"
+      "TIMEOUT"         = each.value.timeout_in_seconds
     }
   }
   depends_on = [
