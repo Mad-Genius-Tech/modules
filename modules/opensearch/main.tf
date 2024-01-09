@@ -7,7 +7,7 @@ locals {
     zone_awareness_enabled         = false
     availability_zone_count        = 2
     dedicated_master_enabled       = false
-    dedicated_master_type          = "t3.small.search"
+    dedicated_master_type          = "c6g.large.search"
     dedicated_master_count         = 0
     warm_enabled                   = false
     warm_count                     = null

@@ -34,9 +34,9 @@ module "server" {
   description                       = "Open Next Server Function"
   handler                           = "index.handler"
   runtime                           = "nodejs18.x"
-  memory_size                       = local.merged_default_settings.server_memory_size
-  timeout                           = 15 # 30
-  cloudwatch_logs_retention_in_days = local.merged_default_settings.server_cloudwatch_log_retention_in_days
+  memory_size                       = coalesce(var.server_memory_size, local.merged_default_settings.server_memory_size)
+  timeout                           = 30
+  cloudwatch_logs_retention_in_days = coalesce(var.server_cloudwatch_log_retention_in_days, local.merged_default_settings.server_cloudwatch_log_retention_in_days)
   architectures                     = ["arm64"]
   create_package                    = false
   ignore_source_code_hash           = true
@@ -56,7 +56,7 @@ module "server" {
     var.enable_dynamodb_cache ? {
       "CACHE_DYNAMO_TABLE" : aws_dynamodb_table.revalidation[0].name
     } : {},
-    var.environment_variables
+    var.server_environment_variables
   )
   attach_policy_statements = length(var.policy_statements) > 0 ? true : false
   policy_statements        = var.policy_statements
@@ -392,7 +392,7 @@ module "warmer" {
 
 resource "aws_cloudwatch_event_rule" "cron" {
   name                = "${local.name}-cron"
-  schedule_expression = local.merged_default_settings.schedule_expression
+  schedule_expression = try(var.schedule_expression, local.merged_default_settings.schedule_expression)
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {

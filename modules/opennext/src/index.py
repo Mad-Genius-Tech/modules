@@ -1,5 +1,6 @@
 import boto3
 import os
+import urllib.parse
 
 CONTENT_TYPE_MAPPING = {
     'js': 'text/javascript',
@@ -43,13 +44,14 @@ def lambda_handler(event, context):
         print("Ignoring event for non-matching bucket %s != %s" % bucket_name, os.environ['S3_BUCKET_NAME'])
         return
 
-    file_key = event['Records'][0]['s3']['object']['key']
-    metadata_updates = {}
+    file_key_src = event['Records'][0]['s3']['object']['key']
+    file_key = urllib.parse.unquote(file_key_src)
+    file_extension = file_key.split('.')[-1].lower()
 
+    metadata_updates = {}
     # Fetch the current metadata of the object
     current_metadata = s3_client.head_object(Bucket=bucket_name, Key=file_key)['Metadata']
 
-    file_extension = file_key.split('.')[-1].lower()
     if file_extension in CONTENT_TYPE_MAPPING:
         new_content_type = CONTENT_TYPE_MAPPING[file_extension]
         current_content_type = current_metadata.get('content-type', None)

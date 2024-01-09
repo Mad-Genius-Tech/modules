@@ -218,8 +218,9 @@ resource "aws_cognito_user_pool" "pool" {
   dynamic "lambda_config" {
     for_each = each.value.lambda_config
     content {
-      custom_message    = lookup(lambda_config.value, "custom_message", null)
-      post_confirmation = lookup(lambda_config.value, "post_confirmation", null)
+      custom_message      = lookup(lambda_config.value, "custom_message", null)
+      post_confirmation   = lookup(lambda_config.value, "post_confirmation", null)
+      post_authentication = lookup(lambda_config.value, "post_authentication", null)
     }
   }
 

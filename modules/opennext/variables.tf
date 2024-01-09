@@ -12,7 +12,7 @@ variable "wildcard_domain" {
   default = true
 }
 
-variable "environment_variables" {
+variable "server_environment_variables" {
   type    = map(string)
   default = {}
 }
@@ -24,4 +24,19 @@ variable "policy_statements" {
     resources = list(string)
   }))
   default = {}
+}
+
+variable "server_cloudwatch_log_retention_in_days" {
+  type    = number
+  default = null
+}
+
+variable "server_memory_size" {
+  type    = number
+  default = null
+}
+
+variable "schedule_expression" {
+  type    = string
+  default = null
 }
