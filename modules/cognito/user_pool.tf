@@ -97,6 +97,8 @@ locals {
     }]
 
     allow_unauthenticated_identities = true
+
+    create_identity_pool = true
   }
 
   env_default_settings = {
@@ -136,11 +138,12 @@ locals {
       "write_attributes"                              = try(coalesce(lookup(v, "write_attributes", null), local.merged_default_settings.write_attributes), local.merged_default_settings.write_attributes)
       "token_validity_units"                          = try(coalesce(lookup(v, "token_validity_units", null), local.merged_default_settings.token_validity_units), local.merged_default_settings.token_validity_units)
       "allow_unauthenticated_identities"              = try(coalesce(lookup(v, "allow_unauthenticated_identities", null), local.merged_default_settings.allow_unauthenticated_identities), local.merged_default_settings.allow_unauthenticated_identities)
+      create_identity_pool                            = try(coalesce(lookup(v, "create_identity_pool", null), local.merged_default_settings.create_identity_pool), local.merged_default_settings.create_identity_pool)
     } if coalesce(lookup(v, "create", true), true)
   }
 }
 
-resource "aws_cognito_user_pool" "pool" {
+resource "aws_cognito_user_pool" "user_pool" {
   for_each                 = local.cognito_map
   name                     = each.value.identifier
   deletion_protection      = each.value.deletion_protection
@@ -236,7 +239,7 @@ resource "aws_cognito_user_pool" "pool" {
 resource "aws_cognito_user_pool_client" "client" {
   for_each                             = local.cognito_map
   name                                 = "${each.value.identifier}-client"
-  user_pool_id                         = aws_cognito_user_pool.pool[each.key].id
+  user_pool_id                         = aws_cognito_user_pool.user_pool[each.key].id
   explicit_auth_flows                  = each.value.explicit_auth_flows
   prevent_user_existence_errors        = each.value.prevent_user_existence_errors
   callback_urls                        = each.value.callback_urls

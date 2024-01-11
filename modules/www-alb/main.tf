@@ -1,8 +1,18 @@
 
-data "aws_acm_certificate" "acm" {
-  count    = var.create ? 1 : 0
+data "aws_acm_certificate" "wildcard" {
+  count    = var.create && var.wildcard_domain ? 1 : 0
   domain   = join(".", slice(split(".", var.domain_name), 1, length(split(".", var.domain_name))))
   statuses = ["ISSUED"]
+}
+
+data "aws_acm_certificate" "non_wildcard" {
+  count    = var.create && !var.wildcard_domain ? 1 : 0
+  domain   = var.domain_name
+  statuses = ["ISSUED"]
+}
+
+locals {
+  aws_acm_certificate_arn = var.create ? (var.wildcard_domain ? data.aws_acm_certificate.wildcard[0].arn : data.aws_acm_certificate.non_wildcard[0].arn) : null
 }
 
 module "alb" {
@@ -33,7 +43,7 @@ module "alb" {
     {
       port            = 443
       protocol        = "HTTPS"
-      certificate_arn = data.aws_acm_certificate.acm[0].arn
+      certificate_arn = local.aws_acm_certificate_arn
       action_type     = "redirect"
       redirect = {
         host        = var.redirect_to

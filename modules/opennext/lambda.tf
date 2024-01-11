@@ -37,7 +37,7 @@ module "server" {
   memory_size                       = coalesce(var.server_memory_size, local.merged_default_settings.server_memory_size)
   timeout                           = 30
   cloudwatch_logs_retention_in_days = coalesce(var.server_cloudwatch_log_retention_in_days, local.merged_default_settings.server_cloudwatch_log_retention_in_days)
-  architectures                     = ["arm64"]
+  architectures                     = ["x86_64"]
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = true
@@ -193,7 +193,7 @@ module "image_optimisation" {
   timeout                           = 25
   cloudwatch_logs_retention_in_days = 1
   reserved_concurrent_executions    = local.merged_default_settings.reserved_concurrent_executions
-  architectures                     = ["arm64"]
+  architectures                     = ["x86_64"]
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = true
@@ -305,7 +305,7 @@ module "revalidation" {
   memory_size                       = 128
   timeout                           = 30
   cloudwatch_logs_retention_in_days = 1
-  architectures                     = ["arm64"]
+  architectures                     = ["x86_64"]
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = false
@@ -353,7 +353,7 @@ module "warmer" {
   memory_size                       = 128
   timeout                           = 15 * 60
   cloudwatch_logs_retention_in_days = 1
-  architectures                     = ["arm64"]
+  architectures                     = ["x86_64"]
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = true

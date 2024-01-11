@@ -1,6 +1,6 @@
 output "user_pool" {
   value = {
-    for k, v in aws_cognito_user_pool.pool : k => {
+    for k, v in aws_cognito_user_pool.user_pool : k => {
       id   = v.id
       arn  = v.arn
       name = v.name

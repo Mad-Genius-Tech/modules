@@ -162,10 +162,6 @@ resource "aws_lambda_invocation" "chime_app_instance" {
   ]
 }
 
-output "chime_app_instance" {
-  value = jsondecode(aws_lambda_invocation.chime_app_instance.result)
-}
-
 locals {
   chime_app_instance_arn = jsondecode(aws_lambda_invocation.chime_app_instance.result)["AppInstanceArn"]
 }
@@ -206,10 +202,6 @@ resource "aws_lambda_invocation" "chime_app_admin" {
     module.chime_app_instance,
     module.chime_app_admin
   ]
-}
-
-output "chime_app_admin" {
-  value = jsondecode(aws_lambda_invocation.chime_app_admin.result)
 }
 
 locals {

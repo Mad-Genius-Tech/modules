@@ -64,5 +64,10 @@ variable "cognito" {
       id_token      = optional(string)
       refresh_token = optional(string)
     })))
+    create_identity_pool = optional(bool)
   }))
+}
+
+variable "app_instance_arn" {
+  type = string
 }

@@ -27,3 +27,8 @@ variable "create_route53_cname" {
   type    = bool
   default = true
 }
+
+variable "wildcard_domain" {
+  type    = bool
+  default = true
+}
