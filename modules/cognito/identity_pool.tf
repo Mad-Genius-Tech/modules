@@ -138,7 +138,8 @@ resource "aws_iam_role" "auth_iam_role" {
               "chime:ListChannelsModeratedByAppInstanceUser",
               "chime:ListSubChannels",
               "chime:UpdateChannelReadMarker",
-              "chime:SearchChannels"
+              "chime:SearchChannels",
+              # "chime:DeleteChannelMessage",
             ]
             Resource = [
               "${var.app_instance_arn}/user/*",
@@ -149,7 +150,45 @@ resource "aws_iam_role" "auth_iam_role" {
         ]
       }
     )
+  }
 
+  inline_policy {
+    name = "ivs"
+    policy = jsonencode(
+      {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow",
+            Action = [
+              "ivs:BatchGetChannel",
+              "ivs:BatchGetStreamKey",
+              "ivs:CreateRecordingConfiguration",
+              "ivs:GetChannel",
+              "ivs:GetParticipant",
+              "ivs:GetRecordingConfiguration",
+              "ivs:GetStream",
+              "ivs:GetStreamKey",
+              "ivs:GetStreamSession",
+              "ivs:ListChannels",
+              "ivs:ListParticipantEvents",
+              "ivs:ListParticipants",
+              "ivs:ListRecordingConfigurations",
+              "ivs:ListStreamKeys",
+              "ivs:ListStreamSessions",
+              "ivs:ListStreams",
+              "ivschat:CreateChatToken",
+              "ivschat:DeleteMessage",
+              "ivschat:DisconnectUser",
+              "ivschat:GetRoom",
+              "ivschat:ListRooms",
+              "ivschat:SendEvent",
+            ],
+            Resource = "*"
+          }
+        ]
+      }
+    )
   }
 }
 

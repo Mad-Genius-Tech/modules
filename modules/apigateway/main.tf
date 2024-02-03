@@ -1,7 +1,6 @@
 
 
 locals {
-
   default_settings = {
     "domain_names"                = {}
     "endpoint_type"               = ["REGIONAL"]

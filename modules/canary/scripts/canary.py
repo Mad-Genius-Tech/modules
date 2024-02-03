@@ -17,7 +17,8 @@ def main():
         browser.save_screenshot("loaded.png")
 
     response_code = syn_webdriver.get_http_response(url)
-    if not response_code or response_code < 200 or response_code > 299:
+    if not response_code or int(response_code) < 200 or int(response_code) > 299:
+        logger.error("response_code: {}".format(response_code))
         raise Exception("Failed to load page!")
     logger.info("Canary successfully executed.")
 

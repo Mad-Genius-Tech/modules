@@ -1,7 +1,7 @@
 locals {
   default_settings = {
     "handler"                           = "handler.lambda_handler"
-    "runtime"                           = "python3.10"
+    "runtime"                           = "nodejs18.x"
     "timeout"                           = 300
     "memory_size"                       = 512
     "ephemeral_storage_size"            = 512
@@ -13,13 +13,11 @@ locals {
     "environment_variables"             = {}
     "provisioned_concurrent_executions" = -1
     "layers"                            = []
-    "policies"                          = ["arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole"]
+    "policies"                          = []
     "policy_statements"                 = {}
     "keep_warm"                         = true
     "keep_warm_expression"              = "rate(15 minutes)"
-    "dynamodb_tables"                   = {}
     "secret_vars"                       = {}
-    "cloudwatch_events"                 = {}
     "create_lambda_function_url"        = false
     "cors" = {
       allow_origins     = null
@@ -29,13 +27,13 @@ locals {
       max_age_seconds   = null
       allow_credentials = null
     }
-    "lambda_bucket_name" = ""
+    "http_method" = "GET"
   }
 
   env_default_settings = {
     prod = merge(local.default_settings,
       {
-        "provisioned_concurrent_executions" = 2
+        "provisioned_concurrent_executions" = -1
         "cloudwatch_logs_retention_in_days" = 30
         "keep_warm_expression"              = "rate(4 minutes)"
       }
@@ -65,10 +63,7 @@ locals {
       "keep_warm"                         = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm)
       "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
       "cloudwatch_logs_retention_in_days" = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
-      "stage_name"                        = coalesce(lookup(v, "stage_name", null), var.stage_name)
-      "dynamodb_tables"                   = coalesce(lookup(v, "dynamodb_tables", null), local.merged_default_settings.dynamodb_tables)
       "secret_vars"                       = coalesce(lookup(v, "secret_vars", null), local.merged_default_settings.secret_vars)
-      "cloudwatch_events"                 = coalesce(lookup(v, "cloudwatch_events", null), local.merged_default_settings.cloudwatch_events)
       "layers"                            = distinct(compact(concat(coalesce(lookup(v, "layers", null), local.merged_default_settings.layers), local.merged_default_settings.layers)))
       "cloudwatch_logs_retention_in_days" = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
       "provisioned_concurrent_executions" = coalesce(lookup(v, "provisioned_concurrent_executions", null), local.merged_default_settings.provisioned_concurrent_executions)
@@ -76,7 +71,8 @@ locals {
       "create_lambda_function_url"        = coalesce(lookup(v, "create_lambda_function_url", null), local.merged_default_settings.create_lambda_function_url)
       "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
       "cors"                              = coalesce(lookup(v, "cors", null), local.merged_default_settings.cors)
-      "lambda_bucket_name"                = try(coalesce(lookup(v, "lambda_bucket_name", null), local.merged_default_settings.lambda_bucket_name), local.merged_default_settings.lambda_bucket_name)
+      "apigateway_path"                   = coalesce(lookup(v, "apigateway_path", null), k)
+      "http_method"                       = coalesce(lookup(v, "http_method", null), local.merged_default_settings.http_method)
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }
@@ -112,12 +108,11 @@ locals {
 }
 
 module "s3_bucket" {
-  for_each      = local.lambda_map
   source        = "terraform-aws-modules/s3-bucket/aws"
   version       = "~> 3.15.0"
-  bucket        = each.value.lambda_bucket_name == "" ? "${each.value.identifier}-lambda-builds" : each.value.lambda_bucket_name
+  create_bucket = var.lambda_bucket_name == "" ? false : true
+  bucket        = var.lambda_bucket_name
   force_destroy = false
-
   server_side_encryption_configuration = {
     rule = {
       apply_server_side_encryption_by_default = {
@@ -133,10 +128,10 @@ module "s3_bucket" {
 }
 
 resource "aws_s3_object" "s3_object" {
-  for_each = local.lambda_map
-  bucket   = module.s3_bucket[each.key].s3_bucket_id
-  key      = "placeholder.zip"
-  source   = "${path.module}/placeholder.zip"
+  count  = var.lambda_bucket_name == "" ? 0 : 1
+  bucket = module.s3_bucket.s3_bucket_id
+  key    = "placeholder.zip"
+  source = "${path.module}/placeholder.zip"
 
   lifecycle {
     ignore_changes = [
@@ -167,14 +162,14 @@ module "lambda" {
   create_package                    = false
   create_lambda_function_url        = each.value.create_lambda_function_url
   cors                              = each.value.cors
-  s3_existing_package = {
-    bucket = module.s3_bucket[each.key].s3_bucket_id
-    key    = aws_s3_object.s3_object[each.key].id
+  s3_existing_package = var.lambda_bucket_name == "" ? null : {
+    bucket = module.s3_bucket.s3_bucket_id
+    key    = aws_s3_object.s3_object[0].id
   }
   environment_variables = merge(
     each.value.environment_variables,
     {
-      LAMBDA_CONFIG_S3_BUCKET    = module.s3_bucket[each.key].s3_bucket_id
+      LAMBDA_CONFIG_S3_BUCKET    = var.lambda_bucket_name
       LAMBDA_CONFIG_PROJECT_NAME = each.value.project_name
       LAMBDA_CONFIG_AWS_REGION   = data.aws_region.current.name
     },
@@ -200,32 +195,13 @@ module "lambda" {
                   "s3:PutObject",
                   "s3:GetObject"
                 ],
-                "Resource": ["${module.s3_bucket[each.key].s3_bucket_arn}/*"]
+                "Resource": ["arn:aws:s3:::${var.lambda_bucket_name}/*"]
+
             }
         ]
     }
   EOT
   tags                     = local.tags
-}
-
-module "stage_alias" {
-  for_each         = local.lambda_map
-  source           = "terraform-aws-modules/lambda/aws//modules/alias"
-  version          = "~> 6.0.0"
-  refresh_alias    = false
-  name             = var.stage_name
-  function_name    = module.lambda[each.key].lambda_function_name
-  function_version = module.lambda[each.key].lambda_function_version
-}
-
-module "test_alias" {
-  for_each         = local.lambda_map
-  source           = "terraform-aws-modules/lambda/aws//modules/alias"
-  version          = "~> 6.0.0"
-  refresh_alias    = false
-  name             = "test"
-  function_name    = module.lambda[each.key].lambda_function_name
-  function_version = module.lambda[each.key].lambda_function_version
 }
 
 module "lambda_sg" {
@@ -258,7 +234,7 @@ resource "aws_cloudwatch_event_target" "lambda" {
   for_each  = { for k, v in local.lambda_map : k => v if v.keep_warm == true }
   target_id = each.value.identifier
   rule      = aws_cloudwatch_event_rule.cron[each.key].name
-  arn       = module.stage_alias[each.key].lambda_alias_arn
+  arn       = module.lambda[each.key].lambda_function_arn
 
   input_transformer {
     input_paths = {
@@ -285,88 +261,4 @@ resource "aws_lambda_permission" "cloudwatch" {
   function_name = module.lambda[each.key].lambda_function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.cron[each.key].arn
-  qualifier     = module.stage_alias[each.key].lambda_alias_name
-}
-
-locals {
-  cloudwatch_events_map = merge([
-    for k, v in local.lambda_map : {
-      for k1, v1 in v.cloudwatch_events : "${k}|${k1}" => v1
-    } if length(v.cloudwatch_events) > 0
-  ]...)
-}
-
-resource "aws_cloudwatch_event_rule" "event_rule" {
-  for_each            = local.cloudwatch_events_map
-  name                = each.value.rule_name
-  description         = each.value.rule_name
-  schedule_expression = each.value.schedule_expression
-  tags                = local.tags
-}
-
-resource "aws_cloudwatch_event_target" "event_rule_target" {
-  for_each  = local.cloudwatch_events_map
-  target_id = each.value.rule_name
-  rule      = aws_cloudwatch_event_rule.event_rule[each.key].name
-  arn       = module.stage_alias[split("|", each.key)[0]].lambda_alias_arn
-
-  input_transformer {
-    input_paths = {
-      "account" : "$.account",
-      "detail" : "$.detail",
-      "detail-type" : "$.detail-type",
-      "id" : "$.id",
-      "region" : "$.region",
-      "resources" : "$.resources",
-      "source" : "$.source",
-      "time" : "$.time",
-      "version" : "$.version"
-    }
-    input_template = <<EOF
-{"time": <time>, "detail-type": <detail-type>, "source": <source>,"account": <account>, "region": <region>,"detail": <detail>, "version": <version>,"resources": <resources>,"id": <id>,"kwargs": {}}
-EOF
-  }
-}
-
-resource "aws_lambda_permission" "event_permission" {
-  for_each      = local.cloudwatch_events_map
-  action        = "lambda:InvokeFunction"
-  function_name = module.lambda[split("|", each.key)[0]].lambda_function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.event_rule[each.key].arn
-  qualifier     = module.stage_alias[split("|", each.key)[0]].lambda_alias_name
-}
-
-locals {
-  dynamodb_map = merge([
-    for k, v in local.lambda_map : {
-      for table_name in keys(v.dynamodb_tables) : "${k}|${table_name}" => v.dynamodb_tables[table_name]
-    } if length(v.dynamodb_tables) > 0
-  ]...)
-}
-
-data "aws_dynamodb_table" "table" {
-  for_each = local.dynamodb_map
-  name     = each.value.table_name
-}
-
-resource "aws_lambda_event_source_mapping" "map_events" {
-  for_each                       = local.dynamodb_map
-  event_source_arn               = data.aws_dynamodb_table.table[each.key].stream_arn
-  function_name                  = module.stage_alias[split("|", each.key)[0]].lambda_alias_arn
-  enabled                        = coalesce(each.value.enabled, true)
-  batch_size                     = coalesce(each.value.batch_size, 100)
-  parallelization_factor         = coalesce(each.value.parallelization_factor, 1)
-  bisect_batch_on_function_error = coalesce(each.value.bisect_batch_on_function_error, false)
-  starting_position              = coalesce(each.value.starting_position, "LATEST")
-  maximum_record_age_in_seconds  = coalesce(each.value.maximum_record_age_in_seconds, -1)
-  maximum_retry_attempts         = coalesce(each.value.maximum_retry_attempts, -1)
-}
-
-resource "aws_lambda_function_event_invoke_config" "stage_invoke_config" {
-  for_each                     = { for k, v in local.lambda_map : k => v if v.create_async_event_config == true }
-  function_name                = module.lambda[each.key].lambda_function_name
-  qualifier                    = module.stage_alias[each.key].lambda_alias_name
-  maximum_event_age_in_seconds = each.value.maximum_event_age_in_seconds
-  maximum_retry_attempts       = each.value.maximum_retry_attempts
 }

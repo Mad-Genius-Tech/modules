@@ -1,14 +1,15 @@
 
 locals {
   default_settings = {
-    server_memory_size                      = 512
-    image_optimisation_memory_size          = 512
+    server_memory_size                      = 1024
+    image_optimisation_memory_size          = 1024
     server_cloudwatch_log_retention_in_days = 1
     # This represents the maximum number of concurrent instances allocated to your function. When a function has reserved concurrency, no other function can use that concurrency. Configuring reserved concurrency for a function incurs no additional charges.
-    # A value of 0 disables Lambda Function from being triggered
-    # -1 removes any concurrency limitations. Defaults to Unreserved Concurrency Limits -1
-    reserved_concurrent_executions = -1
-    schedule_expression            = "rate(15 minutes)"
+    # A value of 0 disables Lambda Function from being triggered, -1 removes any concurrency limitations. Defaults to Unreserved Concurrency Limits -1
+    server_reserved_concurrent_executions    = -1
+    image_reserved_concurrent_executions     = -1
+    provisioned_concurrent_executions        = -1
+    schedule_expression                      = "rate(15 minutes)"
   }
 
   env_default_settings = {
@@ -16,8 +17,8 @@ locals {
       {
         server_memory_size                      = 1024
         image_optimisation_memory_size          = 1024
-        server_cloudwatch_log_retention_in_days = 5
-        reserved_concurrent_executions          = 10
+        server_cloudwatch_log_retention_in_days = 14
+        provisioned_concurrent_executions       = 2
         schedule_expression                     = "rate(5 minutes)"
       }
     )
@@ -25,7 +26,34 @@ locals {
 
   merged_default_settings = can(local.env_default_settings[var.stage_name]) ? lookup(local.env_default_settings, var.stage_name, local.default_settings) : local.default_settings
 
+  merged_settings = {
+    server_memory_size                      = coalesce(var.server_memory_size, local.merged_default_settings.server_memory_size)
+    image_optimisation_memory_size          = coalesce(var.image_optimisation_memory_size, local.merged_default_settings.image_optimisation_memory_size)
+    server_cloudwatch_log_retention_in_days = coalesce(var.server_cloudwatch_log_retention_in_days, local.merged_default_settings.server_cloudwatch_log_retention_in_days)
+    server_reserved_concurrent_executions          = coalesce(var.server_reserved_concurrent_executions, local.merged_default_settings.server_reserved_concurrent_executions)
+    image_reserved_concurrent_executions          = coalesce(var.image_reserved_concurrent_executions, local.merged_default_settings.image_reserved_concurrent_executions)
+    schedule_expression                     = coalesce(var.schedule_expression, local.merged_default_settings.schedule_expression)
+  }
 }
+
+
+module "lambda_sg" {
+  source      = "terraform-aws-modules/security-group/aws"
+  version     = "~> 5.1.0"
+  create      = var.vpc_id == "" ? false : true
+  name        = "${local.name}-server-sg"
+  description = "Lambda ${local.name}-server Security group"
+  egress_with_cidr_blocks = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = -1
+      cidr_blocks = "0.0.0.0/0"
+    }
+  ]
+  vpc_id = var.vpc_id
+}
+
 
 module "server" {
   source                            = "terraform-aws-modules/lambda/aws"
@@ -34,13 +62,17 @@ module "server" {
   description                       = "Open Next Server Function"
   handler                           = "index.handler"
   runtime                           = "nodejs18.x"
-  memory_size                       = coalesce(var.server_memory_size, local.merged_default_settings.server_memory_size)
+  memory_size                       = local.merged_settings.server_memory_size
   timeout                           = 30
-  cloudwatch_logs_retention_in_days = coalesce(var.server_cloudwatch_log_retention_in_days, local.merged_default_settings.server_cloudwatch_log_retention_in_days)
+  cloudwatch_logs_retention_in_days = local.merged_settings.server_cloudwatch_log_retention_in_days
+  reserved_concurrent_executions    = local.merged_settings.server_reserved_concurrent_executions
   architectures                     = ["x86_64"]
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = true
+  vpc_subnet_ids                    = var.vpc_id == "" ? null : var.subnet_ids
+  vpc_security_group_ids            = var.vpc_id == "" ? [] : [module.lambda_sg.security_group_id]
+  attach_network_policy             = var.vpc_id == "" ? false : true
   s3_existing_package = {
     bucket = module.s3_bucket.s3_bucket_id
     key    = aws_s3_object.s3_object_placeholder.id
@@ -56,7 +88,8 @@ module "server" {
     var.enable_dynamodb_cache ? {
       "CACHE_DYNAMO_TABLE" : aws_dynamodb_table.revalidation[0].name
     } : {},
-    var.server_environment_variables
+    var.server_environment_variables,
+    local.secret_vars_env,
   )
   attach_policy_statements = length(var.policy_statements) > 0 ? true : false
   policy_statements        = var.policy_statements
@@ -98,6 +131,13 @@ module "server" {
           "s3:GetObject*"
         ],
         Resource = ["${module.s3_bucket_lambda.s3_bucket_arn}/*"]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "cloudfront:CreateInvalidation",
+        ],
+        Resource = ["*"]
       },
       {
         Effect = "Allow",
@@ -189,11 +229,12 @@ module "image_optimisation" {
   description                       = "Open Next Image Optimization Function"
   handler                           = "index.handler"
   runtime                           = "nodejs18.x"
-  memory_size                       = local.merged_default_settings.image_optimisation_memory_size # 1536
+  memory_size                       = local.merged_settings.image_optimisation_memory_size # 1536
   timeout                           = 25
   cloudwatch_logs_retention_in_days = 1
-  reserved_concurrent_executions    = local.merged_default_settings.reserved_concurrent_executions
-  architectures                     = ["x86_64"]
+  reserved_concurrent_executions    = local.merged_settings.image_reserved_concurrent_executions
+  # https://github.com/sst/open-next/blob/main/packages/open-next/src/build.ts#L375
+  architectures                     = ["arm64"]
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = true
@@ -214,9 +255,9 @@ module "image_optimisation" {
         Action = [
           "s3:GetObject"
         ],
-        Resource = [
+        Resource = compact(distinct(concat([
           "${module.s3_bucket.s3_bucket_arn}/*"
-        ]
+        ], var.image_optimisation_s3_bucket_arns)))
       },
       {
         Effect = "Allow",
@@ -236,6 +277,7 @@ resource "aws_sqs_queue" "revalidation_queue" {
   name                        = "${local.name}-isr-queue.fifo"
   fifo_queue                  = true
   content_based_deduplication = true
+  sqs_managed_sse_enabled     = true
   # https://github.com/sst/sst/blob/master/packages/sst/src/constructs/NextjsSite.ts#L424
   receive_wait_time_seconds = 20
 }
@@ -353,6 +395,7 @@ module "warmer" {
   memory_size                       = 128
   timeout                           = 15 * 60
   cloudwatch_logs_retention_in_days = 1
+  # https://github.com/sst/open-next/blob/main/packages/open-next/src/build.ts#L375
   architectures                     = ["x86_64"]
   create_package                    = false
   ignore_source_code_hash           = true
@@ -392,7 +435,7 @@ module "warmer" {
 
 resource "aws_cloudwatch_event_rule" "cron" {
   name                = "${local.name}-cron"
-  schedule_expression = try(var.schedule_expression, local.merged_default_settings.schedule_expression)
+  schedule_expression = local.merged_settings.schedule_expression
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {
@@ -407,4 +450,21 @@ resource "aws_lambda_permission" "eventbridge_invoke" {
   function_name = module.warmer.lambda_function_arn
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.cron.arn
+}
+
+data "aws_secretsmanager_secret" "secret" {
+  for_each = var.secret_vars
+  name     = each.value.secret_path
+}
+
+data "aws_secretsmanager_secret_version" "secret" {
+  for_each  = var.secret_vars
+  secret_id = data.aws_secretsmanager_secret.secret[each.key].id
+}
+
+locals {
+  secret_vars_env = {
+    for k, v in var.secret_vars : k =>
+    jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.secret[k].secret_string))[v.property] if length(var.secret_vars) > 0
+  }
 }

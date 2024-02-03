@@ -7,7 +7,7 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_cloudfront_function" "x_forwarded_host" {
   name    = "${local.name}-x-forwarded-host"
-  runtime = "cloudfront-js-1.0"
+  runtime = "cloudfront-js-2.0"
   publish = true
   code    = <<EOF
 function handler(event) {
@@ -29,7 +29,7 @@ resource "aws_cloudfront_origin_access_control" "s3_origin_access_control" {
 # https://github.com/sst/sst/blob/master/packages/sst/src/constructs/SsrSite.ts#L1345
 resource "aws_cloudfront_cache_policy" "cache_policy" {
   name        = "${local.name}-cache-policy"
-  comment     = "Server response cache policy for ${local.name}"
+  comment     = "OpenNext server response cache policy for ${local.name}"
   min_ttl     = 0        # CachingOptimized - 1
   max_ttl     = 31536000 # 365*24*60*60
   default_ttl = 0        # CachingOptimized - 86400

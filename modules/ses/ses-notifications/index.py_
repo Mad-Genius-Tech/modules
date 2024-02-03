@@ -1,0 +1,80 @@
+import json
+import os
+import boto3
+from boto3.dynamodb.conditions import Key
+from botocore.exceptions import BotoCoreError, ClientError
+from typing import Dict, Any
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+SES_TABLE_NAME = os.environ['SES_TABLE_NAME']
+
+# Initialize DynamoDB client
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table(SES_TABLE_NAME)
+
+
+def extra_message(message: Dict[str, Any]) -> Dict[str, Any]:
+    # Extract relevant data based on notification type
+    notification_type = message['notificationType']
+    message_id = message['mail']['messageId']
+    source = message['mail']['source']
+
+    match notification_type:
+        case 'Bounce':
+            msg = {
+                'notificationType': 'Bounce',
+                'type': message.get('bounce', {}).get('bounceType', ''),
+                'subType': message.get('bounce', {}).get('bounceSubType', ''),
+                'recipients': [recipient['emailAddress'] for recipient in message.get('bounce', {}).get('bouncedRecipients', [])],
+                'response': message.get('bounce', {}).get('feedbackId', ''),
+                'timestamp': message.get('bounce', {}).get('timestamp', '')
+            }
+        case 'Complaint':
+            msg = {
+                'notificationType': 'Complaint',
+                'type': message.get('complaint', {}).get('complaintFeedbackType', ''),
+                'recipients': [recipient['emailAddress'] for recipient in message.get('complaint', {}).get('complainedRecipients', [])],
+                'response': message.get('complaint', {}).get('feedbackId', ''),
+                'timestamp': message.get('complaint', {}).get('timestamp', '')
+            }
+        case 'Delivery':
+            msg = {
+                'notificationType': 'Delivery',
+                'recipients': [recipient['emailAddress'] for recipient in message.get('delivery', {}).get('recipients', [])],
+                'response':  message.get('delivery', {}).get('smtpResponse', ''),
+                'timestamp': message.get('delivery', {}).get('timestamp', '')
+            }
+        case _:  # default case
+            logger.info(f"Unknown message type:\n{json.dumps(message)}")
+            raise ValueError(f"Invalid message type received: {notification_type}")
+    
+    msg['messageId'] = message_id
+    msg['source'] = source
+    return msg
+
+
+def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+    logger.info(f"Received event: {json.dumps(event)}")
+    try:
+
+        message = json.loads(event['Records'][0]['Sns']['Message'])
+        message_obj = extra_message(message)
+        sns_publish_time = event['Records'][0]['Sns']['Timestamp']
+
+        if message_obj:
+            message_obj['snsPublishTime'] = sns_publish_time
+            response = table.put_item(Item=message_obj)
+            logger.info(f"Stored message {message_obj['messageId']} in DynamoDB: {response}")
+            return {'statusCode': 200, 'body': json.dumps('Data stored in DynamoDB.')}
+        else:
+            return {'statusCode': 200, 'body': json.dumps('Notification type not relevant.')}
+
+    except (BotoCoreError, ClientError) as error:
+        logger.error(f"Error storing data in DynamoDB: {error}")
+        return {'statusCode': 500, 'body': json.dumps('Error storing data in DynamoDB.')}
+    except KeyError as error:
+        logger.error(f"Error parsing SNS message: {error}")
+        return {'statusCode': 500, 'body': json.dumps('Error parsing SNS message.')}

@@ -2,7 +2,7 @@
 
 locals {
   default_settings = {
-    schedule_expression      = "rate(5 minutes)"
+    schedule_expression      = "rate(3 minutes)"
     take_screenshot          = true
     runtime_version          = "syn-python-selenium-2.0"
     handler                  = "canary.handler"
@@ -90,8 +90,8 @@ resource "aws_cloudwatch_metric_alarm" "canary_alarm" {
   alarm_name          = "${each.value.identifier}-alarm"
   comparison_operator = "LessThanThreshold"
   period              = "300"
-  datapoints_to_alarm = "1"
-  evaluation_periods  = "1"
+  datapoints_to_alarm = "2"
+  evaluation_periods  = "2"
   metric_name         = "SuccessPercent"
   namespace           = "CloudWatchSynthetics"
   statistic           = "Average"

@@ -1,8 +1,8 @@
 locals {
   default_settings = {
     "handler"                           = "handler.lambda_handler"
-    "runtime"                           = "python3.10"
-    "timeout"                           = 20
+    "runtime"                           = "python3.11"
+    "timeout"                           = 10
     "memory_size"                       = 1024
     "ephemeral_storage_size"            = 1024
     "create_async_event_config"         = false
@@ -13,7 +13,7 @@ locals {
     "environment_variables"             = {}
     "reserved_concurrent_executions"    = -1
     "provisioned_concurrent_executions" = -1
-    "policies"                          = ["arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole"]
+    "policies"                          = [""]
     "policy_statements"                 = {}
     "create_lambda_function_url"        = true
     "keep_warm"                         = true
@@ -24,7 +24,7 @@ locals {
   env_default_settings = {
     prod = merge(local.default_settings,
       {
-        "provisioned_concurrent_executions" = 2
+        "provisioned_concurrent_executions" = -1
       }
     )
   }
@@ -36,11 +36,17 @@ locals {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-module "imgproxy" {
+
+data "aws_lambda_function" "lambda_function" {
+  count         = var.image_uri == "" ? 1 : 0
+  function_name = module.context.id
+}
+
+module "webadapter" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 6.0.1"
-  function_name                     = "${module.context.id}-imgproxy"
-  description                       = "${module.context.id} imgproxy"
+  function_name                     = module.context.id
+  description                       = "${module.context.id} webadapter"
   create_package                    = false
   memory_size                       = local.merged_default_settings.memory_size
   ephemeral_storage_size            = local.merged_default_settings.ephemeral_storage_size
@@ -53,8 +59,13 @@ module "imgproxy" {
   maximum_event_age_in_seconds      = local.merged_default_settings.maximum_event_age_in_seconds
   create_lambda_function_url        = local.merged_default_settings.create_lambda_function_url
   cors                              = var.cors
+  vpc_subnet_ids                    = var.vpc_id == "" ? null : var.subnet_ids
+  vpc_security_group_ids            = var.vpc_id == "" ? [] : [module.lambda_sg.security_group_id]
+  attach_network_policy             = var.vpc_id == "" ? false : true
   attach_policy                     = true
   policy                            = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  attach_policy_statements          = length(var.policy_statements) > 0 ? true : false
+  policy_statements                 = var.policy_statements
   attach_policy_json                = true
   policy_json                       = <<-EOT
   {
@@ -77,37 +88,90 @@ module "imgproxy" {
   environment_variables = merge(
     var.environment_variables,
     {
-      LAMBDA_CONFIG_PROJECT_NAME = "${module.context.id}-imgproxy"
+      LAMBDA_CONFIG_PROJECT_NAME = "${module.context.id}-webadapter"
       LAMBDA_CONFIG_AWS_REGION   = data.aws_region.current.name
     },
-    local.merged_default_settings.environment_variables
+    local.merged_default_settings.environment_variables,
+    local.secret_vars_env,
   )
   package_type  = "Image"
-  image_uri     = var.image_uri
+  image_uri     = var.image_uri == "" ? data.aws_lambda_function.lambda_function[0].image_uri : var.image_uri
   architectures = local.merged_default_settings.architectures
   tags          = local.tags
 }
 
+module "lambda_sg" {
+  source      = "terraform-aws-modules/security-group/aws"
+  version     = "~> 5.1.0"
+  create      = var.vpc_id == "" ? false : true
+  name        = "${module.context.id}-sg"
+  description = "Lambda ${module.context.id} Security group"
+  egress_with_cidr_blocks = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = -1
+      cidr_blocks = "0.0.0.0/0"
+    }
+  ]
+  vpc_id = var.vpc_id
+}
+
+module "stage_alias" {
+  source           = "terraform-aws-modules/lambda/aws//modules/alias"
+  version          = "~> 6.0.0"
+  refresh_alias    = false
+  name             = var.stage_name
+  function_name    = module.webadapter.lambda_function_name
+  function_version = module.webadapter.lambda_function_version
+}
+
+module "test_alias" {
+  source           = "terraform-aws-modules/lambda/aws//modules/alias"
+  version          = "~> 6.0.0"
+  refresh_alias    = false
+  name             = "test"
+  function_name    = module.webadapter.lambda_function_name
+  function_version = module.webadapter.lambda_function_version
+}
+
 resource "aws_cloudwatch_event_rule" "cron" {
   count               = local.merged_default_settings.keep_warm ? 1 : 0
-  name                = "${module.context.id}-imgproxy-keepwarm"
-  description         = "Sends event to lambda ${module.context.id}-imgproxy based on cronjob"
+  name                = "${module.context.id}-keepwarm"
+  description         = "Sends event to lambda ${module.context.id} based on cronjob"
   schedule_expression = local.merged_default_settings.keep_warm_expression
   tags                = local.tags
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {
   count     = local.merged_default_settings.keep_warm ? 1 : 0
-  target_id = "${module.context.id}-imgproxy"
+  target_id = module.context.id
   rule      = aws_cloudwatch_event_rule.cron[0].name
-  arn       = module.imgproxy.lambda_function_arn
+  arn       = module.webadapter.lambda_function_arn
 }
 
 resource "aws_lambda_permission" "cloudwatch" {
   count         = local.merged_default_settings.keep_warm ? 1 : 0
   statement_id  = "AllowExecutionFromCloudWatch"
   action        = "lambda:InvokeFunction"
-  function_name = module.imgproxy.lambda_function_name
+  function_name = module.webadapter.lambda_function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.cron[0].arn
+}
+
+data "aws_secretsmanager_secret" "secret" {
+  for_each = var.secret_vars
+  name     = each.value.secret_path
+}
+
+data "aws_secretsmanager_secret_version" "secret" {
+  for_each  = var.secret_vars
+  secret_id = data.aws_secretsmanager_secret.secret[each.key].id
+}
+
+locals {
+  secret_vars_env = {
+    for k, v in var.secret_vars : k =>
+    jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.secret[k].secret_string))[v.property] if length(var.secret_vars) > 0
+  }
 }

@@ -36,7 +36,45 @@ variable "server_memory_size" {
   default = null
 }
 
+variable "image_optimisation_memory_size" {
+  type    = number
+  default = null
+}
+
+variable "server_reserved_concurrent_executions" {
+  type    = number
+  default = null
+}
+
+variable "image_reserved_concurrent_executions" {
+  type    = number
+  default = null
+}
+
 variable "schedule_expression" {
   type    = string
   default = null
+}
+
+variable "vpc_id" {
+  type    = string
+  default = ""
+}
+
+variable "subnet_ids" {
+  type    = list(any)
+  default = []
+}
+
+variable "secret_vars" {
+  type = map(object({
+    secret_path = string
+    property    = string
+  }))
+  default = {}
+}
+
+variable "image_optimisation_s3_bucket_arns" {
+  type    = list(string)
+  default = []
 }
