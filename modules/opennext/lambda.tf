@@ -6,10 +6,10 @@ locals {
     server_cloudwatch_log_retention_in_days = 1
     # This represents the maximum number of concurrent instances allocated to your function. When a function has reserved concurrency, no other function can use that concurrency. Configuring reserved concurrency for a function incurs no additional charges.
     # A value of 0 disables Lambda Function from being triggered, -1 removes any concurrency limitations. Defaults to Unreserved Concurrency Limits -1
-    server_reserved_concurrent_executions    = -1
-    image_reserved_concurrent_executions     = -1
-    provisioned_concurrent_executions        = -1
-    schedule_expression                      = "rate(15 minutes)"
+    server_reserved_concurrent_executions = -1
+    image_reserved_concurrent_executions  = -1
+    provisioned_concurrent_executions     = -1
+    schedule_expression                   = "rate(15 minutes)"
   }
 
   env_default_settings = {
@@ -30,8 +30,8 @@ locals {
     server_memory_size                      = coalesce(var.server_memory_size, local.merged_default_settings.server_memory_size)
     image_optimisation_memory_size          = coalesce(var.image_optimisation_memory_size, local.merged_default_settings.image_optimisation_memory_size)
     server_cloudwatch_log_retention_in_days = coalesce(var.server_cloudwatch_log_retention_in_days, local.merged_default_settings.server_cloudwatch_log_retention_in_days)
-    server_reserved_concurrent_executions          = coalesce(var.server_reserved_concurrent_executions, local.merged_default_settings.server_reserved_concurrent_executions)
-    image_reserved_concurrent_executions          = coalesce(var.image_reserved_concurrent_executions, local.merged_default_settings.image_reserved_concurrent_executions)
+    server_reserved_concurrent_executions   = coalesce(var.server_reserved_concurrent_executions, local.merged_default_settings.server_reserved_concurrent_executions)
+    image_reserved_concurrent_executions    = coalesce(var.image_reserved_concurrent_executions, local.merged_default_settings.image_reserved_concurrent_executions)
     schedule_expression                     = coalesce(var.schedule_expression, local.merged_default_settings.schedule_expression)
   }
 }
@@ -234,10 +234,10 @@ module "image_optimisation" {
   cloudwatch_logs_retention_in_days = 1
   reserved_concurrent_executions    = local.merged_settings.image_reserved_concurrent_executions
   # https://github.com/sst/open-next/blob/main/packages/open-next/src/build.ts#L375
-  architectures                     = ["arm64"]
-  create_package                    = false
-  ignore_source_code_hash           = true
-  create_lambda_function_url        = true
+  architectures              = ["arm64"]
+  create_package             = false
+  ignore_source_code_hash    = true
+  create_lambda_function_url = true
   s3_existing_package = {
     bucket = module.s3_bucket.s3_bucket_id
     key    = aws_s3_object.s3_object_placeholder.id
@@ -396,10 +396,10 @@ module "warmer" {
   timeout                           = 15 * 60
   cloudwatch_logs_retention_in_days = 1
   # https://github.com/sst/open-next/blob/main/packages/open-next/src/build.ts#L375
-  architectures                     = ["x86_64"]
-  create_package                    = false
-  ignore_source_code_hash           = true
-  create_lambda_function_url        = true
+  architectures              = ["x86_64"]
+  create_package             = false
+  ignore_source_code_hash    = true
+  create_lambda_function_url = true
   s3_existing_package = {
     bucket = module.s3_bucket.s3_bucket_id
     key    = aws_s3_object.s3_object_placeholder.id

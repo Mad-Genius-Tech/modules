@@ -27,15 +27,15 @@ resource "aws_api_gateway_resource" "compaign_id" {
 }
 
 resource "aws_api_gateway_method" "campaign_id_get" {
-  for_each      = local.lambda_map
-  rest_api_id   = aws_api_gateway_rest_api.rest_api.id
-  resource_id   = aws_api_gateway_resource.compaign_id[each.key].id
-  http_method   = "GET"
-  authorization = "NONE"
+  for_each             = local.lambda_map
+  rest_api_id          = aws_api_gateway_rest_api.rest_api.id
+  resource_id          = aws_api_gateway_resource.compaign_id[each.key].id
+  http_method          = "GET"
+  authorization        = "NONE"
   request_validator_id = aws_api_gateway_request_validator.validator.id
   request_parameters = {
     "method.request.path.campaignId" = true
-    "method.request.querystring.platform" = true
+    # "method.request.querystring.platform" = true
   }
 }
 
@@ -82,14 +82,18 @@ resource "aws_api_gateway_stage" "stage" {
 resource "aws_api_gateway_deployment" "deployment" {
   rest_api_id = aws_api_gateway_rest_api.rest_api.id
   depends_on = [
-    aws_api_gateway_integration.integration,
+    aws_api_gateway_rest_api.rest_api,
     aws_api_gateway_resource.prefix,
     aws_api_gateway_resource.compaign_id,
+    aws_api_gateway_method.campaign_id_get,
+    aws_api_gateway_integration.integration,
   ]
 
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_rest_api.rest_api,
+      aws_api_gateway_resource.prefix,
+      aws_api_gateway_resource.compaign_id,
       aws_api_gateway_method.campaign_id_get,
       aws_api_gateway_integration.integration,
     ]))

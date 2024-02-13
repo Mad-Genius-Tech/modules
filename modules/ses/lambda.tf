@@ -113,15 +113,15 @@ resource "aws_dynamodb_table" "ses_notifications" {
   }
 
   global_secondary_index {
-    name      = "SESMessageType-Index"
-    hash_key  = "SESMessageType"
-    range_key = "SnsPublishTime"
+    name            = "SESMessageType-Index"
+    hash_key        = "SESMessageType"
+    range_key       = "SnsPublishTime"
     projection_type = "ALL"
   }
   global_secondary_index {
-    name      = "SESMessageComplaintType-Index"
-    hash_key  = "SESComplaintFeedbackType"
-    range_key = "SnsPublishTime"
+    name            = "SESMessageComplaintType-Index"
+    hash_key        = "SESComplaintFeedbackType"
+    range_key       = "SnsPublishTime"
     projection_type = "ALL"
   }
   tags = local.tags

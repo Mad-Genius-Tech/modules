@@ -11,8 +11,8 @@ output "user_pool" {
 output "identity_pool" {
   value = {
     for k, v in aws_cognito_identity_pool.identity_pool : k => {
-      id   = v.id
-      arn  = v.arn
+      id  = v.id
+      arn = v.arn
     }
   }
 }

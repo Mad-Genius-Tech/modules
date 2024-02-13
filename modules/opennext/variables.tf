@@ -78,3 +78,8 @@ variable "image_optimisation_s3_bucket_arns" {
   type    = list(string)
   default = []
 }
+
+variable "discord_url" {
+  type    = string
+  default = ""
+}

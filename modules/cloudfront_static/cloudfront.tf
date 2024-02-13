@@ -117,12 +117,12 @@ resource "aws_cloudfront_function" "subdomain_redirect" {
 
 # https://github.com/sst/sst/blob/master/packages/sst/src/constructs/SsrSite.ts#L790
 resource "aws_cloudfront_distribution" "website_distribution" {
-  enabled         = true
-  comment         = "CloudFront for ${local.name}"
-  is_ipv6_enabled = true
-  aliases         = var.domain_names
-  price_class     = "PriceClass_100"
-  http_version    = "http2"
+  enabled             = true
+  comment             = "CloudFront for ${local.name}"
+  is_ipv6_enabled     = true
+  aliases             = var.domain_names
+  price_class         = "PriceClass_100"
+  http_version        = "http2"
   default_root_object = "index.html"
 
   # logging_config {
@@ -147,7 +147,7 @@ resource "aws_cloudfront_distribution" "website_distribution" {
     domain_name              = data.aws_s3_bucket.static_s3_bucket.bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.s3_origin_access_control.id
     # origin_path              = "/"
-    origin_id                = local.s3_origin_id
+    origin_id = local.s3_origin_id
   }
 
   # dynamic "ordered_cache_behavior" {

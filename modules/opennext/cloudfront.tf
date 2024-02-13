@@ -18,6 +18,26 @@ function handler(event) {
 EOF
 }
 
+resource "aws_cloudfront_function" "discord" {
+  count   = var.discord_url != "" ? 1 : 0
+  name    = "${local.name}-discord"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<EOF
+async function handler(event) {
+    const newurl = "${var.discord_url}";
+    const response = {
+        statusCode: 302,
+        statusDescription: 'Found',
+        headers:
+            { "location": { "value": newurl } }
+        }
+    return response;
+}
+EOF
+}
+
+
 resource "aws_cloudfront_origin_access_control" "s3_origin_access_control" {
   name                              = "${local.name}-s3"
   origin_access_control_origin_type = "s3"
@@ -55,8 +75,20 @@ data "aws_cloudfront_origin_request_policy" "all_viewer_except_host_header" {
   name = "Managed-AllViewerExceptHostHeader"
 }
 
+data "aws_cloudfront_origin_request_policy" "user_agent_referer_headers" {
+  name = "Managed-UserAgentRefererHeaders"
+}
+
 data "aws_cloudfront_cache_policy" "caching_optimized" {
   name = "Managed-CachingOptimized"
+}
+
+data "aws_cloudfront_cache_policy" "no_cache" {
+  name = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_response_headers_policy" "simple_cors" {
+  name = "Managed-SimpleCORS"
 }
 
 resource "aws_cloudfront_response_headers_policy" "response_headers_policy" {
@@ -190,6 +222,22 @@ resource "aws_cloudfront_distribution" "website_distribution" {
       origin_protocol_policy = "https-only"
       origin_ssl_protocols   = ["TLSv1.2"]
       # origin_read_timeout    = 10 # Defaults to 30
+    }
+  }
+  dynamic "ordered_cache_behavior" {
+    for_each = var.discord_url != "" ? [1] : []
+    content {
+      target_origin_id       = local.s3_origin_id
+      path_pattern           = "/discord*"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD", "OPTIONS"]
+      compress               = true
+      cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.discord[0].arn
+      }
     }
   }
 
