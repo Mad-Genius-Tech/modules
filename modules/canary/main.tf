@@ -4,7 +4,7 @@ locals {
   default_settings = {
     schedule_expression      = "rate(3 minutes)"
     take_screenshot          = true
-    runtime_version          = "syn-python-selenium-2.0"
+    runtime_version          = "syn-python-selenium-2.1"
     handler                  = "canary.handler"
     timeout_in_seconds       = 15
     memory_in_mb             = 960

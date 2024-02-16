@@ -28,6 +28,7 @@ locals {
     apply_immediately                     = true
     secret_rotation_enabled               = false
     enable_cloudwatch_alarm               = false
+    storage_type                          = "gp2"
     alarms = {
       "statistic"               = "Average"
       "namespace"               = "AWS/RDS"
@@ -51,6 +52,7 @@ locals {
         create_monitoring_role                = true
         monitoring_interval                   = 60
         enable_cloudwatch_alarm               = true
+        storage_type                          = "gp3"
     })
   }
 
@@ -92,6 +94,7 @@ locals {
       "apply_immediately"                     = coalesce(lookup(v, "apply_immediately", null), local.merged_default_settings.apply_immediately)
       "secret_rotation_enabled"               = coalesce(lookup(v, "secret_rotation_enabled", null), local.merged_default_settings.secret_rotation_enabled)
       "enable_cloudwatch_alarm"               = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
+      "storage_type"                          = coalesce(lookup(v, "storage_type", null), local.merged_default_settings.storage_type)
       "alarms" = {
         for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
           "identifier"              = "${module.context.id}-${k}-${k1}"
@@ -122,6 +125,7 @@ module "rds" {
   instance_class                        = each.value.instance_class
   allocated_storage                     = each.value.allocated_storage
   max_allocated_storage                 = each.value.max_allocated_storage
+  storage_type                          = each.value.storage_type
   db_name                               = each.value.db_name
   username                              = each.value.username
   port                                  = each.value.port

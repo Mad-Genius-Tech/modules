@@ -30,6 +30,7 @@ variable "rds" {
     lambda_functions        = optional(list(string))
     apply_immediately       = optional(bool)
     secret_rotation_enabled = optional(bool)
+    storage_type            = optional(string)
     parameters = optional(list(object({
       name         = string
       value        = string
