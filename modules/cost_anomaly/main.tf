@@ -1,11 +1,23 @@
-
-
 resource "aws_ce_anomaly_monitor" "service_monitor" {
-  count             = var.sns_topic_arn != "" ? 1 : 0
   name              = "AWSServiceMonitor"
-  monitor_type      = "DIMENSIONAL"
-  monitor_dimension = "SERVICE"
-  tags              = local.tags
+  monitor_type      = var.cost_category == null ? "DIMENSIONAL" : "CUSTOM"
+  monitor_dimension = var.cost_category == null ? "SERVICE" : null
+
+  monitor_specification = var.cost_category == null ? null : jsonencode(
+    {
+      And = null
+      CostCategories = {
+        Key          = var.cost_category.name
+        Values       = [var.cost_category.value]
+        MatchOptions = null
+      }
+      Dimensions = null
+      Not        = null
+      Or         = null
+      Tags       = null
+    }
+  )
+  tags = local.tags
 }
 
 resource "aws_ce_anomaly_subscription" "subscription" {
@@ -14,12 +26,30 @@ resource "aws_ce_anomaly_subscription" "subscription" {
   frequency = "IMMEDIATE"
 
   monitor_arn_list = [
-    aws_ce_anomaly_monitor.service_monitor[0].arn,
+    aws_ce_anomaly_monitor.service_monitor.arn,
   ]
 
   subscriber {
     type    = "SNS"
     address = var.sns_topic_arn
+  }
+
+  dynamic "subscriber" {
+    for_each = var.notification_email != "" ? [var.notification_email] : []
+
+    content {
+      type    = "EMAIL"
+      address = var.notification_email
+    }
+  }
+
+  dynamic "subscriber" {
+    for_each = var.sns_topic_arn != "" ? [var.sns_topic_arn] : []
+
+    content {
+      type    = "SNS"
+      address = var.sns_topic_arn
+    }
   }
 
   threshold_expression {
