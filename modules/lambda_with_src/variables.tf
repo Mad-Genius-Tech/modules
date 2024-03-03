@@ -33,6 +33,7 @@ variable "lambda" {
     layers                            = optional(list(string))
     create_lambda_function_url        = optional(bool)
     local_existing_package            = optional(string)
+    ignore_source_code_hash           = optional(bool)
     lambda_permissions = optional(map(object({
       principal  = string
       source_arn = string

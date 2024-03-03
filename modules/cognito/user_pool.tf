@@ -224,6 +224,7 @@ resource "aws_cognito_user_pool" "user_pool" {
       custom_message      = lookup(lambda_config.value, "custom_message", null)
       post_confirmation   = lookup(lambda_config.value, "post_confirmation", null)
       post_authentication = lookup(lambda_config.value, "post_authentication", null)
+      pre_sign_up         = lookup(lambda_config.value, "pre_sign_up", null)
     }
   }
 

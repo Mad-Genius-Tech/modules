@@ -6,6 +6,10 @@ output "aws_availability_zones" {
   value = data.aws_availability_zones.available
 }
 
+output "azs" {
+  value = slice(data.aws_availability_zones.available.names, 0, var.subnet_num)
+}
+
 output "vpc_name" {
   value = module.vpc.name
 }

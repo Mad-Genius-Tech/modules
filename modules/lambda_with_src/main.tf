@@ -14,6 +14,7 @@ locals {
     "provisioned_concurrent_executions" = -1
     "layers"                            = []
     "local_existing_package"            = ""
+    "ignore_source_code_hash"           = true
     "policies"                          = []
     "policy_statements"                 = {}
     "secret_vars"                       = {}
@@ -76,6 +77,7 @@ locals {
       "local_existing_package"            = try(coalesce(lookup(v, "local_existing_package", ""), local.merged_default_settings.local_existing_package), local.merged_default_settings.local_existing_package)
       "lambda_permissions"                = coalesce(lookup(v, "lambda_permissions", null), local.merged_default_settings.lambda_permissions)
       "eventbridge_rules"                 = coalesce(lookup(v, "eventbridge_rules", null), local.merged_default_settings.eventbridge_rules)
+      "ignore_source_code_hash"           = coalesce(lookup(v, "ignore_source_code_hash", null), local.merged_default_settings.ignore_source_code_hash)
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }
@@ -148,7 +150,7 @@ module "lambda" {
   attach_policies          = length(each.value.policies) > 0 ? true : false
   policies                 = each.value.policies
   number_of_policies       = length(each.value.policies)
-  ignore_source_code_hash  = true
+  ignore_source_code_hash  = each.value.ignore_source_code_hash
   tags                     = local.tags
 }
 
