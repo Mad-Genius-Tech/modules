@@ -18,6 +18,7 @@ locals {
     "keep_warm"                         = true
     "keep_warm_expression"              = "rate(15 minutes)"
     "dynamodb_tables"                   = {}
+    "sqs"                               = {}
     "secret_vars"                       = {}
     "cloudwatch_events"                 = {}
     "create_lambda_function_url"        = false
@@ -67,6 +68,7 @@ locals {
       "cloudwatch_logs_retention_in_days" = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
       "stage_name"                        = coalesce(lookup(v, "stage_name", null), var.stage_name)
       "dynamodb_tables"                   = coalesce(lookup(v, "dynamodb_tables", null), local.merged_default_settings.dynamodb_tables)
+      "sqs"                               = coalesce(lookup(v, "sqs", null), local.merged_default_settings.sqs)
       "secret_vars"                       = coalesce(lookup(v, "secret_vars", null), local.merged_default_settings.secret_vars)
       "cloudwatch_events"                 = coalesce(lookup(v, "cloudwatch_events", null), local.merged_default_settings.cloudwatch_events)
       "layers"                            = distinct(compact(concat(coalesce(lookup(v, "layers", null), local.merged_default_settings.layers), local.merged_default_settings.layers)))
@@ -167,6 +169,7 @@ module "lambda" {
   create_package                    = false
   create_lambda_function_url        = each.value.create_lambda_function_url
   cors                              = each.value.cors
+  provisioned_concurrent_executions = each.value.provisioned_concurrent_executions
   s3_existing_package = {
     bucket = module.s3_bucket[each.key].s3_bucket_id
     key    = aws_s3_object.s3_object[each.key].id
@@ -364,6 +367,45 @@ resource "aws_lambda_event_source_mapping" "map_events" {
 }
 
 resource "aws_lambda_function_event_invoke_config" "stage_invoke_config" {
+  for_each                     = { for k, v in local.lambda_map : k => v if v.create_async_event_config == true }
+  function_name                = module.lambda[each.key].lambda_function_name
+  qualifier                    = module.stage_alias[each.key].lambda_alias_name
+  maximum_event_age_in_seconds = each.value.maximum_event_age_in_seconds
+  maximum_retry_attempts       = each.value.maximum_retry_attempts
+}
+
+locals {
+  sqs_map = merge([
+    for k, v in local.lambda_map : {
+      for table_name in keys(v.sqs) : "${k}|${table_name}" => v.sqs[table_name]
+    } if length(v.sqs) > 0
+  ]...)
+}
+
+data "aws_sqs_queue" "queue" {
+  for_each = local.sqs_map
+  name     = each.value.queue_name
+}
+
+resource "aws_lambda_event_source_mapping" "sqs_map_events" {
+  for_each                       = local.sqs_map
+  event_source_arn               = data.aws_sqs_queue.queue[each.key].arn
+  function_name                  = module.stage_alias[split("|", each.key)[0]].lambda_alias_arn
+  enabled                        = coalesce(each.value.enabled, true)
+  # filter_criteria {
+  #   filter {
+  #     pattern = jsonencode({
+  #       body = {
+  #         Temperature : [{ numeric : [">", 0, "<=", 100] }]
+  #         Location : ["New York"]
+  #       }
+  #     })
+  #   }
+  # }
+  batch_size                     = coalesce(each.value.batch_size, 10)
+}
+
+resource "aws_lambda_function_event_invoke_config" "sqs_stage_invoke_config" {
   for_each                     = { for k, v in local.lambda_map : k => v if v.create_async_event_config == true }
   function_name                = module.lambda[each.key].lambda_function_name
   qualifier                    = module.stage_alias[each.key].lambda_alias_name

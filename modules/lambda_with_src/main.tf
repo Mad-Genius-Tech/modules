@@ -24,6 +24,7 @@ locals {
       "principal"  = ""
       "source_arn" = ""
     }
+    "sqs"  = {}
     "cors" = {
       allow_origins     = null
       allow_methods     = null
@@ -74,6 +75,7 @@ locals {
       "provisioned_concurrent_executions" = coalesce(lookup(v, "provisioned_concurrent_executions", null), local.merged_default_settings.provisioned_concurrent_executions)
       "create_lambda_function_url"        = coalesce(lookup(v, "create_lambda_function_url", null), local.merged_default_settings.create_lambda_function_url)
       "cors"                              = coalesce(lookup(v, "cors", null), local.merged_default_settings.cors)
+      "sqs"                               = coalesce(lookup(v, "sqs", null), local.merged_default_settings.sqs)
       "local_existing_package"            = try(coalesce(lookup(v, "local_existing_package", ""), local.merged_default_settings.local_existing_package), local.merged_default_settings.local_existing_package)
       "lambda_permissions"                = coalesce(lookup(v, "lambda_permissions", null), local.merged_default_settings.lambda_permissions)
       "eventbridge_rules"                 = coalesce(lookup(v, "eventbridge_rules", null), local.merged_default_settings.eventbridge_rules)
@@ -220,4 +222,49 @@ resource "aws_lambda_permission" "eventbridge_invoke" {
   function_name       = module.lambda[split("|", each.key)[0]].lambda_function_name
   principal           = "events.amazonaws.com"
   source_arn          = aws_cloudwatch_event_rule.event_rule[each.key].arn
+}
+
+
+locals {
+  sqs_map = merge([
+    for k, v in local.lambda_map : {
+      for table_name in keys(v.sqs) : "${k}|${table_name}" => v.sqs[table_name]
+    } if length(v.sqs) > 0
+  ]...)
+}
+
+data "aws_sqs_queue" "queue" {
+  for_each = local.sqs_map
+  name     = each.value.queue_name
+}
+
+resource "aws_lambda_event_source_mapping" "sqs_map_events" {
+  for_each                       = local.sqs_map
+  event_source_arn               = data.aws_sqs_queue.queue[each.key].arn
+  function_name                  = module.lambda[split("|", each.key)[0]].lambda_function_name
+  enabled                        = coalesce(each.value.enabled, true)
+  dynamic "scaling_config" {
+    for_each = length(each.value.scaling_config[0]) > 0 ? each.value.scaling_config : []
+    content {
+      maximum_concurrency                = lookup(scaling_config.value, "maximum_concurrency", null)
+    }
+  }
+  batch_size                     = coalesce(each.value.batch_size, 10)
+  # filter_criteria {
+  #   filter {
+  #     pattern = jsonencode({
+  #       body = {
+  #         Temperature : [{ numeric : [">", 0, "<=", 100] }]
+  #         Location : ["New York"]
+  #       }
+  #     })
+  #   }
+  # }
+}
+
+resource "aws_lambda_function_event_invoke_config" "sqs_stage_invoke_config" {
+  for_each                     = { for k, v in local.lambda_map : k => v if v.create_async_event_config == true }
+  function_name                = module.lambda[each.key].lambda_function_name
+  maximum_event_age_in_seconds = each.value.maximum_event_age_in_seconds
+  maximum_retry_attempts       = each.value.maximum_retry_attempts
 }

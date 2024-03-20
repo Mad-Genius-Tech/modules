@@ -27,6 +27,14 @@ variable "lambda" {
       actions   = list(string)
       resources = list(string)
     })))
+    sqs = optional(map(object({
+      enabled = optional(bool)
+      queue_name = string
+      batch_size = optional(number)
+      scaling_config = optional(list(object({
+        maximum_concurrency = optional(number)
+      })))
+    })))
     provisioned_concurrent_executions = optional(number)
     cloudwatch_logs_retention_in_days = optional(number)
     policies                          = optional(list(string))

@@ -51,6 +51,11 @@ variable "lambda" {
       max_age_seconds   = optional(number)
       allow_credentials = optional(bool)
     }))
+    sqs = optional(map(object({
+      enabled = optional(bool)
+      queue_name = string
+      batch_size = optional(number)
+    })))
     dynamodb_tables = optional(map(object({
       enabled                        = optional(bool)
       table_name                     = string

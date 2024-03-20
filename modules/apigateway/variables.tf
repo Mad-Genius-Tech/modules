@@ -6,6 +6,7 @@ variable "apigateway" {
     domain_names = optional(map(object({
       use_wildcard_domain = optional(bool)
       domain_name         = optional(string)
+      use_acm             = optional(bool)
     })))
     xray_tracing_enabled        = optional(bool)
     lambda_function             = string

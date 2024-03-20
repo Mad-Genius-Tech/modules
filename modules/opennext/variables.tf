@@ -83,3 +83,8 @@ variable "discord_url" {
   type    = string
   default = ""
 }
+
+variable "price_class" {
+  type       = string
+  default    = "PriceClass_100"
+}

@@ -44,7 +44,7 @@ data "aws_lambda_function" "lambda_function" {
 
 module "webadapter" {
   source                            = "terraform-aws-modules/lambda/aws"
-  version                           = "~> 6.0.1"
+  version                           = "~> 7.2.1"
   function_name                     = module.context.id
   description                       = "${module.context.id} webadapter"
   create_package                    = false
@@ -62,8 +62,8 @@ module "webadapter" {
   vpc_subnet_ids                    = var.vpc_id == "" ? null : var.subnet_ids
   vpc_security_group_ids            = var.vpc_id == "" ? [] : [module.lambda_sg.security_group_id]
   attach_network_policy             = var.vpc_id == "" ? false : true
-  attach_policy                     = true
-  policy                            = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  #attach_policy                     = true
+  #policy                            = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
   attach_policy_statements          = length(var.policy_statements) > 0 ? true : false
   policy_statements                 = var.policy_statements
   attach_policy_json                = true

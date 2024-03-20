@@ -5,6 +5,7 @@ locals {
     enabled                                = true
     price_class                            = "PriceClass_100"
     s3_bucket                              = ""
+    attach_cloudfront_policy               = true
     wildcard_domain                        = true
     default_cache_behavior_allowed_methods = ["GET", "HEAD"]
     viewer_protocol_policy                 = "redirect-to-https"
@@ -41,6 +42,7 @@ locals {
       "aliases"                                = distinct(compact(concat(coalesce(lookup(v, "aliases", []), []), [v.domain_name])))
       "enabled"                                = try(coalesce(lookup(v, "enabled", null), local.merged_default_settings.enabled), local.merged_default_settings.enabled)
       "s3_bucket"                              = try(coalesce(lookup(v, "s3_bucket", null), local.merged_default_settings.s3_bucket), local.merged_default_settings.s3_bucket)
+      "attach_cloudfront_policy"               = try(coalesce(lookup(v, "attach_cloudfront_policy", null), local.merged_default_settings.attach_cloudfront_policy), local.merged_default_settings.attach_cloudfront_policy)
       "wildcard_domain"                        = try(coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain), local.merged_default_settings.wildcard_domain)
       "price_class"                            = try(coalesce(lookup(v, "price_class", null), local.merged_default_settings.price_class), local.merged_default_settings.price_class)
       "default_cache_behavior_allowed_methods" = try(coalesce(lookup(v, "default_cache_behavior_allowed_methods", null), local.merged_default_settings.default_cache_behavior_allowed_methods), local.merged_default_settings.default_cache_behavior_allowed_methods)
@@ -121,7 +123,9 @@ module "cloudfront" {
     each.value.origin_domain_name != "" ? {
       "${each.value.origin_domain_name}" = {
         domain_name          = each.value.origin_domain_name
-        custom_origin_config = each.value.custom_origin_config
+        custom_origin_config = strcontains(each.value.origin_domain_name, "s3-website") ? merge(each.value.custom_origin_config, {
+          origin_protocol_policy = "http-only"
+        }) : each.value.custom_origin_config
       }
     } : {}
   )
@@ -185,7 +189,7 @@ data "aws_s3_bucket" "s3_bucket" {
 }
 
 resource "aws_s3_bucket_policy" "bucket_policy" {
-  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.s3_bucket, ""), "")) > 0 }
+  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.s3_bucket, ""), "")) > 0 && v.attach_cloudfront_policy }
   bucket   = data.aws_s3_bucket.s3_bucket[each.key].id
   policy   = data.aws_iam_policy_document.bucket_policy[each.key].json
 }

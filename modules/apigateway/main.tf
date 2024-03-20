@@ -471,6 +471,7 @@ locals {
       for k1, v1 in v.domain_names : "${k}|${k1}" => {
         "domain_name"         = v1.domain_name
         "use_wildcard_domain" = coalesce(lookup(v1, "use_wildcard_domain", true), true)
+        "use_acm"             = coalesce(lookup(v1, "use_acm", true), true)
         "endpoint_type"       = v.endpoint_type[0]
       }
     } if v.create && length(v.domain_names) > 0
@@ -478,27 +479,27 @@ locals {
 }
 
 data "aws_acm_certificate" "wildcard" {
-  for_each = { for k, v in local.domain_names : k => v if v.use_wildcard_domain && v.endpoint_type == "EDGE" }
+  for_each = { for k, v in local.domain_names : k => v if v.use_wildcard_domain && v.endpoint_type == "EDGE" && v.use_acm }
   domain   = length(split(".", each.value.domain_name)) > 2 ? join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name)))) : each.value.domain_name
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "non_wildcard" {
-  for_each = { for k, v in local.domain_names : k => v if !v.use_wildcard_domain && v.endpoint_type == "EDGE" }
+  for_each = { for k, v in local.domain_names : k => v if !v.use_wildcard_domain && v.endpoint_type == "EDGE" && v.use_acm }
   domain   = each.value.domain_name
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "regional_wildcard" {
-  for_each = { for k, v in local.domain_names : k => v if v.use_wildcard_domain && v.endpoint_type == "REGIONAL" }
+  for_each = { for k, v in local.domain_names : k => v if v.use_wildcard_domain && v.endpoint_type == "REGIONAL" && v.use_acm }
   domain   = length(split(".", each.value.domain_name)) > 2 ? join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name)))) : each.value.domain_name
   statuses = ["ISSUED"]
 }
 
 data "aws_acm_certificate" "regional_non_wildcard" {
-  for_each = { for k, v in local.domain_names : k => v if !v.use_wildcard_domain && v.endpoint_type == "REGIONAL" }
+  for_each = { for k, v in local.domain_names : k => v if !v.use_wildcard_domain && v.endpoint_type == "REGIONAL" && v.use_acm }
   domain   = each.value.domain_name
   statuses = ["ISSUED"]
 }
@@ -506,8 +507,8 @@ data "aws_acm_certificate" "regional_non_wildcard" {
 resource "aws_api_gateway_domain_name" "domain_name" {
   for_each                 = local.domain_names
   domain_name              = each.value.domain_name
-  certificate_arn          = each.value.endpoint_type == "EDGE" ? (each.value.use_wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn) : null
-  regional_certificate_arn = each.value.endpoint_type == "REGIONAL" ? (each.value.use_wildcard_domain ? data.aws_acm_certificate.regional_wildcard[each.key].arn : data.aws_acm_certificate.regional_non_wildcard[each.key].arn) : null
+  certificate_arn          = each.value.endpoint_type == "EDGE" && each.value.use_acm ? (each.value.use_wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn) : null
+  regional_certificate_arn = each.value.endpoint_type == "REGIONAL" && each.value.use_acm ? (each.value.use_wildcard_domain ? data.aws_acm_certificate.regional_wildcard[each.key].arn : data.aws_acm_certificate.regional_non_wildcard[each.key].arn) : null
   endpoint_configuration {
     types = [each.value.endpoint_type]
   }

@@ -159,7 +159,11 @@ locals {
     "api" = {
       path_pattern     = "api/*",
       target_origin_id = local.server_function_origin
-    }
+    },
+    # "monitoring" = {
+    #   path_pattern     = "monitoring*",
+    #   target_origin_id = local.server_function_origin
+    # }
   }
   static_paths_2 = [
     "_next/*",
@@ -173,7 +177,7 @@ resource "aws_cloudfront_distribution" "website_distribution" {
   comment         = "CloudFront for ${local.name}"
   is_ipv6_enabled = true
   aliases         = var.domain_names
-  price_class     = "PriceClass_100"
+  price_class     = var.price_class
   http_version    = "http2"
 
   # logging_config {
