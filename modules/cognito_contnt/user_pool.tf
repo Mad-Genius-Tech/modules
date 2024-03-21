@@ -27,8 +27,10 @@ locals {
       name     = "verified_email"
       priority = 1
     }]
+    secret_vars                       = {}
     email_configuration = [{}]
     lambda_config       = [{}]
+    domain_name         = "${var.org_name}-${var.stage_name}-cognito"
     string_schemas = [{
       attribute_data_type      = "String"
       mutable                  = true
@@ -46,7 +48,10 @@ locals {
     access_token_validity                = 60
     id_token_validity                    = 60
     callback_urls                        = ["https://jwt.io"]
+    logout_urls                          = []
     supported_identity_providers         = ["COGNITO"]
+    google_client_id                     = ""
+    google_client_secret                 = ""
     allowed_oauth_flows_user_pool_client = true
     allowed_oauth_flows                  = ["implicit"]
     allowed_oauth_scopes                 = ["email", "openid", "phone"]
@@ -115,6 +120,7 @@ locals {
     for k, v in var.cognito : k => {
       "identifier"                                    = "${module.context.id}-${k}"
       "deletion_protection"                           = try(coalesce(lookup(v, "deletion_protection", null), local.merged_default_settings.deletion_protection), local.merged_default_settings.deletion_protection)
+      "domain_name"                                   = try(coalesce(lookup(v, "domain_name", null), local.merged_default_settings.domain_name), local.merged_default_settings.domain_name)
       "alias_attributes"                              = try(coalesce(lookup(v, "alias_attributes", null), local.merged_default_settings.alias_attributes), local.merged_default_settings.alias_attributes)
       "username_configuration"                        = try(coalesce(lookup(v, "username_configuration", null), local.merged_default_settings.username_configuration), local.merged_default_settings.username_configuration)
       "auto_verified_attributes"                      = try(coalesce(lookup(v, "auto_verified_attributes", null), local.merged_default_settings.auto_verified_attributes), local.merged_default_settings.auto_verified_attributes)
@@ -130,15 +136,19 @@ locals {
       "access_token_validity"                         = try(coalesce(lookup(v, "access_token_validity", null), local.merged_default_settings.access_token_validity), local.merged_default_settings.access_token_validity)
       "id_token_validity"                             = try(coalesce(lookup(v, "id_token_validity", null), local.merged_default_settings.id_token_validity), local.merged_default_settings.id_token_validity)
       "callback_urls"                                 = try(coalesce(lookup(v, "callback_urls", null), local.merged_default_settings.callback_urls), local.merged_default_settings.callback_urls)
+      "logout_urls"                                   = try(coalesce(lookup(v, "logout_urls", null), local.merged_default_settings.logout_urls), local.merged_default_settings.logout_urls)
       "supported_identity_providers"                  = try(coalesce(lookup(v, "supported_identity_providers", null), local.merged_default_settings.supported_identity_providers), local.merged_default_settings.supported_identity_providers)
       "allowed_oauth_flows_user_pool_client"          = try(coalesce(lookup(v, "allowed_oauth_flows_user_pool_client", null), local.merged_default_settings.allowed_oauth_flows_user_pool_client), local.merged_default_settings.allowed_oauth_flows_user_pool_client)
       "allowed_oauth_flows"                           = try(coalesce(lookup(v, "allowed_oauth_flows", null), local.merged_default_settings.allowed_oauth_flows), local.merged_default_settings.allowed_oauth_flows)
       "allowed_oauth_scopes"                          = try(coalesce(lookup(v, "allowed_oauth_scopes", null), local.merged_default_settings.allowed_oauth_scopes), local.merged_default_settings.allowed_oauth_scopes)
-      "read_attributes"                               = try(coalesce(lookup(v, "read_attributes", null), local.merged_default_settings.read_attributes), local.merged_default_settings.read_attributes)
-      "write_attributes"                              = try(coalesce(lookup(v, "write_attributes", null), local.merged_default_settings.write_attributes), local.merged_default_settings.write_attributes)
+      "read_attributes"                               = distinct(concat(try(coalesce(lookup(v, "read_attributes", null), local.merged_default_settings.read_attributes), local.merged_default_settings.read_attributes), local.merged_default_settings.read_attributes))
+      "write_attributes"                              =  distinct(concat(try(coalesce(lookup(v, "write_attributes", null), local.merged_default_settings.write_attributes), local.merged_default_settings.write_attributes), local.merged_default_settings.write_attributes))
       "token_validity_units"                          = try(coalesce(lookup(v, "token_validity_units", null), local.merged_default_settings.token_validity_units), local.merged_default_settings.token_validity_units)
       "allow_unauthenticated_identities"              = try(coalesce(lookup(v, "allow_unauthenticated_identities", null), local.merged_default_settings.allow_unauthenticated_identities), local.merged_default_settings.allow_unauthenticated_identities)
       create_identity_pool                            = try(coalesce(lookup(v, "create_identity_pool", null), local.merged_default_settings.create_identity_pool), local.merged_default_settings.create_identity_pool)
+      google_client_id                                = try(coalesce(lookup(v, "google_client_id", null), local.merged_default_settings.google_client_id), local.merged_default_settings.google_client_id)
+      google_client_secret                            = try(coalesce(lookup(v, "google_client_secret", null), local.merged_default_settings.google_client_secret), local.merged_default_settings.google_client_secret)
+      secret_vars                                     = try(coalesce(lookup(v, "secret_vars", null), local.merged_default_settings.secret_vars), local.merged_default_settings.secret_vars)
     } if coalesce(lookup(v, "create", true), true)
   }
 }
@@ -232,7 +242,8 @@ resource "aws_cognito_user_pool" "user_pool" {
 
   lifecycle {
     ignore_changes = [
-      #lambda_config
+      password_policy,
+      schema
     ]
   }
 }
@@ -244,12 +255,14 @@ resource "aws_cognito_user_pool_client" "client" {
   explicit_auth_flows                  = each.value.explicit_auth_flows
   prevent_user_existence_errors        = each.value.prevent_user_existence_errors
   callback_urls                        = each.value.callback_urls
+  logout_urls                          = each.value.logout_urls
   supported_identity_providers         = each.value.supported_identity_providers
   allowed_oauth_flows_user_pool_client = each.value.allowed_oauth_flows_user_pool_client
   allowed_oauth_flows                  = each.value.allowed_oauth_flows
   allowed_oauth_scopes                 = each.value.allowed_oauth_scopes
   read_attributes                      = each.value.read_attributes
   write_attributes                     = each.value.write_attributes
+  # write_attributes                    = ["custom:chime_user_id", "custom:cognito_identity_id", "custom:google_id", "custom:google_name"]
   enable_token_revocation              = each.value.enable_token_revocation
   access_token_validity                = each.value.access_token_validity
   id_token_validity                    = each.value.id_token_validity
@@ -264,4 +277,54 @@ resource "aws_cognito_user_pool_client" "client" {
   }
 }
 
+resource "aws_cognito_identity_provider" "google" {
+  for_each = { for k,v in local.cognito_map : k => v if contains(v.supported_identity_providers, "Google") }
+  user_pool_id  = aws_cognito_user_pool.user_pool[each.key].id
+  provider_name = "Google"
+  provider_type = "Google"
 
+  provider_details = {
+    authorize_scopes = "profile email openid"
+    client_id        = jsondecode(data.aws_secretsmanager_secret_version.secret["${each.key}|google_client_id"].secret_string)["COGNITO_GOOGLE_CLIENT_ID"]
+    client_secret    = jsondecode(data.aws_secretsmanager_secret_version.secret["${each.key}|google_client_secret"].secret_string)["COGNITO_GOOGLE_CLIENT_SECRET"]
+    attributes_url                = "https://people.googleapis.com/v1/people/me?personFields="
+    attributes_url_add_attributes = "true"
+    authorize_url                 = "https://accounts.google.com/o/oauth2/v2/auth"
+    oidc_issuer                   = "https://accounts.google.com"
+    token_request_method          = "POST"
+    token_url                     = "https://www.googleapis.com/oauth2/v4/token"
+  }
+
+  attribute_mapping = {
+    "custom:google_name" = "name"
+    "email"    = "email"
+    "email_verified" = "email_verified"
+    "picture" = "picture"
+    "username" = "sub"
+  }
+}
+
+resource "aws_cognito_user_pool_domain" "domain" {
+  for_each = local.cognito_map
+  domain       = each.value.domain_name
+  user_pool_id = aws_cognito_user_pool.user_pool[each.key].id
+}
+
+
+locals {
+  secret_vars_map = merge([
+    for k, v in local.cognito_map : {
+      for var in keys(v.secret_vars) : "${k}|${var}" => v.secret_vars[var]
+    } if length(v.secret_vars) > 0
+  ]...)
+}
+
+data "aws_secretsmanager_secret" "secret" {
+  for_each = local.secret_vars_map
+  name     = each.value.secret_path
+}
+
+data "aws_secretsmanager_secret_version" "secret" {
+  for_each  = local.secret_vars_map
+  secret_id = data.aws_secretsmanager_secret.secret[each.key].id
+}

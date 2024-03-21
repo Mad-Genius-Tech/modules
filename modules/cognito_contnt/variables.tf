@@ -53,6 +53,7 @@ variable "cognito" {
     access_token_validity                = optional(number)
     id_token_validity                    = optional(number)
     callback_urls                        = optional(list(string))
+    logout_urls                          = optional(list(string))
     supported_identity_providers         = optional(list(string))
     allowed_oauth_flows_user_pool_client = optional(bool)
     allowed_oauth_flows                  = optional(list(string))
@@ -65,6 +66,13 @@ variable "cognito" {
       refresh_token = optional(string)
     })))
     create_identity_pool = optional(bool)
+    google_client_id     = optional(string)
+    google_client_secret = optional(string)
+    domain_name          = optional(string)
+    secret_vars = optional(map(object({
+      secret_path = optional(string)
+      property    = optional(string)
+    })))
   }))
 }
 
