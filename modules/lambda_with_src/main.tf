@@ -24,6 +24,7 @@ locals {
       "principal"  = ""
       "source_arn" = ""
     }
+    "scaling_config" = [{}]
     "sqs"  = {}
     "cors" = {
       allow_origins     = null
@@ -80,6 +81,7 @@ locals {
       "lambda_permissions"                = coalesce(lookup(v, "lambda_permissions", null), local.merged_default_settings.lambda_permissions)
       "eventbridge_rules"                 = coalesce(lookup(v, "eventbridge_rules", null), local.merged_default_settings.eventbridge_rules)
       "ignore_source_code_hash"           = coalesce(lookup(v, "ignore_source_code_hash", null), local.merged_default_settings.ignore_source_code_hash)
+      "scaling_config"                    = coalesce(lookup(v, "scaling_config", null), local.merged_default_settings.scaling_config)
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }
@@ -244,7 +246,7 @@ resource "aws_lambda_event_source_mapping" "sqs_map_events" {
   function_name                  = module.lambda[split("|", each.key)[0]].lambda_function_name
   enabled                        = coalesce(each.value.enabled, true)
   dynamic "scaling_config" {
-    for_each = length(each.value.scaling_config[0]) > 0 ? each.value.scaling_config : []
+    for_each = length(coalesce(each.value.scaling_config, [])) > 0 ? each.value.scaling_config : []
     content {
       maximum_concurrency                = lookup(scaling_config.value, "maximum_concurrency", null)
     }

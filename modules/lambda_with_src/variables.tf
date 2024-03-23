@@ -27,6 +27,9 @@ variable "lambda" {
       actions   = list(string)
       resources = list(string)
     })))
+    scaling_config = optional(list(object({
+      maximum_concurrency = optional(number)
+    })))
     sqs = optional(map(object({
       enabled = optional(bool)
       queue_name = string
