@@ -69,6 +69,7 @@ variable "cognito" {
     google_client_id     = optional(string)
     google_client_secret = optional(string)
     domain_name          = optional(string)
+    wildcard_domain      = optional(bool)
     secret_vars = optional(map(object({
       secret_path = optional(string)
       property    = optional(string)

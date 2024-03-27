@@ -3,7 +3,7 @@ data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "auth_iam_role" {
-  for_each = local.cognito_map
+  for_each = { for k, v in local.cognito_map : k => v if v.create_identity_pool }
   name     = "${each.value.identifier}-authenticated"
   assume_role_policy = jsonencode(
     {
@@ -173,7 +173,7 @@ resource "aws_iam_role" "auth_iam_role" {
 
 
 resource "aws_iam_role" "guest_iam_role" {
-  for_each = local.cognito_map
+  for_each = { for k, v in local.cognito_map : k => v if v.create_identity_pool }
   name     = "${each.value.identifier}-guest"
   assume_role_policy = jsonencode(
     {
