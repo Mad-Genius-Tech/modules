@@ -37,7 +37,7 @@ resource "aws_acm_certificate" "user" {
 
 
 locals {
-  user_client_configuration = { for k, v in var.vpn_users : k => templatefile("${path.module}/templates/client-config.ovpn.tpl", {
+  user_client_configuration = var.create ? { for k, v in var.vpn_users : k => templatefile("${path.module}/templates/client-config.ovpn.tpl", {
     original_client_config = replace(
       data.awsutils_ec2_client_vpn_export_client_config.client_vpn_config[0].client_configuration,
       "remote cvpn",
@@ -45,7 +45,7 @@ locals {
     )
     cert        = tls_locally_signed_cert.user[k].cert_pem
     private_key = tls_private_key.user[k].private_key_pem
-  }) }
+  }) } : {}
 }
 
 resource "local_file" "user_client_configuration" {

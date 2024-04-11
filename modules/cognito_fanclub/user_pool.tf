@@ -77,7 +77,8 @@ locals {
       "profile",
       "updated_at",
       "website",
-      "zoneinfo"
+      "zoneinfo",
+      "custom:google_name",
     ]
     write_attributes = [
       "address",
@@ -96,7 +97,8 @@ locals {
       "profile",
       "updated_at",
       "website",
-      "zoneinfo"
+      "zoneinfo",
+      "custom:google_name",
     ]
     token_validity_units = [{
       access_token  = "minutes"
@@ -307,6 +309,7 @@ resource "aws_cognito_identity_provider" "google" {
     "name"     = "name"
     "email"    = "email"
     "username" = "sub"
+    "custom:google_name" = "name"
   }
 }
 

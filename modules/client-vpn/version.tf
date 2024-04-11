@@ -2,7 +2,7 @@ terraform {
   required_providers {
     awsutils = {
       source  = "cloudposse/awsutils"
-      version = ">= 0.18.1"
+      version = ">= 0.19.0"
     }
   }
 }

@@ -22,3 +22,10 @@ output "client_id" {
     for k, v in aws_cognito_user_pool_client.client : k => v.id
   }
 }
+
+output "client_secret" {
+  value = {
+    for k, v in aws_cognito_user_pool_client.client : k => v.client_secret
+  }
+  sensitive = true
+}
