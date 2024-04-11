@@ -25,6 +25,7 @@ locals {
     create_eip                             = false
     multiple_ports                         = false
     health_check_path                      = "/"
+    healthy_threshold                      = 5
     health_check_port                      = null
     desired_count                          = 1
     wildcard_domain                        = true
@@ -95,6 +96,7 @@ locals {
       "multiple_ports"                         = try(coalesce(lookup(v, "multiple_ports", null), local.merged_default_settings.multiple_ports), local.merged_default_settings.multiple_ports)
       "health_check_port"                      = try(coalesce(lookup(v, "health_check_port", null), local.merged_default_settings.health_check_port), local.merged_default_settings.health_check_port)
       "health_check_path"                      = try(coalesce(lookup(v, "health_check_path", null), local.merged_default_settings.health_check_path), local.merged_default_settings.health_check_path)
+      "healthy_threshold"                      = try(coalesce(lookup(v, "healthy_threshold", null), local.merged_default_settings.healthy_threshold), local.merged_default_settings.healthy_threshold)
       "environment"                            = distinct(concat(try(coalesce(lookup(v, "environment", null), local.merged_default_settings.environment), local.merged_default_settings.environment), local.merged_default_settings.environment))
       "secrets"                                = distinct(concat(try(coalesce(lookup(v, "secrets", null), local.merged_default_settings.secrets), local.merged_default_settings.secrets), local.merged_default_settings.secrets))
       "tasks_iam_role_statements"              = merge(coalesce(lookup(v, "tasks_iam_role_statements", {}), {}), local.merged_default_settings.tasks_iam_role_statements)

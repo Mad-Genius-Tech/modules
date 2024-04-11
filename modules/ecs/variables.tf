@@ -41,6 +41,7 @@ variable "ecs_services" {
     multiple_ports                         = optional(bool)
     health_check_port                      = optional(number)
     health_check_path                      = optional(string)
+    healthy_threshold                      = optional(number)
     wildcard_domain                        = optional(bool)
     domain_name                            = optional(string)
     task_exec_secret_arns                  = optional(list(string))

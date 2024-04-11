@@ -46,7 +46,7 @@ module "alb_internal" {
       health_check = {
         enabled             = true
         path                = v.health_check_path
-        healthy_threshold   = 5
+        healthy_threshold   = v.healthy_threshold
         unhealthy_threshold = 3
         interval            = 15
         protocol            = "HTTP"
