@@ -41,7 +41,7 @@ resource "aws_sns_topic_policy" "aws_budget" {
   arn = module.discord.sns_topic_arn
   policy = jsonencode({
     Version = "2012-10-17"
-    Id      = "AllowAWSBudgetToPublish"
+    Id      = "AWSBudgetPermission"
     Statement = [
       {
         Sid    = "AWSBudgetsSNSPublishingPermissions"
@@ -51,6 +51,26 @@ resource "aws_sns_topic_policy" "aws_budget" {
         }
         Action   = "SNS:Publish"
         Resource = module.discord.sns_topic_arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceOwner" = data.aws_caller_identity.current.account_id
+          }
+          ArnLike = {
+            "AWS:SourceArn" = "arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/*"
+          }
+        }
+      },
+      {
+        Sid    = "AWSBudgetsKMSPermissions"
+        Effect = "Allow"
+        Principal = {
+          Service = "budgets.amazonaws.com"
+        }
+        Action   = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
         Condition = {
           StringEquals = {
             "AWS:SourceOwner" = data.aws_caller_identity.current.account_id
