@@ -45,6 +45,7 @@ variable "ecs_services" {
     domain_name                            = optional(string)
     task_exec_secret_arns                  = optional(list(string))
     health_check_start_period              = optional(number)
+    health_check_grace_period_seconds      = optional(number)
     environment = optional(list(object({
       name  = string
       value = string

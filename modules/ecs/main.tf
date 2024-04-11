@@ -30,6 +30,7 @@ locals {
     wildcard_domain                        = true
     domain_name                            = ""
     health_check_start_period              = null
+    health_check_grace_period_seconds      = null
     environment = [{
       name  = "ENV_NAME"
       value = var.stage_name
@@ -103,6 +104,7 @@ locals {
       "security_group_rules"                   = merge(coalesce(lookup(v, "security_group_rules", {}), {}), local.merged_default_settings.security_group_rules)
       "repository_credentials"                 = try(coalesce(lookup(v, "repository_credentials", null), local.merged_default_settings.repository_credentials), local.merged_default_settings.repository_credentials)
       "health_check_start_period"              = try(coalesce(lookup(v, "health_check_start_period", null), local.merged_default_settings.health_check_start_period), local.merged_default_settings.health_check_start_period)
+      "health_check_grace_period_seconds"      = try(coalesce(lookup(v, "health_check_grace_period_seconds", null), local.merged_default_settings.health_check_grace_period_seconds), local.merged_default_settings.health_check_grace_period_seconds)
     }
   }
 }
@@ -179,6 +181,7 @@ module "ecs_service" {
   enable_execute_command   = true
   task_exec_secret_arns    = each.value.task_exec_secret_arns
   task_exec_ssm_param_arns = []
+  health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
   container_definitions = {
     (each.key) = {
       essential              = true
