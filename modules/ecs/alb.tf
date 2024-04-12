@@ -137,7 +137,7 @@ module "alb" {
       health_check = {
         enabled             = true
         path                = each.value.health_check_path
-        healthy_threshold   = 5
+        healthy_threshold   = each.value.healthy_threshold
         unhealthy_threshold = 3
         interval            = 15
         protocol            = "HTTP"
