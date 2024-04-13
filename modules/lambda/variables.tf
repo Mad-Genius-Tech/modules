@@ -27,22 +27,33 @@ variable "lambda" {
       actions   = list(string)
       resources = list(string)
     })))
-    provisioned_concurrent_executions  = optional(number)
-    cloudwatch_logs_retention_in_days  = optional(number)
-    keep_warm                          = optional(bool)
-    keep_warm_expression               = optional(string)
-    policies                           = optional(list(string))
-    db_instance_address                = optional(string)
-    db_instance_arn                    = optional(string)
-    db_instance_endpoint               = optional(string)
-    db_instance_identifier             = optional(string)
-    db_instance_master_user_secret_arn = optional(string)
-    db_instance_name                   = optional(string)
-    db_instance_port                   = optional(number)
-    db_security_group_id               = optional(string)
-    layers                             = optional(list(string))
-    create_lambda_function_url         = optional(bool)
-    lambda_bucket_name                 = optional(string)
+    provisioned_concurrent_executions        = optional(number)
+    cloudwatch_logs_retention_in_days        = optional(number)
+    keep_warm                                = optional(bool)
+    keep_warm_expression                     = optional(string)
+    policies                                 = optional(list(string))
+    db_instance_address                      = optional(string)
+    db_instance_arn                          = optional(string)
+    db_instance_endpoint                     = optional(string)
+    db_instance_identifier                   = optional(string)
+    db_instance_master_user_secret_arn       = optional(string)
+    db_instance_name                         = optional(string)
+    db_instance_port                         = optional(number)
+    db_security_group_id                     = optional(string)
+    layers                                   = optional(list(string))
+    create_lambda_function_url               = optional(bool)
+    lambda_bucket_name                       = optional(string)
+    duration_evaluation_periods              = optional(number)
+    duration_threshold                       = optional(number)
+    throttles_evaluation_periods             = optional(number)
+    throttles_threshold                      = optional(number)
+    errors_evaluation_periods                = optional(number)
+    errors_threshold                         = optional(number)
+    concurrent_executions_evaluation_periods = optional(number)
+    concurrent_executions_threshold          = optional(number)
+    error_rate_evaluation_periods            = optional(number)
+    error_rate_threshold                     = optional(number)
+    enable_insights                          = optional(bool)
     cors = optional(object({
       allow_origins     = optional(list(string))
       allow_methods     = optional(list(string))
@@ -52,7 +63,7 @@ variable "lambda" {
       allow_credentials = optional(bool)
     }))
     sqs = optional(map(object({
-      enabled = optional(bool)
+      enabled    = optional(bool)
       queue_name = string
       batch_size = optional(number)
     })))
@@ -78,3 +89,7 @@ variable "lambda" {
   default = {}
 }
 
+variable "sns_topic_arn" {
+  type    = string
+  default = ""
+}

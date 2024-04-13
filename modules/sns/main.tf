@@ -51,14 +51,15 @@ resource "aws_sns_topic_policy" "aws_budget" {
         }
         Action   = "SNS:Publish"
         Resource = module.discord.sns_topic_arn
-        Condition = {
-          StringEquals = {
-            "AWS:SourceOwner" = data.aws_caller_identity.current.account_id
-          }
-          ArnLike = {
-            "AWS:SourceArn" = "arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/*"
-          }
+      },
+      {
+        Sid    = "CloudwatchSNSPublishingPermissions"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudwatch.amazonaws.com"
         }
+        Action   = "SNS:Publish"
+        Resource = module.discord.sns_topic_arn
       }
     ]
   })

@@ -85,6 +85,11 @@ variable "discord_url" {
 }
 
 variable "price_class" {
-  type       = string
-  default    = "PriceClass_100"
+  type    = string
+  default = "PriceClass_100"
+}
+
+variable "sns_topic_arn" {
+  type    = string
+  default = ""
 }

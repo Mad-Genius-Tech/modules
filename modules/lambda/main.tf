@@ -30,7 +30,18 @@ locals {
       max_age_seconds   = null
       allow_credentials = null
     }
-    "lambda_bucket_name" = ""
+    "lambda_bucket_name"                       = ""
+    "duration_evaluation_periods"              = 1
+    "duration_threshold"                       = 29000
+    "throttles_evaluation_periods"             = 1
+    "throttles_threshold"                      = 1
+    "errors_evaluation_periods"                = 1
+    "errors_threshold"                         = 1
+    "concurrent_executions_evaluation_periods" = 1
+    "concurrent_executions_threshold"          = 100
+    "error_rate_evaluation_periods"            = 1
+    "error_rate_threshold"                     = 50
+    "enable_insights"                          = false
   }
 
   env_default_settings = {
@@ -47,39 +58,65 @@ locals {
 
   lambda_map = {
     for k, v in var.lambda : k => {
-      "create"                            = coalesce(lookup(v, "create", null), true)
-      "identifier"                        = "${module.context.id}-${k}"
-      "description"                       = coalesce(lookup(v, "description", null), "Lambda ${module.context.id}-${k}")
-      "project_name"                      = coalesce(lookup(v, "project_name", null), "${module.context.id}-${k}")
-      "handler"                           = coalesce(lookup(v, "handler", null), local.merged_default_settings.handler)
-      "runtime"                           = coalesce(lookup(v, "runtime", null), local.merged_default_settings.runtime)
-      "timeout"                           = coalesce(lookup(v, "timeout", null), local.merged_default_settings.timeout)
-      "memory_size"                       = coalesce(lookup(v, "memory_size", null), local.merged_default_settings.memory_size)
-      "ephemeral_storage_size"            = coalesce(lookup(v, "ephemeral_storage_size", null), local.merged_default_settings.ephemeral_storage_size)
-      "create_async_event_config"         = coalesce(lookup(v, "create_async_event_config", null), local.merged_default_settings.create_async_event_config)
-      "maximum_retry_attempts"            = try(coalesce(lookup(v, "maximum_retry_attempts", null), local.merged_default_settings.maximum_retry_attempts), local.merged_default_settings.maximum_retry_attempts)
-      "maximum_event_age_in_seconds"      = coalesce(lookup(v, "maximum_event_age_in_seconds", null), local.merged_default_settings.maximum_event_age_in_seconds)
-      "environment_variables"             = merge(coalesce(lookup(v, "environment_variables", null), local.merged_default_settings.environment_variables), local.merged_default_settings.environment_variables)
-      "policy_statements"                 = merge(coalesce(lookup(v, "policy_statements", null), local.merged_default_settings.policy_statements), local.merged_default_settings.policy_statements)
-      "policies"                          = distinct(compact(concat(coalesce(lookup(v, "policies", null), local.merged_default_settings.policies), local.merged_default_settings.policies)))
-      "architectures"                     = coalesce(lookup(v, "architectures", null), local.merged_default_settings.architectures)
-      "keep_warm"                         = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm)
-      "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
-      "cloudwatch_logs_retention_in_days" = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
-      "stage_name"                        = coalesce(lookup(v, "stage_name", null), var.stage_name)
-      "dynamodb_tables"                   = coalesce(lookup(v, "dynamodb_tables", null), local.merged_default_settings.dynamodb_tables)
-      "sqs"                               = coalesce(lookup(v, "sqs", null), local.merged_default_settings.sqs)
-      "secret_vars"                       = coalesce(lookup(v, "secret_vars", null), local.merged_default_settings.secret_vars)
-      "cloudwatch_events"                 = coalesce(lookup(v, "cloudwatch_events", null), local.merged_default_settings.cloudwatch_events)
-      "layers"                            = distinct(compact(concat(coalesce(lookup(v, "layers", null), local.merged_default_settings.layers), local.merged_default_settings.layers)))
-      "cloudwatch_logs_retention_in_days" = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
-      "provisioned_concurrent_executions" = coalesce(lookup(v, "provisioned_concurrent_executions", null), local.merged_default_settings.provisioned_concurrent_executions)
-      "keep_warm"                         = coalesce(lookup(v, "keep_warm", null), local.merged_default_settings.keep_warm)
-      "create_lambda_function_url"        = coalesce(lookup(v, "create_lambda_function_url", null), local.merged_default_settings.create_lambda_function_url)
-      "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
-      "cors"                              = coalesce(lookup(v, "cors", null), local.merged_default_settings.cors)
-      "lambda_bucket_name"                = try(coalesce(lookup(v, "lambda_bucket_name", null), local.merged_default_settings.lambda_bucket_name), local.merged_default_settings.lambda_bucket_name)
+      "create"                                   = coalesce(lookup(v, "create", null), true)
+      "identifier"                               = "${module.context.id}-${k}"
+      "description"                              = coalesce(lookup(v, "description", null), "Lambda ${module.context.id}-${k}")
+      "project_name"                             = coalesce(lookup(v, "project_name", null), "${module.context.id}-${k}")
+      "handler"                                  = coalesce(lookup(v, "handler", null), local.merged_default_settings.handler)
+      "runtime"                                  = coalesce(lookup(v, "runtime", null), local.merged_default_settings.runtime)
+      "timeout"                                  = coalesce(lookup(v, "timeout", null), local.merged_default_settings.timeout)
+      "memory_size"                              = coalesce(lookup(v, "memory_size", null), local.merged_default_settings.memory_size)
+      "ephemeral_storage_size"                   = coalesce(lookup(v, "ephemeral_storage_size", null), local.merged_default_settings.ephemeral_storage_size)
+      "create_async_event_config"                = coalesce(lookup(v, "create_async_event_config", null), local.merged_default_settings.create_async_event_config)
+      "maximum_retry_attempts"                   = try(coalesce(lookup(v, "maximum_retry_attempts", null), local.merged_default_settings.maximum_retry_attempts), local.merged_default_settings.maximum_retry_attempts)
+      "maximum_event_age_in_seconds"             = coalesce(lookup(v, "maximum_event_age_in_seconds", null), local.merged_default_settings.maximum_event_age_in_seconds)
+      "environment_variables"                    = merge(coalesce(lookup(v, "environment_variables", null), local.merged_default_settings.environment_variables), local.merged_default_settings.environment_variables)
+      "policy_statements"                        = merge(coalesce(lookup(v, "policy_statements", null), local.merged_default_settings.policy_statements), local.merged_default_settings.policy_statements)
+      "policies"                                 = distinct(compact(concat(coalesce(lookup(v, "policies", null), local.merged_default_settings.policies), local.merged_default_settings.policies)))
+      "architectures"                            = coalesce(lookup(v, "architectures", null), local.merged_default_settings.architectures)
+      "keep_warm"                                = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm)
+      "keep_warm_expression"                     = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
+      "cloudwatch_logs_retention_in_days"        = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
+      "stage_name"                               = coalesce(lookup(v, "stage_name", null), var.stage_name)
+      "dynamodb_tables"                          = coalesce(lookup(v, "dynamodb_tables", null), local.merged_default_settings.dynamodb_tables)
+      "sqs"                                      = coalesce(lookup(v, "sqs", null), local.merged_default_settings.sqs)
+      "secret_vars"                              = coalesce(lookup(v, "secret_vars", null), local.merged_default_settings.secret_vars)
+      "cloudwatch_events"                        = coalesce(lookup(v, "cloudwatch_events", null), local.merged_default_settings.cloudwatch_events)
+      "layers"                                   = distinct(compact(concat(coalesce(lookup(v, "layers", null), local.merged_default_settings.layers), local.merged_default_settings.layers)))
+      "cloudwatch_logs_retention_in_days"        = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
+      "provisioned_concurrent_executions"        = coalesce(lookup(v, "provisioned_concurrent_executions", null), local.merged_default_settings.provisioned_concurrent_executions)
+      "keep_warm"                                = coalesce(lookup(v, "keep_warm", null), local.merged_default_settings.keep_warm)
+      "create_lambda_function_url"               = coalesce(lookup(v, "create_lambda_function_url", null), local.merged_default_settings.create_lambda_function_url)
+      "keep_warm_expression"                     = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
+      "cors"                                     = coalesce(lookup(v, "cors", null), local.merged_default_settings.cors)
+      "lambda_bucket_name"                       = try(coalesce(lookup(v, "lambda_bucket_name", null), local.merged_default_settings.lambda_bucket_name), local.merged_default_settings.lambda_bucket_name)
+      "duration_evaluation_periods"              = coalesce(lookup(v, "duration_evaluation_periods", null), local.merged_default_settings.duration_evaluation_periods)
+      "duration_threshold"                       = coalesce(lookup(v, "duration_threshold", null), local.merged_default_settings.duration_threshold)
+      "throttles_evaluation_periods"             = coalesce(lookup(v, "throttles_evaluation_periods", null), local.merged_default_settings.throttles_evaluation_periods)
+      "throttles_threshold"                      = coalesce(lookup(v, "throttles_threshold", null), local.merged_default_settings.throttles_threshold)
+      "errors_evaluation_periods"                = coalesce(lookup(v, "errors_evaluation_periods", null), local.merged_default_settings.errors_evaluation_periods)
+      "errors_threshold"                         = coalesce(lookup(v, "errors_threshold", null), local.merged_default_settings.errors_threshold)
+      "concurrent_executions_evaluation_periods" = coalesce(lookup(v, "concurrent_executions_evaluation_periods", null), local.merged_default_settings.concurrent_executions_evaluation_periods)
+      "concurrent_executions_threshold"          = coalesce(lookup(v, "concurrent_executions_threshold", null), local.merged_default_settings.concurrent_executions_threshold)
+      "error_rate_threshold"                     = coalesce(lookup(v, "error_rate_threshold", null), local.merged_default_settings.error_rate_threshold)
+      "error_rate_evaluation_periods"            = coalesce(lookup(v, "error_rate_evaluation_periods", null), local.merged_default_settings.error_rate_evaluation_periods)
+      "enable_insights"                          = coalesce(lookup(v, "enable_insights", null), local.merged_default_settings.enable_insights)
     } if coalesce(lookup(v, "create", null), true) == true
+  }
+}
+
+locals {
+  lambda_insights_layer = {
+    "x86_64" = {
+      "us-east-1": "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension:51",
+      "us-west-1": "arn:aws:lambda:us-west-1:580247275435:layer:LambdaInsightsExtension:51",
+      "us-west-2": "arn:aws:lambda:us-west-2:580247275435:layer:LambdaInsightsExtension:51",
+    },
+    "arm64" = {
+      "us-east-1": "arn:aws:lambda:us-east-1:580247275435:layer:LambdaInsightsExtension-Arm64:18",
+      "us-west-1": "arn:aws:lambda:us-west-1:580247275435:layer:LambdaInsightsExtension-Arm64:16",
+      "us-west-2": "arn:aws:lambda:us-west-2:580247275435:layer:LambdaInsightsExtension-Arm64:18",
+    }
   }
 }
 
@@ -156,7 +193,7 @@ module "lambda" {
   function_name                     = each.value.identifier
   description                       = "Lambda ${each.value.identifier}"
   handler                           = each.value.handler
-  layers                            = each.value.layers
+  layers                            = each.value.enable_insights ? compact(concat(each.value.layers, [local.lambda_insights_layer[each.value.architectures[0]][data.aws_region.current.name]])) : each.value.layers
   runtime                           = each.value.runtime
   memory_size                       = each.value.memory_size
   ephemeral_storage_size            = each.value.ephemeral_storage_size
@@ -188,8 +225,8 @@ module "lambda" {
   attach_network_policy    = var.vpc_id == "" ? false : true
   attach_policy_statements = length(each.value.policy_statements) > 0 ? true : false
   policy_statements        = each.value.policy_statements
-  attach_policies          = length(each.value.policies) > 0 ? true : false
-  policies                 = each.value.policies
+  attach_policies          = length(each.value.policies) > 0 || each.value.enable_insights ? true : false
+  policies                 = each.value.enable_insights ? compact(concat(each.value.policies, ["arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy"])) : each.value.policies
   number_of_policies       = length(each.value.policies)
   ignore_source_code_hash  = true
   attach_policy_json       = true
@@ -388,10 +425,10 @@ data "aws_sqs_queue" "queue" {
 }
 
 resource "aws_lambda_event_source_mapping" "sqs_map_events" {
-  for_each                       = local.sqs_map
-  event_source_arn               = data.aws_sqs_queue.queue[each.key].arn
-  function_name                  = module.stage_alias[split("|", each.key)[0]].lambda_alias_arn
-  enabled                        = coalesce(each.value.enabled, true)
+  for_each         = local.sqs_map
+  event_source_arn = data.aws_sqs_queue.queue[each.key].arn
+  function_name    = module.stage_alias[split("|", each.key)[0]].lambda_alias_arn
+  enabled          = coalesce(each.value.enabled, true)
   # filter_criteria {
   #   filter {
   #     pattern = jsonencode({
@@ -402,7 +439,7 @@ resource "aws_lambda_event_source_mapping" "sqs_map_events" {
   #     })
   #   }
   # }
-  batch_size                     = coalesce(each.value.batch_size, 10)
+  batch_size = coalesce(each.value.batch_size, 10)
 }
 
 resource "aws_lambda_function_event_invoke_config" "sqs_stage_invoke_config" {
