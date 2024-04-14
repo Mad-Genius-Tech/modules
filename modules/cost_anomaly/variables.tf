@@ -38,6 +38,7 @@ variable "overall_budget" {
     include_tax                = optional(bool)
     include_upfront            = optional(bool)
     use_blended                = optional(bool)
+    use_amortized              = optional(bool)
   }))
   default = {}
 }
