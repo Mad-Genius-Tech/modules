@@ -233,8 +233,12 @@ data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
   filter {
+    name   = "architecture"
+    values = var.architecture == "amd64" ? ["x86_64"] : ["arm64"]
+  }
+  filter {
     name   = "name"
-    values = ["amzn-ami-hvm-*-x86_64-gp2"]
+    values = ["al2023-ami-2023*-kernel-*"]
   }
 }
 
@@ -243,9 +247,12 @@ data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"]
   filter {
+    name   = "architecture"
+    values = var.architecture == "amd64" ? ["x86_64"] : ["arm64"]
+  }
+  filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server*"]
-    # values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-*-server*"]
   }
 }
 
@@ -253,13 +260,14 @@ data "aws_ami" "ubuntu" {
 data "aws_ami" "amazon_linux_2" {
   for_each    = { for k, v in local.ec2_map : k => v if v.create && v.use_amazon_linux_2 }
   most_recent = true
+  owners      = ["amazon"]
   filter {
-    name   = "owner-alias"
-    values = ["amazon"]
+    name   = "architecture"
+    values = var.architecture == "amd64" ? ["x86_64"] : ["arm64"]
   }
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm*"]
+    values =  ["amzn2-ami-kernel-*-hvm-*-gp2"]
   }
 }
 

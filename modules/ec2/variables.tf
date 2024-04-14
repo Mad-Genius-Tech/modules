@@ -12,6 +12,11 @@ variable "private_subnets" {
   default = []
 }
 
+variable "architecture" {
+  type    = string
+  default = "amd64"
+}
+
 variable "ec2" {
   type = map(object({
     create                      = optional(bool)
