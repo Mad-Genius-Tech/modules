@@ -267,7 +267,7 @@ data "aws_ami" "amazon_linux_2" {
   }
   filter {
     name   = "name"
-    values =  ["amzn2-ami-kernel-*-hvm-*-gp2"]
+    values = ["amzn2-ami-kernel-*-hvm-*-gp2"]
   }
 }
 

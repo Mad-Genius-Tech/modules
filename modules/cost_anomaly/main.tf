@@ -99,7 +99,7 @@ resource "aws_ce_anomaly_subscription" "subscription" {
 }
 
 resource "aws_budgets_budget" "monthly_overall_budget" {
-  for_each          = { for k, v in local.overall_budget_map : k => v if upper(k) == "MONTHLY" && v.limit_amount > 0}
+  for_each          = { for k, v in local.overall_budget_map : k => v if upper(k) == "MONTHLY" && v.limit_amount > 0 }
   name              = "overall-monthly-budget-cost-alert"
   budget_type       = "COST"
   limit_amount      = each.value.limit_amount
@@ -136,7 +136,7 @@ resource "aws_budgets_budget" "monthly_overall_budget" {
 
 
 resource "aws_budgets_budget" "daily_overall_budget" {
-  for_each          = { for k, v in local.overall_budget_map : k => v if upper(k) == "DAILY" && v.limit_amount > 0}
+  for_each          = { for k, v in local.overall_budget_map : k => v if upper(k) == "DAILY" && v.limit_amount > 0 }
   name              = "overall-daily-budget-cost-alert"
   budget_type       = "COST"
   limit_amount      = each.value.limit_amount

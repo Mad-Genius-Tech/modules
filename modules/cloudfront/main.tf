@@ -122,7 +122,7 @@ module "cloudfront" {
     } : {},
     each.value.origin_domain_name != "" ? {
       "${each.value.origin_domain_name}" = {
-        domain_name          = each.value.origin_domain_name
+        domain_name = each.value.origin_domain_name
         custom_origin_config = strcontains(each.value.origin_domain_name, "s3-website") ? merge(each.value.custom_origin_config, {
           origin_protocol_policy = "http-only"
         }) : each.value.custom_origin_config

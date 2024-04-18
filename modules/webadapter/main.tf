@@ -64,10 +64,10 @@ module "webadapter" {
   attach_network_policy             = var.vpc_id == "" ? false : true
   #attach_policy                     = true
   #policy                            = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
-  attach_policy_statements          = length(var.policy_statements) > 0 ? true : false
-  policy_statements                 = var.policy_statements
-  attach_policy_json                = true
-  policy_json                       = <<-EOT
+  attach_policy_statements = length(var.policy_statements) > 0 ? true : false
+  policy_statements        = var.policy_statements
+  attach_policy_json       = true
+  policy_json              = <<-EOT
   {
     "Version": "2012-10-17",
     "Statement": [

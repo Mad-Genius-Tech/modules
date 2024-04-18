@@ -25,7 +25,7 @@ locals {
       "source_arn" = ""
     }
     "scaling_config" = [{}]
-    "sqs"  = {}
+    "sqs"            = {}
     "cors" = {
       allow_origins     = null
       allow_methods     = null
@@ -241,17 +241,17 @@ data "aws_sqs_queue" "queue" {
 }
 
 resource "aws_lambda_event_source_mapping" "sqs_map_events" {
-  for_each                       = local.sqs_map
-  event_source_arn               = data.aws_sqs_queue.queue[each.key].arn
-  function_name                  = module.lambda[split("|", each.key)[0]].lambda_function_name
-  enabled                        = coalesce(each.value.enabled, true)
+  for_each         = local.sqs_map
+  event_source_arn = data.aws_sqs_queue.queue[each.key].arn
+  function_name    = module.lambda[split("|", each.key)[0]].lambda_function_name
+  enabled          = coalesce(each.value.enabled, true)
   dynamic "scaling_config" {
     for_each = length(coalesce(each.value.scaling_config, [])) > 0 ? each.value.scaling_config : []
     content {
-      maximum_concurrency                = lookup(scaling_config.value, "maximum_concurrency", null)
+      maximum_concurrency = lookup(scaling_config.value, "maximum_concurrency", null)
     }
   }
-  batch_size                     = coalesce(each.value.batch_size, 10)
+  batch_size = coalesce(each.value.batch_size, 10)
   # filter_criteria {
   #   filter {
   #     pattern = jsonencode({

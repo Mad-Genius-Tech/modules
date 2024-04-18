@@ -31,7 +31,7 @@ variable "lambda" {
       maximum_concurrency = optional(number)
     })))
     sqs = optional(map(object({
-      enabled = optional(bool)
+      enabled    = optional(bool)
       queue_name = string
       batch_size = optional(number)
       scaling_config = optional(list(object({

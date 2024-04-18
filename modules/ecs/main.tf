@@ -171,18 +171,18 @@ locals {
 # }
 
 module "ecs_service" {
-  source                   = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v5.5.0"
-  for_each                 = local.ecs_map
-  name                     = each.value.identifier
-  desired_count            = each.value.desired_count
-  autoscaling_min_capacity = each.value.enable_autoscaling ? each.value.desired_count : 1
-  cluster_arn              = module.ecs_cluster.arn
-  cpu                      = max(ceil(each.value.container_cpu / 256) * 256, 256)
-  memory                   = max(ceil(each.value.container_memory / 512) * 512, 512)
-  enable_autoscaling       = each.value.enable_autoscaling
-  enable_execute_command   = true
-  task_exec_secret_arns    = each.value.task_exec_secret_arns
-  task_exec_ssm_param_arns = []
+  source                            = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v5.5.0"
+  for_each                          = local.ecs_map
+  name                              = each.value.identifier
+  desired_count                     = each.value.desired_count
+  autoscaling_min_capacity          = each.value.enable_autoscaling ? each.value.desired_count : 1
+  cluster_arn                       = module.ecs_cluster.arn
+  cpu                               = max(ceil(each.value.container_cpu / 256) * 256, 256)
+  memory                            = max(ceil(each.value.container_memory / 512) * 512, 512)
+  enable_autoscaling                = each.value.enable_autoscaling
+  enable_execute_command            = true
+  task_exec_secret_arns             = each.value.task_exec_secret_arns
+  task_exec_ssm_param_arns          = []
   health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
   container_definitions = {
     (each.key) = {
