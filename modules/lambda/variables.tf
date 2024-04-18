@@ -10,18 +10,19 @@ variable "subnet_ids" {
 
 variable "lambda" {
   type = map(object({
-    create                       = optional(bool)
-    description                  = optional(string)
-    handler                      = optional(string)
-    runtime                      = optional(string)
-    timeout                      = optional(number)
-    memory_size                  = optional(number)
-    ephemeral_storage_size       = optional(number)
-    architectures                = optional(list(string))
-    environment_variables        = optional(map(string))
-    maximum_retry_attempts       = optional(number)
-    maximum_event_age_in_seconds = optional(number)
-    create_async_event_config    = optional(bool)
+    create                                    = optional(bool)
+    description                               = optional(string)
+    handler                                   = optional(string)
+    runtime                                   = optional(string)
+    timeout                                   = optional(number)
+    memory_size                               = optional(number)
+    ephemeral_storage_size                    = optional(number)
+    architectures                             = optional(list(string))
+    environment_variables                     = optional(map(string))
+    maximum_retry_attempts                    = optional(number)
+    maximum_event_age_in_seconds              = optional(number)
+    create_async_event_config                 = optional(bool)
+    create_current_version_async_event_config = optional(bool)
     policy_statements = optional(map(object({
       effect    = string
       actions   = list(string)

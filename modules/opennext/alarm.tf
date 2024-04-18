@@ -4,7 +4,7 @@ locals {
       "image-optimization" = {
         "enabled"            = true
         "evaluation_periods" = 1
-        "threshold"          = 10000
+        "threshold"          = 24000
       }
       "server" = {
         "enabled"            = true
