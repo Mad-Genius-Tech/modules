@@ -215,3 +215,26 @@ resource "aws_budgets_budget" "per_service_budget" {
     subscriber_email_addresses = var.notification_email != "" ? [var.notification_email] : null
   }
 }
+
+locals {
+  cost_tags = {
+    "project_name" = {
+      key    = "namespace"
+      status = "Active"
+    }
+    "environment_name" = {
+      key    = "stage"
+      status = "Active"
+    }
+    "service_name" = {
+      key    = "service"
+      status = "Active"
+    }
+  }
+}
+
+resource "aws_ce_cost_allocation_tag" "tags" {
+  for_each = local.cost_tags
+  tag_key  = each.value.key
+  status   = each.value.status
+}
