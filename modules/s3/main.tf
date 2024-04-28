@@ -42,7 +42,8 @@ locals {
     cors_rule                = []
     control_object_ownership = false
     object_ownership         = "BucketOwnerEnforced"
-    tags                     = local.tags
+    lambda_function_name     = ""
+    bucket_events            = ["s3:ObjectCreated:*"]
   }
 
   env_default_settings = {
@@ -95,11 +96,38 @@ locals {
       "restrict_public_buckets"              = coalesce(lookup(v, "restrict_public_buckets", null), local.default_settings.restrict_public_buckets)
       "cors_rule"                            = concat(try(coalesce(lookup(v, "cors_rule", null), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule)
       "website"                              = v.website != null ? { for k,v in v.website: k => v if v != null } : {}
-      "tags"                                 = merge(coalesce(lookup(v, "tags", null), {}), local.default_settings.tags)
       "control_object_ownership"             = coalesce(lookup(v, "control_object_ownership", null), local.default_settings.control_object_ownership)
       "object_ownership"                     = coalesce(lookup(v, "object_ownership", null), local.default_settings.object_ownership)
+      "lambda_function_name"                 = try(coalesce(lookup(v, "lambda_function_name", null), local.default_settings.lambda_function_name), local.default_settings.lambda_function_name)
+      "bucket_events"                        = coalesce(lookup(v, "bucket_events", null), local.default_settings.bucket_events)
     } if coalesce(lookup(v, "create", null), true)
   }
+}
+
+data "aws_lambda_function" "lambda_function" {
+  for_each = { for k,v in local.s3_buckets_map: k => v if v.lambda_function_name != "" }
+  function_name = each.value.lambda_function_name
+}
+
+resource "aws_lambda_permission" "allow_terraform_bucket" {
+  for_each = { for k,v in local.s3_buckets_map: k => v if v.lambda_function_name != "" }
+  statement_id = "AllowExecutionFromS3Bucket"
+  action = "lambda:InvokeFunction"
+  function_name = "${data.aws_lambda_function.lambda_function[each.key].arn}"
+  principal = "s3.amazonaws.com"
+  source_arn = module.s3_bucket[each.key].s3_bucket_arn
+}
+
+resource "aws_s3_bucket_notification" "bucket_terraform_notification" {
+  for_each = { for k,v in local.s3_buckets_map: k => v if v.lambda_function_name != "" }
+  bucket = module.s3_bucket[each.key].s3_bucket_arn
+  lambda_function {
+    lambda_function_arn = "${data.aws_lambda_function.lambda_function[each.key].arn}"
+    events = each.value.bucket_events
+  }
+  depends_on = [ 
+    aws_lambda_permission.allow_terraform_bucket 
+  ]
 }
 
 module "s3_bucket" {
@@ -123,7 +151,7 @@ module "s3_bucket" {
   website                              = each.value.website
   control_object_ownership             = each.value.control_object_ownership
   object_ownership                     = each.value.object_ownership
-  tags                                 = each.value.tags
+  tags                                 = local.tags
 }
 
 data "aws_iam_policy_document" "public_read" {
