@@ -40,7 +40,6 @@ locals {
     ignore_public_acls       = true
     restrict_public_buckets  = true
     cors_rule                = []
-    website                  = {}
     control_object_ownership = false
     object_ownership         = "BucketOwnerEnforced"
     tags                     = local.tags
@@ -95,7 +94,7 @@ locals {
       "ignore_public_acls"                   = coalesce(lookup(v, "ignore_public_acls", null), local.default_settings.ignore_public_acls)
       "restrict_public_buckets"              = coalesce(lookup(v, "restrict_public_buckets", null), local.default_settings.restrict_public_buckets)
       "cors_rule"                            = concat(try(coalesce(lookup(v, "cors_rule", null), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule)
-      "website"                              = merge(lookup(v, "website", {}), local.default_settings.website)
+      "website"                              = v.website != null ? { for k,v in v.website: k => v if v != null } : {}
       "tags"                                 = merge(coalesce(lookup(v, "tags", null), {}), local.default_settings.tags)
       "control_object_ownership"             = coalesce(lookup(v, "control_object_ownership", null), local.default_settings.control_object_ownership)
       "object_ownership"                     = coalesce(lookup(v, "object_ownership", null), local.default_settings.object_ownership)

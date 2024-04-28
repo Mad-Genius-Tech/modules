@@ -57,8 +57,8 @@ variable "s3_buckets" {
       max_age_seconds = optional(number)
     })))
     website = optional(object({
-      index_document = optional(string)
-      # error_document = optional(string)
+      index_document = optional(string, null)
+      error_document = optional(string, null)
       # redirect_all_requests_to = optional(object({
       #   host_name = optional(string)
       #   protocol  = optional(string)

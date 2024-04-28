@@ -177,6 +177,7 @@ module "rds_sg" {
     }
   ] : []
   number_of_computed_ingress_with_cidr_blocks = length(var.ingress_cidr_blocks) > 0 ? 1 : 0
+  tags = local.tags
 }
 
 

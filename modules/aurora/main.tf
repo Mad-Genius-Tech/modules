@@ -231,4 +231,5 @@ resource "aws_cloudwatch_metric_alarm" "alarm" {
     var.sns_topic_arn,
     lookup(local.aurora_map[split("|", each.key)[0]], "cloudwatch_alarm_action", "")
   ])
+  tags = local.tags
 }

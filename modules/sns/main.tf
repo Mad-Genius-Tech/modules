@@ -2,6 +2,7 @@
 resource "aws_sns_topic" "topic" {
   count = var.create ? 1 : 0
   name  = "${module.context.id}-alarm"
+  tags  = local.tags
 }
 
 resource "aws_sns_topic_subscription" "subscription" {
