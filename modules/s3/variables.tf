@@ -79,6 +79,8 @@ variable "s3_buckets" {
     }))
     lambda_function_name     = optional(string)
     bucket_events            = optional(list(string))
+    event_filter_prefix      = optional(string)
+    event_filter_suffix      = optional(string)
     tags = optional(map(string))
   }))
   default = {}

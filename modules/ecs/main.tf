@@ -68,7 +68,7 @@ locals {
         container_cpu                          = 1024
         container_memory                       = 1536
         cloudwatch_log_group_retention_in_days = 14
-        enable_autoscaling                     = true
+        enable_autoscaling                     = false
         desired_count                          = 2
     })
   }

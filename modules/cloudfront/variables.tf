@@ -5,6 +5,7 @@ variable "cloudfront" {
     enabled                                = optional(bool)
     price_class                            = optional(string)
     s3_bucket                              = optional(string)
+    use_acm_cert                           = optional(bool)
     wildcard_domain                        = optional(bool)
     domain_name                            = string
     default_cache_behavior_allowed_methods = optional(list(string))

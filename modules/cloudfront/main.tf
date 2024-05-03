@@ -6,6 +6,7 @@ locals {
     price_class                            = "PriceClass_100"
     s3_bucket                              = ""
     attach_cloudfront_policy               = true
+    use_acm_cert                           = true
     wildcard_domain                        = true
     default_cache_behavior_allowed_methods = ["GET", "HEAD"]
     viewer_protocol_policy                 = "redirect-to-https"
@@ -43,6 +44,7 @@ locals {
       "enabled"                                = try(coalesce(lookup(v, "enabled", null), local.merged_default_settings.enabled), local.merged_default_settings.enabled)
       "s3_bucket"                              = try(coalesce(lookup(v, "s3_bucket", null), local.merged_default_settings.s3_bucket), local.merged_default_settings.s3_bucket)
       "attach_cloudfront_policy"               = try(coalesce(lookup(v, "attach_cloudfront_policy", null), local.merged_default_settings.attach_cloudfront_policy), local.merged_default_settings.attach_cloudfront_policy)
+      "use_acm_cert"                           = try(coalesce(lookup(v, "use_acm_cert", null), local.merged_default_settings.use_acm_cert), local.merged_default_settings.use_acm_cert)
       "wildcard_domain"                        = try(coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain), local.merged_default_settings.wildcard_domain)
       "price_class"                            = try(coalesce(lookup(v, "price_class", null), local.merged_default_settings.price_class), local.merged_default_settings.price_class)
       "default_cache_behavior_allowed_methods" = try(coalesce(lookup(v, "default_cache_behavior_allowed_methods", null), local.merged_default_settings.default_cache_behavior_allowed_methods), local.merged_default_settings.default_cache_behavior_allowed_methods)
@@ -68,14 +70,14 @@ provider "aws" {
 }
 
 data "aws_acm_certificate" "wildcard" {
-  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.wildcard_domain }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.wildcard_domain && v.use_acm_cert }
   domain   = join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name))))
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "non_wildcard" {
-  for_each = { for k, v in local.cloudfront_map : k => v if v.create && !v.wildcard_domain }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.create && !v.wildcard_domain && v.use_acm_cert }
   domain   = each.value.domain_name
   statuses = ["ISSUED"]
   provider = aws.us-east-1
@@ -151,7 +153,8 @@ module "cloudfront" {
   }
 
   viewer_certificate = {
-    acm_certificate_arn      = each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn
+    acm_certificate_arn      =  each.value.use_acm_cert ? (each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn) : null
+    cloudfront_default_certificate = each.value.use_acm_cert ? null : true
     minimum_protocol_version = "TLSv1.2_2021"
     ssl_support_method       = "sni-only"
   }
