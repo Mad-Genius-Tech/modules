@@ -4,7 +4,7 @@ data "aws_region" "current" {}
 module "efs" {
   source                          = "terraform-aws-modules/efs/aws"
   version                         = "1.6.0"
-  create                          = true
+  create                          = var.efs_enabled
   name                            = module.context.id
   performance_mode                = local.merged_settings.efs_performance_mode
   throughput_mode                 = local.merged_settings.efs_throughput_mode

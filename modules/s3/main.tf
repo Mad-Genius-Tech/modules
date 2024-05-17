@@ -44,8 +44,7 @@ locals {
     object_ownership         = "BucketOwnerEnforced"
     lambda_function_name     = ""
     bucket_events            = ["s3:ObjectCreated:*"]
-    event_filter_prefix      = null
-    event_filter_suffix      = null
+    events_filter            = {}
   }
 
   env_default_settings = {
@@ -97,20 +96,13 @@ locals {
       "ignore_public_acls"                   = coalesce(lookup(v, "ignore_public_acls", null), local.default_settings.ignore_public_acls)
       "restrict_public_buckets"              = coalesce(lookup(v, "restrict_public_buckets", null), local.default_settings.restrict_public_buckets)
       "cors_rule"                            = concat(try(coalesce(lookup(v, "cors_rule", null), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule)
-      "website"                              = v.website != null ? { for k,v in v.website: k => v if v != null } : {}
+      "website"                              = v.website != null ? { for k, v in v.website : k => v if v != null } : {}
       "control_object_ownership"             = coalesce(lookup(v, "control_object_ownership", null), local.default_settings.control_object_ownership)
       "object_ownership"                     = coalesce(lookup(v, "object_ownership", null), local.default_settings.object_ownership)
       "lambda_function_name"                 = try(coalesce(lookup(v, "lambda_function_name", null), local.default_settings.lambda_function_name), local.default_settings.lambda_function_name)
-      "bucket_events"                        = coalesce(lookup(v, "bucket_events", null), local.default_settings.bucket_events)
-      "event_filter_prefix"                  = try(coalesce(lookup(v, "event_filter_prefix", null), local.default_settings.event_filter_prefix), local.default_settings.event_filter_prefix)
-      "event_filter_suffix"                  = try(coalesce(lookup(v, "event_filter_suffix", null), local.default_settings.event_filter_suffix), local.default_settings.event_filter_suffix)
+      "events_filter"                        = try(coalesce(lookup(v, "events_filter", null), local.default_settings.events_filter), local.default_settings.events_filter)
     } if coalesce(lookup(v, "create", null), true)
   }
-}
-
-data "aws_lambda_function" "lambda_function" {
-  for_each = { for k,v in local.s3_buckets_map: k => v if v.lambda_function_name != "" }
-  function_name = each.value.lambda_function_name
 }
 
 # resource "aws_lambda_permission" "allow_terraform_bucket" {
@@ -122,14 +114,31 @@ data "aws_lambda_function" "lambda_function" {
 #   source_arn = module.s3_bucket[each.key].s3_bucket_arn
 # }
 
+
+locals {
+  events_map = merge([
+    for k, v in local.s3_buckets_map : {
+      for event in keys(v.events_filter) : "${k}|${event}" => v.events_filter[event]
+    } if length(v.events_filter) > 0
+  ]...)
+}
+
+data "aws_lambda_function" "lambda_function" {
+  for_each      = local.events_map
+  function_name = each.value.lambda
+}
+
 resource "aws_s3_bucket_notification" "bucket_terraform_notification" {
-  for_each = { for k,v in local.s3_buckets_map: k => v if v.lambda_function_name != "" }
-  bucket = module.s3_bucket[each.key].s3_bucket_id
-  lambda_function {
-    lambda_function_arn = "${data.aws_lambda_function.lambda_function[each.key].arn}"
-    events = each.value.bucket_events
-    filter_prefix = each.value.event_filter_prefix
-    filter_suffix = each.value.event_filter_suffix
+  for_each = { for k, v in local.s3_buckets_map : k => v if length(v.events_filter) > 0 }
+  bucket   = module.s3_bucket[each.key].s3_bucket_id
+  dynamic "lambda_function" {
+    for_each = local.events_map
+    content {
+      lambda_function_arn = data.aws_lambda_function.lambda_function[lambda_function.key].arn
+      events              = lambda_function.value.bucket_events
+      filter_prefix       = lambda_function.value.prefix
+      filter_suffix       = lambda_function.value.suffix
+    }
   }
 }
 

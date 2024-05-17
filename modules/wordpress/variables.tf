@@ -88,6 +88,12 @@ variable "database_backup_retention_period" {
   default     = null
 }
 
+variable "efs_enabled" {
+  description = "Whether to enable the EFS"
+  type        = bool
+  default     = false
+}
+
 variable "efs_performance_mode" {
   description = "The performance mode of the EFS"
   type        = string
@@ -110,4 +116,10 @@ variable "domain_name" {
   description = "The domain name"
   type        = string
   default     = ""
+}
+
+variable "asg_enabled" {
+  description = "Whether to enable the ASG"
+  type        = bool
+  default     = false
 }

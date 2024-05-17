@@ -55,3 +55,7 @@ output "efs_dns_name" {
 output "user_data" {
   value = local.user_data
 }
+
+output "alb_dns_name" {
+  value = module.alb.dns_name
+}

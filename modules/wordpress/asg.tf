@@ -31,29 +31,9 @@ locals {
     wp_username    = "admin"
     wp_password    = "admin!@#zxc."
     wp_email       = "sggamecard@gmail.com"
-    file_system_id = module.efs.id
+    file_system_id = var.efs_enabled ? module.efs.id : ""
     redis_endpoint = "${aws_elasticache_replication_group.elasticache.primary_endpoint_address}:6379"
   }
-}
-
-module "config_bucket" {
-  source  = "terraform-aws-modules/s3-bucket/aws"
-  version = "4.1.0"
-  bucket  = "${module.context.id}-config"
-  versioning = {
-    enabled = true
-  }
-}
-
-module "wordpress_bucket" {
-  source                  = "terraform-aws-modules/s3-bucket/aws"
-  version                 = "4.1.0"
-  bucket                  = "${module.context.id}-images"
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
-  object_ownership        = "BucketOwnerPreferred"
 }
 
 module "wordpress_sg" {
@@ -104,7 +84,7 @@ resource "aws_iam_policy" "ec2_policy" {
         ],
         Effect = "Allow",
         Resource = [
-          module.efs.arn
+          var.efs_enabled ? module.efs.arn : "*"
         ]
       },
       {
@@ -161,8 +141,8 @@ resource "aws_iam_policy" "ec2_policy" {
 
 module "asg" {
   source                          = "terraform-aws-modules/autoscaling/aws"
-  version                         = "7.4.0"
-  create                          = true
+  version                         = "7.4.1"
+  create                          = var.asg_enabled
   name                            = "${module.context.id}-asg"
   min_size                        = 1
   max_size                        = 4
@@ -188,7 +168,7 @@ module "asg" {
   ebs_optimized     = true
   enable_monitoring = false
 
-  create_iam_instance_profile = true
+  create_iam_instance_profile = var.asg_enabled ? true : false
   iam_role_name               = "${module.context.id}-ec2"
   iam_role_tags               = local.tags
   iam_role_policies = {
@@ -244,9 +224,9 @@ module "asg" {
   #   ]
   # }
 
-  instance_market_options = {
-    market_type = "spot"
-  }
+  # instance_market_options = {
+  #   market_type = "spot"
+  # }
 
   # Target scaling policy schedule based on average CPU load
   scaling_policies = {
@@ -262,4 +242,9 @@ module "asg" {
     }
   }
   tags = local.tags
+
+  depends_on = [
+    resource.aws_s3_bucket_object.template,
+    resource.aws_s3_bucket_object.config
+  ]
 }

@@ -1,24 +1,34 @@
 #!/bin/bash
 
-wordpress_dir=/usr/share/nginx/wordpress
+wordpress_dir=/wordpress
 
 function installPackages {
     yum update -y
     amazon-linux-extras install php7.4 nginx1 -y
-    #amazon-linux-extras install php8.2 nginx1 -y
-    yum install amazon-efs-utils cachefilesd -y
+    # amazon-linux-extras install php8.2 nginx1 -y
     yum install php php-{cli,pear,cgi,common,pdo,curl,mbstring,gd,mysqlnd,gettext,bcmath,json,xml,fpm,intl,zip,dom,simplexml,intl,redis,opcache,imagick} -y
-    systemctl start cachefilesd
-    systemctl enable --now cachefilesd
+    # yum install amazon-efs-utils cachefilesd -y
+    # systemctl start cachefilesd
+    # systemctl enable --now cachefilesd
 }
 
-#Mount the EFS file system to the wordpress dir
-function mountEFS {
-     mkdir $wordpress_dir
-     mount -t efs -o tls,iam,fsc ${file_system_id}:/ $wordpress_dir
+# Mount the EFS file system to the wordpress dir
+# function mountEFS {
+#      mkdir $wordpress_dir
+#      mount -t efs -o tls,iam,fsc ${file_system_id}:/ $wordpress_dir
+# }
+
+function mountVol {
+    mkdir $wordpress_dir
+    mkfs.xfs /dev/nvme1n1
+    mount /dev/nvme1n1 $wordpress_dir
+    UUID=`blkid | grep /dev/nvme1n1 | awk -F'UUID=' '{print $2}'|awk -F'"' '{print $2}'`
+    echo "[INFO] UUID=$UUID"
+    echo "UUID=$UUID $wordpress_dir xfs defaults 0 2" >> /etc/fstab
+    cat /etc/fstab
 }
 
-#downloanding and overwriting the  Nginx configuration files 
+# Downloading and overwriting the  Nginx configuration files 
 function configuringNginx {
     echo "Configuring Nginx ........"
     aws s3 cp s3://${config_bucket}/config/wordpress.conf /etc/nginx/conf.d/wordpress.conf
@@ -76,20 +86,20 @@ function installWordpress {
     db_password=$(echo $secret | jq -r '.password')
 
     echo "Downloading Wordpress...."
-    wp core download 
+    wp core download --allow-root
 
-    #create wp-config.php
+    # Create wp-config.php
     echo "Generating wp-config.php...."
-    wp config create --dbname=${db_name} --dbuser=$db_username --dbpass=\'"$db_password"\' --dbhost=${db_host}
+    wp config create --dbname=${db_name} --dbuser=$db_username --dbpass=\'"$db_password"\' --dbhost=${db_host} --allow-root
 
     echo "Installing Wordpress...."
-    wp core install --url=${site_url} --title="${wp_title}" --admin_user=${wp_username} --admin_password='${wp_password}' --admin_email=${wp_email}
+    wp core install --url=${site_url} --title="${wp_title}" --admin_user=${wp_username} --admin_password='${wp_password}' --admin_email=${wp_email} --allow-root
 
     #Install plugins
-    wp plugin install w3-total-cache --activate
-    wp plugin install amazon-s3-and-cloudfront --activate
-    wp plugin install hyperdb --activate
-    wp plugin install query-monitor --activate
+    wp plugin install w3-total-cache --activate --allow-root
+    wp plugin install amazon-s3-and-cloudfront --activate --allow-root
+    #wp plugin install hyperdb --activate --allow-root
+    wp plugin install query-monitor --activate --allow-root
 
     find . -type d -exec chmod 755 {} \;
     find . -type f -exec chmod 644 {} \;
@@ -102,7 +112,8 @@ function installWordpress {
 
 #Installing Everything
 installPackages
-mountEFS
+# mountEFS
+mountVol
 configuringNginx
 
 #Spining everything

@@ -57,6 +57,56 @@ resource "aws_api_gateway_integration" "integration" {
   uri                     = module.lambda[each.key].lambda_function_invoke_arn
 }
 
+# resource "aws_api_gateway_method" "options" {
+#   for_each      = local.lambda_map
+#   rest_api_id   = aws_api_gateway_rest_api.rest_api.id
+#   resource_id   = aws_api_gateway_resource.compaign_id[each.key].id
+#   http_method   = "OPTIONS"
+#   authorization = "NONE"
+# }
+
+# resource "aws_api_gateway_integration" "cors" {
+#   for_each    = local.lambda_map
+#   rest_api_id = aws_api_gateway_rest_api.rest_api.id
+#   resource_id = aws_api_gateway_method.options[each.key].resource_id
+#   http_method = aws_api_gateway_method.options[each.key].http_method
+#   type        = "MOCK"
+
+#   request_templates = {
+#     "application/json" = "{\"statusCode\": 200}"
+#   }
+# }
+
+# resource "aws_api_gateway_method_response" "cors_response" {
+#   for_each    = local.lambda_map
+#   rest_api_id = aws_api_gateway_rest_api.rest_api.id
+#   resource_id = aws_api_gateway_method.options[each.key].resource_id
+#   http_method = aws_api_gateway_method.options[each.key].http_method
+#   status_code = "200"
+
+#   response_models = {
+#     "application/json" = "Empty"
+#   }
+# }
+
+# resource "aws_api_gateway_integration_response" "cors_integration" {
+#   for_each    = local.lambda_map
+#   rest_api_id = aws_api_gateway_rest_api.rest_api.id
+#   resource_id = aws_api_gateway_method.options[each.key].resource_id
+#   http_method = aws_api_gateway_method.options[each.key].http_method
+#   status_code = "200"
+
+#   response_templates = {
+#     "application/json" = ""
+#   }
+
+#   response_parameters = {
+#     "method.response.header.Access-Control-Allow-Headers" = "'*'",
+#     "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,OPTIONS'",
+#     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+#   }
+# }
+
 resource "aws_api_gateway_stage" "stage" {
   rest_api_id   = aws_api_gateway_rest_api.rest_api.id
   deployment_id = aws_api_gateway_deployment.deployment.id
