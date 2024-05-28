@@ -2,6 +2,7 @@
 locals {
   default_settings = {
     deletion_protection = "INACTIVE"
+    mfa_configuration   = "OFF"
     # Cognito user pool sign-in options
     alias_attributes = [
       "email",
@@ -126,6 +127,7 @@ locals {
     for k, v in var.cognito : k => {
       "identifier"                                    = "${module.context.id}-${k}"
       "deletion_protection"                           = try(coalesce(lookup(v, "deletion_protection", null), local.merged_default_settings.deletion_protection), local.merged_default_settings.deletion_protection)
+      "mfa_configuration"                             = try(coalesce(lookup(v, "mfa_configuration", null), local.merged_default_settings.mfa_configuration), local.merged_default_settings.mfa_configuration)
       "domain_name"                                   = try(coalesce(lookup(v, "domain_name", null), local.merged_default_settings.domain_name), local.merged_default_settings.domain_name)
       "wildcard_domain"                               = try(coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain), local.merged_default_settings.wildcard_domain)
       "alias_attributes"                              = try(coalesce(lookup(v, "alias_attributes", null), local.merged_default_settings.alias_attributes), local.merged_default_settings.alias_attributes)
@@ -164,6 +166,7 @@ locals {
 resource "aws_cognito_user_pool" "user_pool" {
   for_each                 = local.cognito_map
   name                     = each.value.identifier
+  mfa_configuration        = each.value.mfa_configuration
   deletion_protection      = each.value.deletion_protection
   alias_attributes         = each.value.alias_attributes
   auto_verified_attributes = each.value.auto_verified_attributes
@@ -243,6 +246,13 @@ resource "aws_cognito_user_pool" "user_pool" {
           priority = lookup(recovery_mechanism.value, "priority")
         }
       }
+    }
+  }
+
+  dynamic "software_token_mfa_configuration" {
+    for_each = each.value.mfa_configuration != "OFF" ? [1] : []
+    content {
+      enabled = each.value.mfa_configuration != "OFF"
     }
   }
 

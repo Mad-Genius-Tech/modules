@@ -11,7 +11,8 @@ variable "apigateway" {
     xray_tracing_enabled        = optional(bool)
     lambda_function             = string
     create_log_group            = optional(bool)
-    enable_apigw_exec_logs      = optional(bool)
+    apigw_exec_log_level        = optional(string)
+    data_trace_enabled          = optional(bool)
     log_group_retention_in_days = optional(number)
     enable_cors                 = optional(bool)
   }))
@@ -32,10 +33,11 @@ variable "access_log_format" {
 	"status": $context.status,
 	"responseLatency": $context.responseLatency,
   "xrayTraceId": "$context.xrayTraceId",
-  "integrationRequestId": "$context.integration.requestId",
 	"functionResponseStatus": "$context.integration.status",
-  "integrationLatency": "$context.integration.latency",
 	"integrationServiceStatus": "$context.integration.integrationStatus",
+  "integrationRequestId": "$context.integration.requestId",
+  "integrationLatency": "$context.integration.latency",
+  "integrationError": "$context.integration.error",
   "authorizeResultStatus": "$context.authorize.status",
 	"authorizerServiceStatus": "$context.authorizer.status",
 	"authorizerLatency": "$context.authorizer.latency",
@@ -44,7 +46,13 @@ variable "access_log_format" {
 	"userAgent": "$context.identity.userAgent",
 	"principalId": "$context.authorizer.principalId",
 	"cognitoUser": "$context.identity.cognitoIdentityId",
-  "user": "$context.identity.user"
+  "caller": "$context.identity.caller",
+  "user": "$context.identity.user",
+  "accountId": "$context.identity.accountId",
+  "apiId": "$context.apiId",
+  "stage": "$context.stage",
+  "errorMessageString": "$context.error.messageString",
+  "errorValidationErrorString": "$context.error.validationErrorString",
 }
   EOF
 }

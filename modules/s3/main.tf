@@ -105,16 +105,6 @@ locals {
   }
 }
 
-# resource "aws_lambda_permission" "allow_terraform_bucket" {
-#   for_each = { for k,v in local.s3_buckets_map: k => v if v.lambda_function_name != "" }
-#   statement_id = "AllowExecutionFromS3Bucket"
-#   action = "lambda:InvokeFunction"
-#   function_name = "${data.aws_lambda_function.lambda_function[each.key].arn}"
-#   principal = "s3.amazonaws.com"
-#   source_arn = module.s3_bucket[each.key].s3_bucket_arn
-# }
-
-
 locals {
   events_map = merge([
     for k, v in local.s3_buckets_map : {
@@ -123,12 +113,14 @@ locals {
   ]...)
 }
 
+
+
 data "aws_lambda_function" "lambda_function" {
   for_each      = local.events_map
   function_name = each.value.lambda
 }
 
-resource "aws_s3_bucket_notification" "bucket_terraform_notification" {
+resource "aws_s3_bucket_notification" "bucket_notification" {
   for_each = { for k, v in local.s3_buckets_map : k => v if length(v.events_filter) > 0 }
   bucket   = module.s3_bucket[each.key].s3_bucket_id
   dynamic "lambda_function" {
@@ -140,6 +132,22 @@ resource "aws_s3_bucket_notification" "bucket_terraform_notification" {
       filter_suffix       = lambda_function.value.suffix
     }
   }
+}
+
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+resource "aws_lambda_permission" "lambda_permission" {
+  for_each = {
+    for k, v in local.s3_buckets_map : k => distinct([
+      for i in values(v.events_filter) : i.lambda_function_name
+    ]) if length(v.events_filter) > 0
+  }
+  statement_id = "AllowExecutionFromS3Bucket"
+  action = "lambda:InvokeFunction"
+  principal = "s3.amazonaws.com"
+  function_name = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${each.value}"
+  source_arn = module.s3_bucket[each.key].s3_bucket_arn
 }
 
 module "s3_bucket" {

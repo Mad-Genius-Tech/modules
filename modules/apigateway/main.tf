@@ -5,8 +5,9 @@ locals {
     "domain_names"                = {}
     "endpoint_type"               = ["REGIONAL"]
     "xray_tracing_enabled"        = false
-    "create_log_group"            = false
-    "enable_apigw_exec_log"       = false
+    "create_log_group"            = true
+    "apigw_exec_log_level"        = "OFF"
+    "data_trace_enabled"          = false
     "log_group_retention_in_days" = 1
     "timeout_milliseconds"        = 29000
     "enable_cors"                 = false
@@ -16,7 +17,6 @@ locals {
     prod = merge(local.default_settings,
       {
         "endpoint_type"               = ["EDGE"]
-        "enable_apigw_exec_log"       = true
         "log_group_retention_in_days" = 3
       }
     )
@@ -34,7 +34,8 @@ locals {
       "lambda_function"             = v.lambda_function
       "stage_name"                  = coalesce(lookup(v, "stage_name", null), var.stage_name)
       "create_log_group"            = coalesce(lookup(v, "create_log_group", null), local.merged_default_settings.create_log_group)
-      "enable_apigw_exec_log"       = coalesce(lookup(v, "enable_apigw_exec_log", null), local.merged_default_settings.enable_apigw_exec_log)
+      "apigw_exec_log_level"        = coalesce(lookup(v, "apigw_exec_log_level", null), local.merged_default_settings.apigw_exec_log_level)
+      "data_trace_enabled"          = coalesce(lookup(v, "data_trace_enabled", null), local.merged_default_settings.data_trace_enabled)
       "log_group_retention_in_days" = coalesce(lookup(v, "log_group_retention_in_days", null), local.merged_default_settings.log_group_retention_in_days)
       "timeout_milliseconds"        = coalesce(lookup(v, "timeout_milliseconds", null), local.merged_default_settings.timeout_milliseconds)
       "enable_cors"                 = coalesce(lookup(v, "enable_cors", null), local.merged_default_settings.enable_cors)
@@ -153,7 +154,7 @@ resource "aws_api_gateway_stage" "stage" {
   }
 
   dynamic "access_log_settings" {
-    for_each = each.value.create_log_group ? [1] : []
+    for_each = each.value.apigw_exec_log_level == "OFF" ? [1] : []
 
     content {
       destination_arn = aws_cloudwatch_log_group.log_group[each.key].arn
@@ -169,26 +170,26 @@ resource "aws_api_gateway_stage" "stage" {
 }
 
 resource "aws_api_gateway_method_settings" "rest_api" {
-  for_each    = { for k, v in local.apigateway_map : k => v if v.create && v.enable_apigw_exec_log }
+  for_each    = { for k, v in local.apigateway_map : k => v if v.create && v.apigw_exec_log_level != "OFF" }
   rest_api_id = aws_api_gateway_rest_api.rest_api[each.key].id
   stage_name  = aws_api_gateway_stage.stage[each.key].stage_name
   method_path = "*/*"
 
   settings {
-    throttling_burst_limit = 5000  # -1
-    throttling_rate_limit  = 10000 # -1
+    throttling_burst_limit = -1
+    throttling_rate_limit  = -1
     metrics_enabled        = false
-    data_trace_enabled     = false
-    logging_level          = "ERROR" #OFF, ERROR, INFO
+    data_trace_enabled     = each.value.data_trace_enabled
+    logging_level          = each.value.apigw_exec_log_level #OFF, ERROR, INFO
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.apigateway_log_group,
+    aws_cloudwatch_log_group.apigateway_exec_log_group,
   ]
 }
 
-resource "aws_cloudwatch_log_group" "apigateway_log_group" {
-  for_each          = { for k, v in local.apigateway_map : k => v if v.create && v.enable_apigw_exec_log }
+resource "aws_cloudwatch_log_group" "apigateway_exec_log_group" {
+  for_each          = { for k, v in local.apigateway_map : k => v if v.create }
   name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.rest_api[each.key].id}/${aws_api_gateway_stage.stage[each.key].stage_name}"
   retention_in_days = each.value.log_group_retention_in_days
   tags              = local.tags

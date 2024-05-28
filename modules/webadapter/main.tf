@@ -1,7 +1,5 @@
 locals {
   default_settings = {
-    "handler"                           = "handler.lambda_handler"
-    "runtime"                           = "python3.11"
     "timeout"                           = 10
     "memory_size"                       = 1024
     "ephemeral_storage_size"            = 1024

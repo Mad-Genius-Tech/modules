@@ -29,3 +29,21 @@ output "client_secret" {
   }
   sensitive = true
 }
+
+output "authenticated_role" {
+  value = {
+    for k, v in aws_iam_role.auth_iam_role : k => {
+      name = v.name
+      arn  = v.arn
+    }
+  }
+}
+
+output "guest_role" {
+  value = {
+    for k, v in aws_iam_role.guest_iam_role : k => {
+      name = v.name
+      arn  = v.arn
+    }
+  }
+}

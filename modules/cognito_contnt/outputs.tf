@@ -22,3 +22,20 @@ output "client_id" {
     for k, v in aws_cognito_user_pool_client.client : k => v.id
   }
 }
+
+output "authenticated_role" {
+  value = {
+    for k, v in aws_iam_role.auth_iam_role : k => {
+      name = v.name
+      arn  = v.arn
+    }
+  }
+}
+output "guest_role" {
+  value = {
+    for k, v in aws_iam_role.guest_iam_role : k => {
+      name = v.name
+      arn  = v.arn
+    }
+  }
+}

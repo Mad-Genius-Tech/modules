@@ -48,6 +48,52 @@ resource "aws_iam_role" "auth_iam_role" {
     )
   }
 
+  inline_policy {
+    name = "chime"
+    policy = jsonencode(
+      {
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Effect = "Allow"
+            Action = [
+              "chime:GetMessagingSessionEndpoint"
+            ]
+            Resource = ["*"]
+          },
+          {
+            Effect = "Allow"
+            Action = [
+              "chime:*"
+            ]
+            Resource = ["*"]
+          },
+          {
+            Effect = "Allow"
+            Action = [
+              "chime:Connect",
+              "chime:CreateChannelMembership",
+              "chime:ListChannelMemberships",              "chime:CreateChannel",
+              "chime:DescribeChannel",
+              "chime:DeleteChannel",
+              "chime:UpdateChannel",
+              "chime:SearchChannels",
+              "chime:UpdateChannelReadMarker",
+              "chime:ListChannelMessages",
+              "chime:RedactChannelMessage",
+              "chime:SendChannelMessage",
+            ]
+            Resource = [
+              "${var.app_instance_arn}/user/*",
+              "${var.app_instance_arn}/channel/*",
+              "${var.app_instance_arn}/channel-flow/*"
+            ]
+          }
+        ]
+      }
+    )
+  }
+
 }
 
 

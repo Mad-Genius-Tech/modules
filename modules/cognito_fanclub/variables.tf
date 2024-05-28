@@ -2,6 +2,7 @@
 variable "cognito" {
   type = map(object({
     deletion_protection = optional(string)
+    mfa_configuration   = optional(string)
     alias_attributes    = optional(list(string))
     username_configuration = optional(object({
       case_sensitive = optional(bool)
@@ -75,4 +76,8 @@ variable "cognito" {
       property    = optional(string)
     })))
   }))
+}
+
+variable "app_instance_arn" {
+  type = string
 }
