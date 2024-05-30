@@ -98,9 +98,11 @@ resource "aws_secretsmanager_secret_version" "secret_version" {
     for k, v in local.aurora_map : k => {
       secret_id = aws_secretsmanager_secret.secret[k].id
       secret_string = jsonencode({
+        database = v.database_name
         username = v.master_username
         password = random_password.password[k].result
         endpoint = module.aurora_postgresql_v2[k].cluster_endpoint
+        db_url   = "postgres://${v.master_username}:${random_password.password[k].result}@${module.aurora_postgresql_v2[k].cluster_endpoint}:5432/${v.database_name}"
       })
     } if v.create
   }

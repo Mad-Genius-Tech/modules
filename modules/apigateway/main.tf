@@ -164,7 +164,7 @@ resource "aws_api_gateway_stage" "stage" {
 
   depends_on = [
     aws_cloudwatch_log_group.log_group,
-    aws_api_gateway_account.apigateway_cloudwatch_logs
+    aws_api_gateway_account.apigateway_cloudwatch_logs,
   ]
   tags = local.tags
 }
@@ -235,12 +235,10 @@ resource "aws_lambda_permission" "api_gateway_all" {
 }
 
 resource "aws_api_gateway_account" "apigateway_cloudwatch_logs" {
-  count               = var.stage_name == "prod" ? 1 : 0
-  cloudwatch_role_arn = aws_iam_role.apigateway_cloudwatch_logs[0].arn
+  cloudwatch_role_arn = aws_iam_role.apigateway_cloudwatch_logs.arn
 }
 
 resource "aws_iam_role" "apigateway_cloudwatch_logs" {
-  count = var.stage_name == "prod" ? 1 : 0
   name  = "${module.context.id}-logs"
 
   assume_role_policy = <<EOF
@@ -262,9 +260,8 @@ EOF
 }
 
 resource "aws_iam_role_policy" "apigateway_cloudwatch_logs" {
-  count  = var.stage_name == "prod" ? 1 : 0
   name   = "${module.context.id}-logs"
-  role   = aws_iam_role.apigateway_cloudwatch_logs[0].id
+  role   = aws_iam_role.apigateway_cloudwatch_logs.id
   policy = <<EOF
 {
     "Version": "2012-10-17",

@@ -76,7 +76,8 @@ module "webadapter" {
           "ecr:BatchGetImage",
           "ecr:DescribeImages",
           "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability"
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetRepositoryPolicy"
         ],
         "Resource": ["*"]
       }
