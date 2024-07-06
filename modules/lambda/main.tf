@@ -455,3 +455,9 @@ resource "aws_lambda_function_event_invoke_config" "sqs_stage_invoke_config" {
   maximum_event_age_in_seconds = each.value.maximum_event_age_in_seconds
   maximum_retry_attempts       = each.value.maximum_retry_attempts
 }
+
+resource "aws_lambda_runtime_management_config" "runtime_management" {
+  for_each          = local.lambda_map
+  function_name     = module.lambda[each.key].lambda_function_name
+  update_runtime_on = "FunctionUpdate"
+}

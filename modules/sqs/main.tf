@@ -51,3 +51,26 @@ module "sqs" {
   redrive_policy                = each.value.redrive_policy
   tags                          = local.tags
 }
+
+module "dlq_alarm" {
+  source              = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
+  version             = "~> 5.4.0"
+  for_each            = local.sqs_map
+  create_metric_alarm = var.sns_topic_arn != "" ? true : false
+  alarm_name          = module.sqs[each.key].dead_letter_queue_name
+  alarm_description   = "Alarm that triggers whenever a message is sent to this queue: ${module.sqs[each.key].dead_letter_queue_name}"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  threshold           = 1
+  period              = 300
+  unit                = "Count"
+  treat_missing_data  = "missing"
+  namespace           = "AWS/SQS"
+  metric_name         = "NumberOfMessagesSent"
+  statistic           = "Sum"
+  dimensions = {
+    "QueueName" : module.sqs[each.key].dead_letter_queue_name
+  }
+  alarm_actions = [var.sns_topic_arn]
+  tags          = local.tags
+}
