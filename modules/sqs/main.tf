@@ -58,16 +58,15 @@ module "dlq_alarm" {
   for_each            = local.sqs_map
   create_metric_alarm = var.sns_topic_arn != "" ? true : false
   alarm_name          = module.sqs[each.key].dead_letter_queue_name
-  alarm_description   = "Alarm that triggers whenever a message is sent to this queue: ${module.sqs[each.key].dead_letter_queue_name}"
+  alarm_description   = "Items are on the ${module.sqs[each.key].dead_letter_queue_name} queue"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   threshold           = 1
   period              = 300
-  unit                = "Count"
-  treat_missing_data  = "missing"
+  statistic           = "Average"
+  treat_missing_data  = "notBreaching"
   namespace           = "AWS/SQS"
-  metric_name         = "NumberOfMessagesSent"
-  statistic           = "Sum"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
   dimensions = {
     "QueueName" : module.sqs[each.key].dead_letter_queue_name
   }
