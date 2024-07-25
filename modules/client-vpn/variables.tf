@@ -49,3 +49,38 @@ variable "vpn_users" {
   }))
   default = {}
 }
+
+variable "banner_text" {
+  default = ""
+}
+
+variable "authentication_type" {
+  default = "certificate-authentication"
+}
+
+variable "saml_metadata_file" {
+  default = ""
+}
+
+variable "access_group_id" {
+  default = ""
+}
+
+variable "lambda_function_arn" {
+  default = ""
+}
+
+variable "lambda_local_package" {
+  type    = string
+  default = ""
+}
+
+variable "lambda_environment_variables" {
+  type    = map(string)
+  default = {}
+}
+
+variable "lambda_ignore_source_code_hash" {
+  type    = bool
+  default = false
+}

@@ -1,4 +1,3 @@
-
 module "object_header" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 6.5.0"
@@ -10,7 +9,7 @@ module "object_header" {
   timeout                           = 10
   cloudwatch_logs_retention_in_days = 1
   architectures                     = ["arm64"]
-  source_path                       = "./src"
+  source_path                       = "./src/object_header"
   environment_variables = {
     "S3_BUCKET_NAME" = module.s3_bucket.s3_bucket_id
   }

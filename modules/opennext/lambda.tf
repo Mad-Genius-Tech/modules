@@ -2,7 +2,7 @@
 locals {
   default_settings = {
     server_memory_size                      = 1024
-    image_optimisation_memory_size          = 1024
+    image_optimisation_memory_size          = 1536
     server_cloudwatch_log_retention_in_days = 1
     # This represents the maximum number of concurrent instances allocated to your function. When a function has reserved concurrency, no other function can use that concurrency. Configuring reserved concurrency for a function incurs no additional charges.
     # A value of 0 disables Lambda Function from being triggered, -1 removes any concurrency limitations. Defaults to Unreserved Concurrency Limits -1
@@ -15,8 +15,6 @@ locals {
   env_default_settings = {
     prod = merge(local.default_settings,
       {
-        server_memory_size                      = 1024
-        image_optimisation_memory_size          = 1024
         server_cloudwatch_log_retention_in_days = 14
         provisioned_concurrent_executions       = 2
         schedule_expression                     = "rate(5 minutes)"
@@ -54,14 +52,13 @@ module "lambda_sg" {
   vpc_id = var.vpc_id
 }
 
-
 module "server" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 6.0.1"
   function_name                     = "${local.name}-server"
   description                       = "Open Next Server Function"
   handler                           = "index.handler"
-  runtime                           = "nodejs18.x"
+  runtime                           = var.opennext_version == "v2" ? "nodejs18.x" : "nodejs20.x"
   memory_size                       = local.merged_settings.server_memory_size
   timeout                           = 30
   cloudwatch_logs_retention_in_days = local.merged_settings.server_cloudwatch_log_retention_in_days
@@ -70,6 +67,7 @@ module "server" {
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = true
+  authorization_type                = var.enable_lambda_url_oac ? "AWS_IAM" : "NONE"
   vpc_subnet_ids                    = var.vpc_id == "" ? null : var.subnet_ids
   vpc_security_group_ids            = var.vpc_id == "" ? [] : [module.lambda_sg.security_group_id]
   attach_network_policy             = var.vpc_id == "" ? false : true
@@ -166,11 +164,100 @@ module "server" {
           "ivschat:SendEvent",
         ],
         Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "dynamodb:BatchGetItem",
+          "dynamodb:GetRecords",
+          "dynamodb:GetShardIterator",
+          "dynamodb:Query",
+          "dynamodb:GetItem",
+          "dynamodb:Scan",
+          "dynamodb:ConditionCheckItem",
+          "dynamodb:BatchWriteItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:DescribeTable",
+        ],
+        Resource = [
+          aws_dynamodb_table.revalidation[0].arn,
+          "${aws_dynamodb_table.revalidation[0].arn}/index/*"
+        ]
       }
     ]
   })
   tags = local.tags
 }
+
+resource "aws_lambda_permission" "server_url_permission" {
+  count                  = var.enable_lambda_url_oac ? 1 : 0
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = module.server.lambda_function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.website_distribution.arn
+  function_url_auth_type = "AWS_IAM"
+}
+
+module "additional_server" {
+  source                            = "terraform-aws-modules/lambda/aws"
+  version                           = "~> 6.0.1"
+  create                            = var.opennext_version == "v3"
+  function_name                     = "${local.name}-additional-server"
+  description                       = "Open Next v3 Additional Server Function"
+  handler                           = "index.handler"
+  runtime                           = "nodejs20.x"
+  memory_size                       = local.merged_settings.server_memory_size
+  timeout                           = 30
+  cloudwatch_logs_retention_in_days = local.merged_settings.server_cloudwatch_log_retention_in_days
+  reserved_concurrent_executions    = local.merged_settings.server_reserved_concurrent_executions
+  architectures                     = ["x86_64"]
+  create_package                    = false
+  ignore_source_code_hash           = true
+  create_lambda_function_url        = true
+  authorization_type                = var.enable_lambda_url_oac ? "AWS_IAM" : "NONE"
+  vpc_subnet_ids                    = var.vpc_id == "" ? null : var.subnet_ids
+  vpc_security_group_ids            = var.vpc_id == "" ? [] : [module.lambda_sg.security_group_id]
+  attach_network_policy             = var.vpc_id == "" ? false : true
+  s3_existing_package = {
+    bucket = module.s3_bucket.s3_bucket_id
+    key    = aws_s3_object.s3_object_placeholder.id
+  }
+  attach_policy_statements = length(var.policy_statements) > 0 ? true : false
+  policy_statements        = var.policy_statements
+  attach_policy_json       = true
+  policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:GetObject*"
+        ],
+        Resource = ["${module.s3_bucket_lambda.s3_bucket_arn}/*"]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "cloudfront:CreateInvalidation",
+        ],
+        Resource = ["*"]
+      },
+    ]
+  })
+  tags = local.tags
+}
+
+resource "aws_lambda_permission" "additional_server_url_permission" {
+  count                  = var.enable_lambda_url_oac && var.opennext_version == "v3" ? 1 : 0
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = module.additional_server.lambda_function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.website_distribution.arn
+  function_url_auth_type = "AWS_IAM"
+}
+
 
 data "aws_iam_policy_document" "server_lambda_cloudfront" {
   statement {
@@ -228,8 +315,8 @@ module "image_optimisation" {
   function_name                     = "${local.name}-image-optimization"
   description                       = "Open Next Image Optimization Function"
   handler                           = "index.handler"
-  runtime                           = "nodejs18.x"
-  memory_size                       = local.merged_settings.image_optimisation_memory_size # 1536
+  runtime                           = var.opennext_version == "v2" ? "nodejs18.x" : "nodejs14.x"
+  memory_size                       = local.merged_settings.image_optimisation_memory_size
   timeout                           = 25
   cloudwatch_logs_retention_in_days = 1
   reserved_concurrent_executions    = local.merged_settings.image_reserved_concurrent_executions
@@ -238,14 +325,17 @@ module "image_optimisation" {
   create_package             = false
   ignore_source_code_hash    = true
   create_lambda_function_url = true
+  authorization_type         = var.enable_lambda_url_oac ? "AWS_IAM" : "NONE"
   s3_existing_package = {
     bucket = module.s3_bucket.s3_bucket_id
     key    = aws_s3_object.s3_object_placeholder.id
   }
-  environment_variables = {
+  environment_variables = merge({
     "BUCKET_KEY_PREFIX" = "_assets"
     "BUCKET_NAME"       = module.s3_bucket.s3_bucket_id
-  }
+    }, var.opennext_version == "v2" ? {} : {
+    "OPENNEXT_STATIC_ETAG" = "true"
+  })
   attach_policy_json = true
   policy_json = jsonencode({
     Version = "2012-10-17"
@@ -273,6 +363,15 @@ module "image_optimisation" {
   tags = local.tags
 }
 
+resource "aws_lambda_permission" "image_optimisation_url_permission" {
+  count                  = var.enable_lambda_url_oac ? 1 : 0
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = module.image_optimisation.lambda_function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.website_distribution.arn
+  function_url_auth_type = "AWS_IAM"
+}
+
 resource "aws_sqs_queue" "revalidation_queue" {
   name                        = "${local.name}-isr-queue.fifo"
   fifo_queue                  = true
@@ -288,6 +387,7 @@ resource "aws_lambda_event_source_mapping" "revalidation_queue_source" {
   # https://github.com/sst/sst/blob/master/packages/sst/src/constructs/NextjsSite.ts#L436
   batch_size = 5
 }
+
 
 module "revalidation_insert" {
   source                            = "terraform-aws-modules/lambda/aws"
@@ -343,8 +443,8 @@ module "revalidation" {
   function_name                     = "${local.name}-revalidation"
   description                       = "Open Next Revalidation Function"
   handler                           = "index.handler"
-  runtime                           = "nodejs18.x"
-  memory_size                       = 128
+  runtime                           = var.opennext_version == "v2" ? "nodejs18.x" : "nodejs20.x"
+  memory_size                       = 1536
   timeout                           = 30
   cloudwatch_logs_retention_in_days = 1
   architectures                     = ["x86_64"]
@@ -391,7 +491,7 @@ module "warmer" {
   function_name                     = "${local.name}-warmer"
   description                       = "Open Next Warmer Function"
   handler                           = "index.handler"
-  runtime                           = "nodejs18.x"
+  runtime                           = var.opennext_version == "v2" ? "nodejs18.x" : "nodejs20.x"
   memory_size                       = 128
   timeout                           = 15 * 60
   cloudwatch_logs_retention_in_days = 1
@@ -399,14 +499,25 @@ module "warmer" {
   architectures              = ["x86_64"]
   create_package             = false
   ignore_source_code_hash    = true
-  create_lambda_function_url = true
+  create_lambda_function_url = false
   s3_existing_package = {
     bucket = module.s3_bucket.s3_bucket_id
     key    = aws_s3_object.s3_object_placeholder.id
   }
-  environment_variables = {
+  environment_variables = var.opennext_version == "v2" ? {
     "FUNCTION_NAME" : module.server.lambda_function_name
-    "CONCURRENCY" : 1
+    "CONCURRENCY" : 20
+    } : {
+    "WARM_PARAMS" : jsonencode(concat(
+      [{
+        function    = module.server.lambda_function_name,
+        concurrency = 20
+      }],
+      [{
+        function    = module.additional_server.lambda_function_name,
+        concurrency = 20
+      }]
+    ))
   }
   attach_policy_json = true
   policy_json        = <<-EOT
@@ -418,7 +529,7 @@ module "warmer" {
               "Action": [
                 "lambda:InvokeFunction"
               ],
-              "Resource": ["${module.server.lambda_function_arn}"]
+              "Resource": ["arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${local.name}-*"]
           },
           {
             "Effect": "Allow",
@@ -468,3 +579,4 @@ locals {
     jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.secret[k].secret_string))[v.property] if length(var.secret_vars) > 0
   }
 }
+

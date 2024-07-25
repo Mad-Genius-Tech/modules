@@ -1,8 +1,8 @@
 
 locals {
-
   default_settings = {
     instance_type               = "t3a.nano"
+    architecture                = "amd64"
     ignore_ami_changes          = true
     associate_public_ip_address = false
     disable_api_stop            = false
@@ -26,6 +26,7 @@ locals {
     monitoring                 = false
     enable_cloudwatch_alarm    = false
     alarms = {
+      "enabled"                 = true
       "statistic"               = "Average"
       "namespace"               = "AWS/EC2"
       "comparison_operator"     = "GreaterThanOrEqualToThreshold"
@@ -42,11 +43,10 @@ locals {
   env_default_settings = {
     prod = merge(local.default_settings,
       {
-        enable_cloudwatch_alarm     = true
-        cpu_credits                 = "unlimited"
-        disable_api_stop            = true
-        disable_api_termination     = true
-        associate_public_ip_address = true
+        enable_cloudwatch_alarm = true
+        cpu_credits             = "unlimited"
+        disable_api_stop        = true
+        disable_api_termination = true
     })
   }
 
@@ -57,6 +57,7 @@ locals {
       "identifier"                  = "${module.context.id}-${k}"
       "create"                      = coalesce(lookup(v, "create", null), true)
       "instance_type"               = coalesce(lookup(v, "instance_type", null), local.merged_default_settings.instance_type)
+      "architecture"                = coalesce(lookup(v, "architecture", null), local.merged_default_settings.architecture)
       "ignore_ami_changes"          = coalesce(lookup(v, "ignore_ami_changes", null), local.merged_default_settings.ignore_ami_changes)
       "subnet_id"                   = try(coalesce(lookup(v, "subnet_id", null), local.merged_default_settings.subnet_id), local.merged_default_settings.subnet_id)
       "associate_public_ip_address" = coalesce(lookup(v, "associate_public_ip_address", null), local.merged_default_settings.associate_public_ip_address)
@@ -79,6 +80,7 @@ locals {
       "enable_cloudwatch_alarm"     = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
       "alarms" = {
         for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
+          "enabled"                 = v1.enabled
           "identifier"              = "${module.context.id}-${k}-${k1}"
           "metric_name"             = v1.metric_name
           "threshold"               = v1.threshold
@@ -136,7 +138,7 @@ module "ec2" {
       volume_size = each.value.root_volume_size
     },
   ]
-  key_name               = each.value.key_name == "" ? (var.key_per_instance ? aws_key_pair.key_pair[each.key].key_name : one(values(aws_key_pair.key_pair)).key_name) : each.value.key_name
+  key_name               = each.value.key_name == "" ? (var.key_per_instance ? aws_key_pair.key_pair_per_instance[each.key].key_name : one(values(aws_key_pair.key_pair)).key_name) : each.value.key_name
   vpc_security_group_ids = [module.sg[each.key].security_group_id]
   cpu_credits            = replace(each.value.instance_type, "/^t(2|3|3a){1}\\..*$/", "1") == "1" ? each.value.cpu_credits : null
   monitoring             = each.value.monitoring
@@ -155,22 +157,42 @@ resource "aws_eip_association" "eip_assoc" {
 }
 
 resource "tls_private_key" "rsa" {
-  for_each  = var.key_per_instance ? { for k, v in local.ec2_map : k => v.identifier } : { 1 = 1 }
+  for_each  = { 1 = 1 }
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
 resource "aws_key_pair" "key_pair" {
-  for_each   = var.key_per_instance ? { for k, v in local.ec2_map : k => v.identifier } : { 1 = 1 }
-  key_name   = var.key_per_instance ? "${each.value.identifier}-key" : "${module.context.id}-key"
+  for_each   = { 1 = 1 }
+  key_name   = "${module.context.id}-key"
   public_key = tls_private_key.rsa[each.key].public_key_openssh
   tags       = local.tags
 }
 
 resource "local_file" "private_key" {
-  for_each        = var.output_private_key ? (var.key_per_instance ? { for k, v in local.ec2_map : k => v.identifier } : { 1 = 1 }) : {}
+  for_each        = var.output_private_key ? { 1 = 1 } : {}
   content         = tls_private_key.rsa[each.key].private_key_pem
-  filename        = var.key_per_instance ? "${var.terragrunt_directory}/${each.value.identifier}-key.pem" : "${var.terragrunt_directory}/${module.context.id}-key.pem"
+  filename        = "${var.terragrunt_directory}/${module.context.id}-key.pem"
+  file_permission = "0600"
+}
+
+resource "tls_private_key" "rsa_per_instance" {
+  for_each  = var.key_per_instance ? { for k, v in local.ec2_map : k => v.identifier } : {}
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "key_pair_per_instance" {
+  for_each   = var.key_per_instance ? { for k, v in local.ec2_map : k => v.identifier } : {}
+  key_name   = var.key_per_instance ? "${each.value}-key" : null
+  public_key = tls_private_key.rsa_per_instance[each.key].public_key_openssh
+  tags       = local.tags
+}
+
+resource "local_file" "private_key_per_instance" {
+  for_each        = var.output_private_key && var.key_per_instance ? { for k, v in local.ec2_map : k => v.identifier } : {}
+  content         = tls_private_key.rsa_per_instance[each.key].private_key_pem
+  filename        = var.key_per_instance ? "${var.terragrunt_directory}/${each.value}-key.pem" : null
   file_permission = "0600"
 }
 
@@ -234,7 +256,7 @@ data "aws_ami" "amazon_linux" {
   owners      = ["amazon"]
   filter {
     name   = "architecture"
-    values = var.architecture == "amd64" ? ["x86_64"] : ["arm64"]
+    values = each.value.architecture == "amd64" ? ["x86_64"] : ["arm64"]
   }
   filter {
     name   = "name"
@@ -248,7 +270,7 @@ data "aws_ami" "ubuntu" {
   owners      = ["099720109477"]
   filter {
     name   = "architecture"
-    values = var.architecture == "amd64" ? ["x86_64"] : ["arm64"]
+    values = each.value.architecture == "amd64" ? ["x86_64"] : ["arm64"]
   }
   filter {
     name   = "name"
@@ -263,7 +285,7 @@ data "aws_ami" "amazon_linux_2" {
   owners      = ["amazon"]
   filter {
     name   = "architecture"
-    values = var.architecture == "amd64" ? ["x86_64"] : ["arm64"]
+    values = each.value.architecture == "amd64" ? ["x86_64"] : ["arm64"]
   }
   filter {
     name   = "name"
@@ -313,7 +335,7 @@ locals {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alarm" {
-  for_each            = local.alarms_map
+  for_each            = { for k,v in local.alarms_map : k => v if v.enabled }
   alarm_name          = local.alarms_map[each.key].identifier
   alarm_description   = "This metric monitors EC2 ${local.ec2_map[split("|", each.key)[0]].identifier} ${local.alarms_map[each.key].metric_name}"
   metric_name         = local.alarms_map[each.key].metric_name

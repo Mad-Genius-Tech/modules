@@ -4,6 +4,7 @@ import urllib.parse
 
 CONTENT_TYPE_MAPPING = {
     'js': 'text/javascript',
+    'map': 'application/json',
     'svg': 'image/svg+xml',
     'png': 'image/png',
     'jpg': 'image/jpg',
@@ -20,8 +21,13 @@ CONTENT_TYPE_MAPPING = {
     'ttf': 'font/ttf',
 }
 
+# public: response could be cached by any cache(eg. browser cache, CDN cache)
+# max-age: response can be served from the cache without checking with the origin server for the specified time
+# immutable: response can be cached indefinitely
+# must-revalidate: cache must revalidate stale responses with the origin server before using a cached copy
+# s-maxage: response can be served from the shared cache(eg. CDN, proxies) without checking with the origin server for the specified time
 CACHE_CONTROL_MAPPING = {
-    '_assets/_next/': 'public,max-age=31536000,immutable',
+    '_assets/_next/': 'public,max-age=31536000,immutable', # 31536000 seconds = 1 year
     '_assets/': 'public,max-age=0,s-maxage=31536000,must-revalidate',
 }
 

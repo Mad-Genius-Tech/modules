@@ -3,15 +3,15 @@ output "security_group_id" {
 }
 
 output "vpn_endpoint_id" {
-  value = var.create ? aws_ec2_client_vpn_endpoint.client_vpn_endpoint[0].id : null
+  value = var.create ? (var.authentication_type == "federated-authentication" ? aws_ec2_client_vpn_endpoint.saml[0].id : aws_ec2_client_vpn_endpoint.mtls[0].id) : null
 }
 
 output "vpn_endpoint_dns_name" {
-  value = var.create ? aws_ec2_client_vpn_endpoint.client_vpn_endpoint.*.dns_name : null
+  value = var.create ? (var.authentication_type == "federated-authentication" ? aws_ec2_client_vpn_endpoint.saml.*.dns_name : aws_ec2_client_vpn_endpoint.mtls.*.dns_name) : null
 }
 
 output "vpn_endpoint_name" {
-  value = var.create ? "${local.service_name}.${replace(aws_ec2_client_vpn_endpoint.client_vpn_endpoint.*.dns_name[0], "*.", "")}" : null
+  value = var.create ? (var.authentication_type == "federated-authentication" ? "${local.service_name}.${replace(aws_ec2_client_vpn_endpoint.saml.*.dns_name[0], "*.", "")}" : "${local.service_name}.${replace(aws_ec2_client_vpn_endpoint.mtls.*.dns_name[0], "*.", "")}") : null
 }
 
 output "vpn_client_cert" {
@@ -39,4 +39,8 @@ output "vpn_ca_cert" {
 output "vpn_ca_key" {
   value     = var.create ? tls_private_key.ca.private_key_pem : null
   sensitive = true
+}
+
+output "self_service_url" {
+  value = var.create && var.authentication_type == "federated-authentication" ? "https://self-service.clientvpn.amazonaws.com/endpoints/${aws_ec2_client_vpn_endpoint.saml[0].id}" : null
 }

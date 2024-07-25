@@ -24,6 +24,7 @@ locals {
     "secret_vars"                                 = {}
     "cloudwatch_events"                           = {}
     "create_lambda_function_url"                  = false
+    "tracing_mode"                                = null
     "cors" = {
       allow_origins     = null
       allow_methods     = null
@@ -105,6 +106,7 @@ locals {
       "error_rate_threshold"                        = coalesce(lookup(v, "error_rate_threshold", null), local.merged_default_settings.error_rate_threshold)
       "error_rate_evaluation_periods"               = coalesce(lookup(v, "error_rate_evaluation_periods", null), local.merged_default_settings.error_rate_evaluation_periods)
       "enable_insights"                             = coalesce(lookup(v, "enable_insights", null), local.merged_default_settings.enable_insights)
+      "tracing_mode"                               = try(coalesce(lookup(v, "tracing_mode", null), local.merged_default_settings.tracing_mode), local.merged_default_settings.tracing_mode)
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }
@@ -201,6 +203,8 @@ module "lambda" {
   runtime                                     = each.value.runtime
   memory_size                                 = each.value.memory_size
   ephemeral_storage_size                      = each.value.ephemeral_storage_size
+  tracing_mode                                = each.value.tracing_mode
+  attach_tracing_policy                       = each.value.tracing_mode != null ? true : false
   timeout                                     = each.value.timeout
   cloudwatch_logs_retention_in_days           = each.value.cloudwatch_logs_retention_in_days
   create_async_event_config                   = each.value.create_async_event_config

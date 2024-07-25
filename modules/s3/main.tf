@@ -140,13 +140,13 @@ data "aws_region" "current" {}
 resource "aws_lambda_permission" "lambda_permission" {
   for_each = {
     for k, v in local.s3_buckets_map : k => distinct([
-      for i in values(v.events_filter) : i.lambda_function_name
+      for i in values(v.events_filter) : i.lambda
     ]) if length(v.events_filter) > 0
   }
   statement_id = "AllowExecutionFromS3Bucket"
   action = "lambda:InvokeFunction"
   principal = "s3.amazonaws.com"
-  function_name = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${each.value}"
+  function_name = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${each.value[0]}"
   source_arn = module.s3_bucket[each.key].s3_bucket_arn
 }
 

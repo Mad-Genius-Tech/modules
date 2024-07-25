@@ -154,7 +154,7 @@ resource "aws_api_gateway_stage" "stage" {
   }
 
   dynamic "access_log_settings" {
-    for_each = each.value.apigw_exec_log_level == "OFF" ? [1] : []
+    for_each = each.value.apigw_exec_log_level == "OFF" && each.value.create_log_group ? [1] : []
 
     content {
       destination_arn = aws_cloudwatch_log_group.log_group[each.key].arn
@@ -189,7 +189,7 @@ resource "aws_api_gateway_method_settings" "rest_api" {
 }
 
 resource "aws_cloudwatch_log_group" "apigateway_exec_log_group" {
-  for_each          = { for k, v in local.apigateway_map : k => v if v.create }
+  for_each          = { for k, v in local.apigateway_map : k => v if v.create && v.apigw_exec_log_level != "OFF" }
   name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.rest_api[each.key].id}/${aws_api_gateway_stage.stage[each.key].stage_name}"
   retention_in_days = each.value.log_group_retention_in_days
   tags              = local.tags
@@ -235,12 +235,13 @@ resource "aws_lambda_permission" "api_gateway_all" {
 }
 
 resource "aws_api_gateway_account" "apigateway_cloudwatch_logs" {
-  cloudwatch_role_arn = aws_iam_role.apigateway_cloudwatch_logs.arn
+  for_each            = { for k, v in local.apigateway_map : k => v if v.create_log_group }
+  cloudwatch_role_arn = join("", aws_iam_role.apigateway_cloudwatch_logs[*].arn)
 }
 
 resource "aws_iam_role" "apigateway_cloudwatch_logs" {
-  name  = "${module.context.id}-logs"
-
+  for_each           = { for k, v in local.apigateway_map : k => v if v.create_log_group }
+  name               = "${module.context.id}-logs"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -260,9 +261,10 @@ EOF
 }
 
 resource "aws_iam_role_policy" "apigateway_cloudwatch_logs" {
-  name   = "${module.context.id}-logs"
-  role   = aws_iam_role.apigateway_cloudwatch_logs.id
-  policy = <<EOF
+  for_each = { for k, v in local.apigateway_map : k => v if v.create_log_group }
+  name     = "${module.context.id}-logs"
+  role     = join("", aws_iam_role.apigateway_cloudwatch_logs[*].id)
+  policy   = <<EOF
 {
     "Version": "2012-10-17",
     "Statement": [

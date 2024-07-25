@@ -49,7 +49,7 @@ module "ses_notifications" {
   cloudwatch_logs_retention_in_days = 1
   architectures                     = ["arm64"]
   create_package                    = true
-  source_path                       = "ses_notifications"
+  source_path                       = "ses-notifications"
   environment_variables = {
     "SES_TABLE_NAME" : aws_dynamodb_table.ses_notifications.name,
   }

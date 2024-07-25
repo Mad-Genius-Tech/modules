@@ -37,10 +37,17 @@ async function handler(event) {
 EOF
 }
 
-
 resource "aws_cloudfront_origin_access_control" "s3_origin_access_control" {
   name                              = "${local.name}-s3"
   origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_origin_access_control" "lambda_url_origin_access_control" {
+  count                             = var.enable_lambda_url_oac ? 1 : 0
+  name                              = "${local.name}-lambda-url"
+  origin_access_control_origin_type = "lambda"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
@@ -65,7 +72,7 @@ resource "aws_cloudfront_cache_policy" "cache_policy" {
     headers_config {
       header_behavior = "whitelist"
       headers {
-        items = ["accept", "rsc", "next-router-prefetch", "next-router-state-tree", "next-url"]
+        items = var.opennext_version == "v2" ? ["accept", "rsc", "next-router-prefetch", "next-router-state-tree", "next-url", "x-prerender-bypass", "x-prerender-revalidate"] : ["x-open-next-cache-key"]
       }
     }
   }
@@ -180,11 +187,14 @@ resource "aws_cloudfront_distribution" "website_distribution" {
   price_class     = var.price_class
   http_version    = "http2"
 
-  # logging_config {
-  #   include_cookies = false
-  #   bucket          = module.cloudfront_logs.logs_s3_bucket.bucket_regional_domain_name
-  #   prefix = one(var.domain_names)
-  # }
+  dynamic "logging_config" {
+    for_each = var.cloudfront_logging_enabled ? [1] : []
+    content {
+      bucket          = module.cloudfront_logs.s3_bucket_bucket_domain_name
+      prefix          = trimsuffix(trimprefix(replace(replace(var.domain_names[0], "*", ""), ".", "-"), "-"), "-")
+      include_cookies = var.cloudfront_logging_include_cookies
+    }
+  }
 
   viewer_certificate {
     acm_certificate_arn      = var.wildcard_domain ? data.aws_acm_certificate.wildcard[0].arn : data.aws_acm_certificate.non_wildcard[0].arn

@@ -46,6 +46,7 @@ variable "lambda" {
     create_lambda_function_url               = optional(bool)
     lambda_bucket_name                       = optional(string)
     duration_evaluation_periods              = optional(number)
+    tracing_mode                             = optional(string)
     duration_threshold                       = optional(number)
     throttles_evaluation_periods             = optional(number)
     throttles_threshold                      = optional(number)

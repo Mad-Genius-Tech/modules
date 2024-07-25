@@ -12,15 +12,11 @@ variable "private_subnets" {
   default = []
 }
 
-variable "architecture" {
-  type    = string
-  default = "amd64"
-}
-
 variable "ec2" {
   type = map(object({
     create                      = optional(bool)
     ignore_ami_changes          = optional(bool)
+    architecture                = optional(string, "amd64")
     instance_type               = optional(string)
     subnet_id                   = optional(string)
     associate_public_ip_address = optional(bool)
@@ -57,6 +53,7 @@ variable "ec2" {
     monitoring                 = optional(bool)
     root_volume_size           = optional(number)
     alarms = optional(map(object({
+      enabled                 = optional(bool, true)
       metric_name             = string
       comparison_operator     = optional(string)
       dimensions              = optional(map(string), {})

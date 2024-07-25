@@ -93,3 +93,28 @@ variable "sns_topic_arn" {
   type    = string
   default = ""
 }
+
+variable "cloudfront_logging_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "cloudfront_logging_include_cookies" {
+  type    = bool
+  default = false
+}
+
+variable "cloudfront_log_retention_period" {
+  type    = number
+  default = 14
+}
+
+variable "opennext_version" {
+  type    = string
+  default = "v2"
+}
+
+variable "enable_lambda_url_oac" {
+  type    = bool
+  default = false
+}

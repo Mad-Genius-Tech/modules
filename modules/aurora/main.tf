@@ -76,9 +76,14 @@ locals {
 }
 
 data "aws_rds_engine_version" "aurora" {
-  for_each = local.aurora_map
-  engine   = "aurora-postgresql"
-  version  = each.value.version
+  for_each    = local.aurora_map
+  engine      = "aurora-postgresql"
+  version     = each.value.version
+  include_all = true
+  filter {
+    name   = "engine-mode"
+    values = ["provisioned"]
+  }
 }
 
 resource "random_password" "password" {
