@@ -236,12 +236,12 @@ resource "aws_lambda_permission" "api_gateway_all" {
 
 resource "aws_api_gateway_account" "apigateway_cloudwatch_logs" {
   for_each            = { for k, v in local.apigateway_map : k => v if v.create_log_group }
-  cloudwatch_role_arn = join("", aws_iam_role.apigateway_cloudwatch_logs[*].arn)
+  cloudwatch_role_arn = aws_iam_role.apigateway_cloudwatch_logs[each.key].arn
 }
 
 resource "aws_iam_role" "apigateway_cloudwatch_logs" {
   for_each           = { for k, v in local.apigateway_map : k => v if v.create_log_group }
-  name               = "${module.context.id}-logs"
+  name               = "${module.context.id}-${each.key}-logs"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -262,8 +262,8 @@ EOF
 
 resource "aws_iam_role_policy" "apigateway_cloudwatch_logs" {
   for_each = { for k, v in local.apigateway_map : k => v if v.create_log_group }
-  name     = "${module.context.id}-logs"
-  role     = join("", aws_iam_role.apigateway_cloudwatch_logs[*].id)
+  name     = "${module.context.id}-${each.key}-logs"
+  role     = aws_iam_role.apigateway_cloudwatch_logs[each.key].id
   policy   = <<EOF
 {
     "Version": "2012-10-17",

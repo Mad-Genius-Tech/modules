@@ -52,6 +52,8 @@ variable "ec2" {
     enable_cloudwatch_alarm    = optional(bool)
     monitoring                 = optional(bool)
     root_volume_size           = optional(number)
+    root_volume_type           = optional(string)
+    ami                        = optional(string)
     alarms = optional(map(object({
       enabled                 = optional(bool, true)
       metric_name             = string

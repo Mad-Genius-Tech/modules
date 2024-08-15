@@ -73,7 +73,8 @@ resource "aws_iam_role" "auth_iam_role" {
             Action = [
               "chime:Connect",
               "chime:CreateChannelMembership",
-              "chime:ListChannelMemberships",              "chime:CreateChannel",
+              "chime:ListChannelMemberships",
+              "chime:CreateChannel",
               "chime:DescribeChannel",
               "chime:DeleteChannel",
               "chime:UpdateChannel",

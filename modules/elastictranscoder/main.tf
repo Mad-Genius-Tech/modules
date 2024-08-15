@@ -14,6 +14,7 @@ locals {
   elastictranscoder_pipeline_map = {
     for k, v in var.elastictranscoder_pipeline : k => {
       "identifier"       = "${module.context.id}-${k}"
+      "name"             = length("${module.context.id}-${k}") > 40 && v.name != null ? v.name : "${module.context.id}-${k}"
       "create"           = coalesce(lookup(v, "create", null), true)
       "container"        = coalesce(lookup(v, "container", null), local.merged_default_settings.container)
       "input_bucket"     = lookup(v, "input_bucket", null)
@@ -29,6 +30,7 @@ locals {
   elastictranscoder_preset_map = {
     for k, v in var.elastictranscoder_preset : k => {
       "identifier"          = "${module.context.id}-${k}"
+      "name"                = length("${module.context.id}-${k}") > 40 && v.name != null ? v.name : "${module.context.id}-${k}"
       "create"              = coalesce(lookup(v, "create", null), true)
       "container"           = lookup(v, "container", null)
       "audio"               = lookup(v, "audio", null)
@@ -149,7 +151,7 @@ resource "aws_iam_role_policy" "transcoder_policy" {
 
 resource "aws_elastictranscoder_preset" "preset" {
   for_each    = local.elastictranscoder_preset_map
-  name        = "${each.value.identifier}-preset"
+  name        = length("${each.value.identifier}-preset") > 40 ? each.value.name : "${each.value.identifier}-preset"
   description = "Elastictranscoder preset ${each.value.identifier}"
   container   = each.value.container
 

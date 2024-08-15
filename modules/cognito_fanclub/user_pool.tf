@@ -30,6 +30,14 @@ locals {
       name     = "verified_email"
       priority = 1
     }]
+    password_policy = [{
+      minimum_length                   = 8
+      temporary_password_validity_days = 7
+      require_numbers                  = true
+      require_uppercase                = true
+      require_lowercase                = true
+      require_symbols                  = false
+    }]
     secret_vars         = {}
     email_configuration = [{}]
     lambda_config       = [{}]
@@ -136,6 +144,7 @@ locals {
       "attributes_require_verification_before_update" = try(coalesce(lookup(v, "attributes_require_verification_before_update", null), local.merged_default_settings.attributes_require_verification_before_update), local.merged_default_settings.attributes_require_verification_before_update)
       "verification_message_template"                 = try(coalesce(lookup(v, "verification_message_template", null), local.merged_default_settings.verification_message_template), local.merged_default_settings.verification_message_template)
       "recovery_mechanisms"                           = try(coalesce(lookup(v, "recovery_mechanisms", null), local.merged_default_settings.recovery_mechanisms), local.merged_default_settings.recovery_mechanisms)
+      "password_policy"                               = try(coalesce(lookup(v, "password_policy", null), local.merged_default_settings.password_policy), local.merged_default_settings.password_policy)
       "string_schemas"                                = try(coalesce(lookup(v, "string_schemas", null), local.merged_default_settings.string_schemas), local.merged_default_settings.string_schemas)
       "email_configuration"                           = try(coalesce(lookup(v, "email_configuration", null), local.merged_default_settings.email_configuration), local.merged_default_settings.email_configuration)
       "lambda_config"                                 = try(coalesce(lookup(v, "lambda_config", null), local.merged_default_settings.lambda_config), local.merged_default_settings.lambda_config)
@@ -256,12 +265,24 @@ resource "aws_cognito_user_pool" "user_pool" {
     }
   }
 
+  dynamic "password_policy" {
+    for_each = each.value.password_policy
+    content {
+      minimum_length                   = lookup(password_policy.value, "minimum_length", null)
+      require_lowercase                = lookup(password_policy.value, "require_lowercase", null)
+      require_numbers                  = lookup(password_policy.value, "require_numbers", null)
+      require_symbols                  = lookup(password_policy.value, "require_symbols", null)
+      require_uppercase                = lookup(password_policy.value, "require_uppercase", null)
+      temporary_password_validity_days = lookup(password_policy.value, "temporary_password_validity_days", null)
+    }
+  }
+
   tags = local.tags
 
   lifecycle {
     ignore_changes = [
       #lambda_config
-      password_policy,
+      #password_policy,
       schema
     ]
   }

@@ -38,6 +38,7 @@ locals {
     root_volume_encrypt = false
     root_volume_type    = "gp2"
     root_volume_size    = 8
+    ami                 = null
   }
 
   env_default_settings = {
@@ -97,6 +98,7 @@ locals {
       "root_volume_type"    = coalesce(lookup(v, "root_volume_type", null), local.merged_default_settings.root_volume_type)
       "root_volume_encrypt" = coalesce(lookup(v, "root_volume_encrypt", null), local.merged_default_settings.root_volume_encrypt)
       "root_volume_size"    = coalesce(lookup(v, "root_volume_size", null), local.merged_default_settings.root_volume_size)
+      "ami"                 = try(lookup(v, "ami", null), local.merged_default_settings.ami)
     } if coalesce(lookup(v, "create", null), true)
   }
 }
@@ -117,7 +119,7 @@ module "ec2" {
   for_each                    = local.ec2_map
   name                        = each.value.identifier
   instance_type               = each.value.instance_type
-  ami                         = each.value.use_ubuntu ? data.aws_ami.ubuntu[each.key].id : (each.value.use_amazon_linux_2 ? data.aws_ami.amazon_linux_2[each.key].id : data.aws_ami.amazon_linux[each.key].id)
+  ami                         = each.value.ami != null ? each.value.ami : (each.value.use_ubuntu ? data.aws_ami.ubuntu[each.key].id : (each.value.use_amazon_linux_2 ? data.aws_ami.amazon_linux_2[each.key].id : data.aws_ami.amazon_linux[each.key].id))
   ignore_ami_changes          = each.value.ignore_ami_changes
   subnet_id                   = each.value.subnet_id == "" ? (each.value.associate_public_ip_address ? random_shuffle.public_subnet[each.key].result[0] : random_shuffle.private_subnet[each.key].result[0]) : each.value.subnet_id
   associate_public_ip_address = each.value.associate_public_ip_address

@@ -23,6 +23,13 @@ output "client_id" {
   }
 }
 
+output "client_secret" {
+  value = {
+    for k, v in aws_cognito_user_pool_client.client : k => v.client_secret
+  }
+  sensitive = true
+}
+
 output "authenticated_role" {
   value = {
     for k, v in aws_iam_role.auth_iam_role : k => {
@@ -31,6 +38,7 @@ output "authenticated_role" {
     }
   }
 }
+
 output "guest_role" {
   value = {
     for k, v in aws_iam_role.guest_iam_role : k => {

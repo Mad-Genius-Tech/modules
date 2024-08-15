@@ -21,6 +21,14 @@ variable "cognito" {
       name     = optional(string)
       priority = optional(number)
     })))
+    password_policy = optional(list(object({
+      minimum_length                   = optional(number)
+      require_lowercase                = optional(bool)
+      require_numbers                  = optional(bool)
+      require_symbols                  = optional(bool)
+      require_uppercase                = optional(bool)
+      temporary_password_validity_days = optional(number)
+    })))
     string_schemas = optional(list(object({
       attribute_data_type      = optional(string)
       developer_only_attribute = optional(bool)

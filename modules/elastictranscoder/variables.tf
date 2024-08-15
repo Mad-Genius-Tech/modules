@@ -2,6 +2,7 @@
 variable "elastictranscoder_preset" {
   type = map(object({
     create    = optional(bool, true)
+    name      = optional(string)
     container = optional(string)
     audio = optional(object({
       audio_packing_mode = optional(string)
@@ -66,6 +67,7 @@ variable "elastictranscoder_preset" {
 variable "elastictranscoder_pipeline" {
   type = map(object({
     create        = optional(bool, true)
+    name          = optional(string)
     container     = optional(string)
     input_bucket  = string
     output_bucket = string
