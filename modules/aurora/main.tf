@@ -248,7 +248,7 @@ resource "aws_cloudwatch_metric_alarm" "alarm" {
 
 module "rds_proxy" {
   source                 = "terraform-aws-modules/rds-proxy/aws"
-  version                = "~> 3.1.1"
+  version                = "~> v3.1.0"
   for_each               = { for k, v in local.aurora_map : k => v if v.enable_proxy }
   name                   = "${each.value.identifier}-proxy"
   iam_role_name          = "${each.value.identifier}-proxy"
@@ -263,8 +263,10 @@ module "rds_proxy" {
     }
   }
   auth = {
-    "postgres" = {
-      secret_arn = module.aurora_postgresql_v2[each.key].secret_arn
+    "${each.value.username}" = {
+      iam_auth                  = "DISABLED"
+      client_password_auth_type = "POSTGRES_SCRAM_SHA_256"
+      secret_arn                = aws_secretsmanager_secret.secret[each.key].arn
     }
   }
   engine_family               = "POSTGRESQL"
