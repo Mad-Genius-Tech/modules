@@ -28,13 +28,16 @@ locals {
     apply_immediately                     = true
     secret_rotation_enabled               = false
     enable_cloudwatch_alarm               = false
+    enable_proxy                          = false
+    log_group_retention_in_days           = 1
     storage_type                          = "gp2"
     alarms = {
-      "statistic"               = "Average"
-      "namespace"               = "AWS/RDS"
-      "comparison_operator"     = "GreaterThanOrEqualToThreshold"
-      "dimensions"              = {}
-      "cloudwatch_alarm_action" = ""
+      "statistic"                   = "Average"
+      "namespace"                   = "AWS/RDS"
+      "comparison_operator"         = "GreaterThanOrEqualToThreshold"
+      "dimensions"                  = {}
+      "cloudwatch_alarm_action"     = ""
+      "log_group_retention_in_days" = 14
     }
   }
 
@@ -74,6 +77,8 @@ locals {
       "port"                                  = coalesce(lookup(v, "port", null), local.merged_default_settings.port)
       "parameters"                            = coalesce(lookup(v, "parameters", null), local.merged_default_settings.parameters)
       "options"                               = coalesce(lookup(v, "options", null), local.merged_default_settings.options)
+      "enable_proxy"                          = coalesce(lookup(v, "enable_proxy", null), local.merged_default_settings.enable_proxy)
+      "log_group_retention_in_days"           = local.merged_default_settings.log_group_retention_in_days
       "maintenance_window"                    = local.merged_default_settings.maintenance_window
       "backup_window"                         = local.merged_default_settings.backup_window
       "create_db_subnet_group"                = local.merged_default_settings.create_db_subnet_group
@@ -177,7 +182,7 @@ module "rds_sg" {
     }
   ] : []
   number_of_computed_ingress_with_cidr_blocks = length(var.ingress_cidr_blocks) > 0 ? 1 : 0
-  tags = local.tags
+  tags                                        = local.tags
 }
 
 
@@ -294,4 +299,36 @@ resource "aws_cloudwatch_metric_alarm" "alarm" {
     lookup(local.rds_map[split("|", each.key)[0]], "cloudwatch_alarm_action", "")
   ])
   tags = local.tags
+}
+
+module "rds_proxy" {
+  source                 = "terraform-aws-modules/rds-proxy/aws"
+  version                = "~> v3.1.0"
+  for_each               = { for k, v in local.rds_map : k => v if v.enable_proxy }
+  name                   = "${each.value.identifier}-proxy"
+  iam_role_name          = "${each.value.identifier}-proxy"
+  vpc_subnet_ids         = each.value.subnet_ids
+  vpc_security_group_ids = [module.rds_sg[each.key].security_group_id]
+  endpoints = {
+    read_write = {
+      name                   = "read-write-endpoint"
+      vpc_subnet_ids         = each.value.subnet_ids
+      vpc_security_group_ids = [module.rds_sg[each.key].security_group_id]
+      tags                   = local.tags
+    }
+  }
+  auth = {
+    "${each.value.username}" = {
+      iam_auth                  = "DISABLED"
+      client_password_auth_type = "POSTGRES_SCRAM_SHA_256"
+      secret_arn                = aws_secretsmanager_secret.secret[each.key].arn
+    }
+  }
+  engine_family               = "POSTGRESQL"
+  require_tls                 = false
+  debug_logging               = false
+  target_db_instance          = true
+  db_instance_identifier      = module.rds[each.key].db_instance_identifier
+  log_group_retention_in_days = each.value.log_group_retention_in_days
+  tags                        = local.tags
 }

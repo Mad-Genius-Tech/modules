@@ -28,6 +28,7 @@ variable "aurora" {
     monitoring_interval          = optional(number)
     instances                    = optional(map(any))
     instances_count              = optional(number)
+    enable_proxy                 = optional(bool)
     enable_cloudwatch_alarm      = optional(bool)
     alarms = optional(map(object({
       metric_name             = string

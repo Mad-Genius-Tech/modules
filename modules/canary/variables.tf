@@ -2,6 +2,7 @@
 variable "canary" {
   type = map(object({
     create                   = optional(bool)
+    enable_notification      = optional(bool)
     runtime_version          = optional(string)
     handler                  = optional(string)
     take_screenshot          = optional(bool)

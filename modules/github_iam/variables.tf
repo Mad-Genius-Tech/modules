@@ -8,6 +8,7 @@ variable "github_repos" {
     create                 = optional(bool)
     github_org_name        = string
     github_repo_names      = map(object({
+      org    = optional(string)
       repo   = string
       branch = string
     }))

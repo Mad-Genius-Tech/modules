@@ -137,17 +137,28 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-resource "aws_lambda_permission" "lambda_permission" {
-  for_each = {
+locals {
+  bucket_lambda_list = {
     for k, v in local.s3_buckets_map : k => distinct([
       for i in values(v.events_filter) : i.lambda
     ]) if length(v.events_filter) > 0
   }
+
+  bucket_lambda_map = merge([
+    for bucket, lambdas in local.bucket_lambda_list : zipmap(
+      [for lambda in lambdas : "${bucket}|${lambda}"], 
+      lambdas
+    )
+  ]...)
+}
+
+resource "aws_lambda_permission" "lambda_permission" {
+  for_each = local.bucket_lambda_map
   statement_id = "AllowExecutionFromS3Bucket"
   action = "lambda:InvokeFunction"
   principal = "s3.amazonaws.com"
-  function_name = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${each.value[0]}"
-  source_arn = module.s3_bucket[each.key].s3_bucket_arn
+  function_name = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${each.value}"
+  source_arn = module.s3_bucket[split("|",each.key)[0]].s3_bucket_arn
 }
 
 module "s3_bucket" {

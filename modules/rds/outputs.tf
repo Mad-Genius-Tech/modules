@@ -15,3 +15,12 @@ output "rds_info" {
   }
 }
 
+output "rds_proxy" {
+  value = {
+    for k, v in module.rds : k => {
+      proxy_endpoint        = module.rds_proxy[k].proxy_endpoint
+      proxy_target_endpoint = module.rds_proxy[k].proxy_target_endpoint
+      db_proxy_endpoints    = module.rds_proxy[k].db_proxy_endpoints
+    }
+  }
+}

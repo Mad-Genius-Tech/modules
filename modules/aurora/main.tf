@@ -14,6 +14,8 @@ locals {
     lambda_functions             = []
     instances_count              = 1
     instances                    = {}
+    enable_proxy                 = false
+    log_group_retention_in_days  = 1
     enable_cloudwatch_alarm      = false
     alarms = {
       "statistic"               = "Average"
@@ -34,6 +36,7 @@ locals {
         deletion_protection          = true
         instances_count              = 2
         enable_cloudwatch_alarm      = true
+        log_group_retention_in_days  = 14
     })
   }
 
@@ -56,6 +59,8 @@ locals {
       "lambda_functions"             = coalesce(lookup(v, "lambda_functions", null), local.merged_default_settings.lambda_functions)
       "instances_count"              = try(coalesce(lookup(v, "instances_count", null), local.merged_default_settings.instances_count), local.merged_default_settings.instances_count)
       "instances"                    = try(coalesce(lookup(v, "instances", null), local.merged_default_settings.instances), local.merged_default_settings.instances)
+      "enable_proxy"                 = coalesce(lookup(v, "enable_proxy", null), local.merged_default_settings.enable_proxy)
+      "log_group_retention_in_days"           = local.merged_default_settings.log_group_retention_in_days
       "enable_cloudwatch_alarm"      = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
       "alarms" = {
         for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
@@ -239,4 +244,34 @@ resource "aws_cloudwatch_metric_alarm" "alarm" {
     lookup(local.aurora_map[split("|", each.key)[0]], "cloudwatch_alarm_action", "")
   ])
   tags = local.tags
+}
+
+module "rds_proxy" {
+  source                 = "terraform-aws-modules/rds-proxy/aws"
+  version                = "~> 3.1.1"
+  for_each               = { for k, v in local.aurora_map : k => v if v.enable_proxy }
+  name                   = "${each.value.identifier}-proxy"
+  iam_role_name          = "${each.value.identifier}-proxy"
+  vpc_subnet_ids         = var.subnet_ids
+  vpc_security_group_ids = [module.aurora_postgresql_v2[each.key].security_group_id]
+  endpoints = {
+    read_write = {
+      name                   = "read-write-endpoint"
+      vpc_subnet_ids         = var.subnet_ids
+      vpc_security_group_ids = [module.aurora_postgresql_v2[each.key].security_group_id]
+      tags                   = local.tags
+    }
+  }
+  auth = {
+    "postgres" = {
+      secret_arn = module.aurora_postgresql_v2[each.key].secret_arn
+    }
+  }
+  engine_family               = "POSTGRESQL"
+  require_tls                 = false
+  debug_logging               = false
+  target_db_cluster           = true
+  db_cluster_identifier       = module.aurora_postgresql_v2[each.key].cluster_id
+  log_group_retention_in_days = each.value.log_group_retention_in_days
+  tags                        = local.tags
 }

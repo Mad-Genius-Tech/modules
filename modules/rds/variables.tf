@@ -43,6 +43,7 @@ variable "rds" {
         value = string
       }))
     })))
+    enable_proxy            = optional(bool)
     enable_cloudwatch_alarm = optional(bool)
     alarms = optional(map(object({
       metric_name             = string

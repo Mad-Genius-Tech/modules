@@ -12,3 +12,13 @@ output "aurora_info" {
     }
   }
 }
+
+output "rds_proxy" {
+  value = {
+    for k, v in module.rds_proxy : k => {
+      proxy_endpoint        = v.proxy_endpoint
+      proxy_target_endpoint = v.proxy_target_endpoint
+      db_proxy_endpoints    = v.db_proxy_endpoints
+    }
+  }
+}

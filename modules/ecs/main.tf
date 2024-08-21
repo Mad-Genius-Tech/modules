@@ -222,6 +222,7 @@ module "ecs_service" {
           hostPort      = each.value.container_port
         }
       ]
+      systemControls                         = []
       enable_cloudwatch_logging              = true
       create_cloudwatch_log_group            = true
       cloudwatch_log_group_retention_in_days = each.value.cloudwatch_log_group_retention_in_days

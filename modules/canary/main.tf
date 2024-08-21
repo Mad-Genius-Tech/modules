@@ -10,6 +10,7 @@ locals {
     memory_in_mb             = 960
     success_retention_period = 2
     failure_retention_period = 14
+    enable_notification      = true
   }
 
   env_default_settings = {
@@ -25,6 +26,7 @@ locals {
     for k, v in var.canary : k => {
       "identifier"               = "${module.context.id}-${k}"
       "create"                   = coalesce(lookup(v, "create", null), true)
+      enable_notification        = coalesce(lookup(v, "enable_notification", null), local.merged_default_settings.enable_notification)
       "runtime_version"          = try(coalesce(lookup(v, "runtime_version", null), local.merged_default_settings.runtime_version), local.merged_default_settings.runtime_version)
       "handler"                  = try(coalesce(lookup(v, "handler", null), local.merged_default_settings.handler), local.merged_default_settings.handler)
       "url"                      = v.url
@@ -86,7 +88,7 @@ resource "aws_synthetics_canary" "canary" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "canary_alarm" {
-  for_each            = local.canary_map
+  for_each            = { for k,v in local.canary_map : k => v if v.enable_notification }
   alarm_name          = "${each.value.identifier}-alarm"
   comparison_operator = "LessThanThreshold"
   period              = "300"

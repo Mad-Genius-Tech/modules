@@ -503,6 +503,7 @@ module "warmer" {
   s3_existing_package = {
     bucket = module.s3_bucket.s3_bucket_id
     key    = aws_s3_object.s3_object_placeholder.id
+    version_id = null 
   }
   environment_variables = var.opennext_version == "v2" ? {
     "FUNCTION_NAME" : module.server.lambda_function_name
