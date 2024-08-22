@@ -13,7 +13,7 @@ locals {
     enable_lambda_download          = false
     lamda_repository_policy         = <<EOF
 {
-  "Version": "2008-10-17",
+  "Version": "2012-10-17",
   "Statement": [
     {
       "Sid": "LambdaECRImageRetrievalPolicy",
@@ -22,17 +22,21 @@ locals {
         "Service": "lambda.amazonaws.com"
       },
       "Action": [
+        "ecr:BatchCheckLayerAvailability",
         "ecr:BatchGetImage",
         "ecr:DeleteRepositoryPolicy",
+        "ecr:DescribeImages",
+        "ecr:DescribeImageScanFindings",
+        "ecr:DescribeRepositories",
+        "ecr:GetAuthorizationToken",
         "ecr:GetDownloadUrlForLayer",
         "ecr:GetRepositoryPolicy",
-        "ecr:SetRepositoryPolicy"
-      ],
-      "Condition": {
-        "StringLike": {
-          "aws:sourceArn": "arn:aws:${data.aws_region.current.name}:lambda::${data.aws_caller_identity.current.account_id}:function:*"
-        }
-      }
+        "ecr:ListImages",
+        "ecr:ListTagsForResource",
+        "ecr:SetRepositoryPolicy",
+        "ecr:GetLifecyclePolicy",
+        "ecr:GetLifecyclePolicyPreview"
+      ]
     }
   ]
 }
@@ -81,7 +85,7 @@ module "ecr_repository" {
   repository_image_tag_mutability = each.value.repository_image_tag_mutability
   repository_encryption_type      = each.value.repository_encryption_type
   repository_image_scan_on_push   = each.value.repository_image_scan_on_push
-  attach_repository_policy        = each.value.attach_repository_policy
+  attach_repository_policy        = each.value.enable_lambda_download ? true : each.value.attach_repository_policy
   repository_policy               = each.value.enable_lambda_download ? local.default_settings.lamda_repository_policy : each.value.repository_policy
   create_repository_policy        = each.value.create_repository_policy
   create_lifecycle_policy         = each.value.create_lifecycle_policy
