@@ -5,9 +5,12 @@ variable "apigateway" {
     endpoint_type = optional(list(string))
     domain_names = optional(map(object({
       use_wildcard_domain = optional(bool)
+      create_domain_name  = optional(bool)
       domain_name         = optional(string)
       use_acm             = optional(bool)
     })))
+    enable_stage                = optional(bool)
+    enable_lambda_alias         = optional(bool)
     xray_tracing_enabled        = optional(bool)
     lambda_function             = string
     create_log_group            = optional(bool)
@@ -55,4 +58,10 @@ variable "access_log_format" {
   "errorValidationErrorString": "$context.error.validationErrorString",
 }
   EOF
+}
+
+variable "apigateway_account_arn" {
+  description = "The ARN of the AWS account that owns the API Gateway."
+  type        = string
+  default     = null
 }

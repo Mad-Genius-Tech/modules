@@ -1,117 +1,118 @@
 
-# Create API Gateway
-resource "aws_apigatewayv2_api" "lambda" {
-  name          = "serverless_lambda_gw"
-  protocol_type = "HTTP"
-}
+locals {
+  default_settings = {
+    "domain_names"                = {}
+    "endpoint_type"               = ["REGIONAL"]
+    "enable_stage"                = true
+    "connection_type"             = "INTERNET"
+    "enable_log"                  = false
+    "create_log_group"            = false
+    "log_group_retention_in_days" = 1
+    "logging_level"               = "OFF" # Supported only for WebSocket APIs
+  }
 
-
-resource "aws_apigatewayv2_stage" "lambda" {
-  api_id      = aws_apigatewayv2_api.lambda.id
-  name        = "serverless_lambda_stage"
-  auto_deploy = true
-
-  access_log_settings {
-    destination_arn = aws_cloudwatch_log_group.api_gw.arn
-
-    format = jsonencode({
-      requestId               = "$context.requestId"
-      sourceIp                = "$context.identity.sourceIp"
-      requestTime             = "$context.requestTime"
-      protocol                = "$context.protocol"
-      httpMethod              = "$context.httpMethod"
-      resourcePath            = "$context.resourcePath"
-      routeKey                = "$context.routeKey"
-      status                  = "$context.status"
-      responseLength          = "$context.responseLength"
-      integrationErrorMessage = "$context.integrationErrorMessage"
+  env_default_settings = {
+    prod = merge(local.default_settings,
+      {
       }
     )
   }
+
+  merged_default_settings = can(local.env_default_settings[var.stage_name]) ? lookup(local.env_default_settings, var.stage_name, local.default_settings) : local.default_settings
+
+  apigateway_map = {
+    for k, v in var.apigateway : k => {
+      "create"                      = coalesce(lookup(v, "create", null), true)
+      "identifier"                  = "${module.context.id}-${k}"
+      "enable_stage"                = coalesce(lookup(v, "enable_stage", null), local.merged_default_settings.enable_stage)
+      "lambda_function"             = v.lambda_function
+      "stage_name"                  = coalesce(lookup(v, "stage_name", null), var.stage_name)
+      "connection_type"             = coalesce(lookup(v, "connection_type", null), local.merged_default_settings.connection_type)
+      enable_log                    = coalesce(lookup(v, "enable_log", null), local.merged_default_settings.enable_log)
+      "logging_level"               = coalesce(lookup(v, "logging_level", null), local.merged_default_settings.logging_level)
+      "create_log_group"            = coalesce(lookup(v, "create_log_group", null), local.merged_default_settings.create_log_group)
+      "log_group_retention_in_days" = coalesce(lookup(v, "log_group_retention_in_days", null), local.merged_default_settings.log_group_retention_in_days)
+    } if coalesce(lookup(v, "create", true), true)
+  }
 }
 
+data "aws_region" "current" {}
 
-resource "aws_apigatewayv2_integration" "storeimage" {
-  api_id = aws_apigatewayv2_api.lambda.id
-
-  integration_uri    = aws_lambda_function.storeimage.invoke_arn
-  integration_type   = "AWS_PROXY"
-  integration_method = "POST"
+resource "aws_apigatewayv2_api" "apigateway" {
+  for_each      = local.apigateway_map
+  name          = each.value.identifier
+  protocol_type = "HTTP"
 }
 
-
-resource "aws_apigatewayv2_route" "storeimage_post" {
-  api_id = aws_apigatewayv2_api.lambda.id
-
-  route_key = "POST /storeimage"
-  target    = "integrations/${aws_apigatewayv2_integration.storeimage.id}"
+resource "aws_cloudwatch_log_group" "log_group" {
+  for_each          = { for k, v in local.apigateway_map : k => v if v.enable_log && v.create_log_group }
+  name              = each.value.identifier
+  retention_in_days = each.value.log_group_retention_in_days
+  tags              = local.tags
 }
 
+resource "aws_apigatewayv2_stage" "stage" {
+  for_each    = local.apigateway_map
+  api_id      = aws_apigatewayv2_api.apigateway[each.key].id
+  name        = each.value.stage_name
+  auto_deploy = true
 
-resource "aws_apigatewayv2_integration" "getallbagids" {
-  api_id = aws_apigatewayv2_api.lambda.id
+  default_route_settings {
+    # Supported only for WebSocket APIs
+    # logging_level            = each.value.logging_level
+    detailed_metrics_enabled = false
+    data_trace_enabled       = false
+    throttling_burst_limit   = 5000
+    throttling_rate_limit    = 10000
+  }
 
-  integration_uri    = aws_lambda_function.getallbagids.invoke_arn
-  integration_type   = "AWS_PROXY"
-  integration_method = "POST"
+  dynamic "access_log_settings" {
+    for_each = { for k, v in local.apigateway_map : k => v if v.enable_log && v.create_log_group }
+    content {
+      destination_arn = aws_cloudwatch_log_group.log_group[each.key].arn
+      format = jsonencode({
+        requestId               = "$context.requestId"
+        requestTime             = "$context.requestTime"
+        sourceIp                = "$context.identity.sourceIp"
+        protocol                = "$context.protocol"
+        httpMethod              = "$context.httpMethod"
+        resourcePath            = "$context.resourcePath"
+        routeKey                = "$context.routeKey"
+        status                  = "$context.status"
+        responseLength          = "$context.responseLength"
+        integrationErrorMessage = "$context.integrationErrorMessage"
+        }
+      )
+    }
+  }
 }
 
-
-resource "aws_apigatewayv2_route" "getallbagids" {
-  api_id = aws_apigatewayv2_api.lambda.id
-
-  route_key = "GET /getallbagids"
-  target    = "integrations/${aws_apigatewayv2_integration.getallbagids.id}"
+data "aws_lambda_function" "lambda_function" {
+  for_each      = { for k, v in local.apigateway_map : k => v if v.create }
+  function_name = each.value.lambda_function
 }
 
-resource "aws_apigatewayv2_route" "getallbagids_post" {
-  api_id = aws_apigatewayv2_api.lambda.id
-
-  route_key = "POST /getallbagids"
-  target    = "integrations/${aws_apigatewayv2_integration.getallbagids.id}"
+resource "aws_apigatewayv2_integration" "integration" {
+  for_each               = local.apigateway_map
+  api_id                 = aws_apigatewayv2_api.apigateway[each.key].id
+  integration_type       = "AWS_PROXY"
+  integration_method     = "POST"
+  connection_type        = each.value.connection_type
+  integration_uri        = data.aws_lambda_function.lambda_function[each.key].invoke_arn
+  payload_format_version = "2.0"
 }
 
-
-resource "aws_apigatewayv2_integration" "lambda_integration" {
-  api_id = var.api_id
-
-  integration_uri    = var.function_arn
-  integration_type   = "AWS_PROXY"
-  integration_method = var.http_method
+resource "aws_apigatewayv2_route" "route" {
+  for_each  = local.apigateway_map
+  api_id    = aws_apigatewayv2_api.apigateway[each.key].id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.integration[each.key].id}"
 }
 
-resource "aws_apigatewayv2_route" "get_product_route" {
-  api_id = var.api_id
-
-  route_key = "${var.http_method} ${var.route}"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
-}
-
-resource "aws_lambda_permission" "get_lambda_api_gw" {
-  statement_id  = "AllowLambdaExecutionFromAPIGateway_${var.function_name}"
+resource "aws_lambda_permission" "api_gateway" {
+  for_each      = local.apigateway_map
   action        = "lambda:InvokeFunction"
-  function_name = var.function_name
+  function_name = each.value.lambda_function
   principal     = "apigateway.amazonaws.com"
-
-  source_arn = "${var.api_arn}/*/*"
-}
-
-
-resource "aws_lambda_permission" "api_gw_storeimage" {
-  statement_id  = "AllowExecutionFromAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.storeimage.function_name
-  principal     = "apigateway.amazonaws.com"
-
-  source_arn = "${aws_apigatewayv2_api.lambda.execution_arn}/*/*"
-}
-
-
-resource "aws_lambda_permission" "api_gw_getallbags" {
-  statement_id  = "AllowExecutionFromAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.getallbagids.function_name
-  principal     = "apigateway.amazonaws.com"
-
-  source_arn = "${aws_apigatewayv2_api.lambda.execution_arn}/*/*"
+  source_arn    = "${aws_apigatewayv2_api.apigateway[each.key].execution_arn}/*/*"
 }

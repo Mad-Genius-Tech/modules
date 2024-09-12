@@ -84,7 +84,7 @@ module "cloudfront_logs_forward" {
 resource "aws_cloudwatch_log_group" "target_log_group" {
   count             = var.cloudfront_logging_enabled ? 1 : 0
   name              = "/aws/cloudfront/${local.name}-logs"
-  retention_in_days = var.cloudfront_log_retention_period
+  retention_in_days = var.stage_name == "prod" ? 14 : var.cloudfront_log_retention_period
 }
 
 resource "aws_lambda_permission" "s3_bucket_invoke_function" {

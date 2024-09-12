@@ -106,7 +106,7 @@ variable "cloudfront_logging_include_cookies" {
 
 variable "cloudfront_log_retention_period" {
   type    = number
-  default = 14
+  default = 3
 }
 
 variable "opennext_version" {

@@ -118,6 +118,12 @@ variable "domain_name" {
   default     = ""
 }
 
+variable "attach_ssl" {
+  description = "Whether to attach an SSL certificate"
+  type        = bool
+  default     = true
+}
+
 variable "asg_enabled" {
   description = "Whether to enable the ASG"
   type        = bool

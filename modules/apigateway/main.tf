@@ -4,8 +4,10 @@ locals {
   default_settings = {
     "domain_names"                = {}
     "endpoint_type"               = ["REGIONAL"]
+    "enable_lambda_alias"         = true
+    "enable_stage"                = true
     "xray_tracing_enabled"        = false
-    "create_log_group"            = true
+    "create_log_group"            = false
     "apigw_exec_log_level"        = "OFF"
     "data_trace_enabled"          = false
     "log_group_retention_in_days" = 1
@@ -29,6 +31,8 @@ locals {
       "create"                      = coalesce(lookup(v, "create", null), true)
       "identifier"                  = "${module.context.id}-${k}"
       "endpoint_type"               = coalesce(lookup(v, "endpoint_type", null), local.merged_default_settings.endpoint_type)
+      "enable_lambda_alias"         = coalesce(lookup(v, "enable_lambda_alias", null), local.merged_default_settings.enable_lambda_alias)
+      "enable_stage"                = coalesce(lookup(v, "enable_stage", null), local.merged_default_settings.enable_stage)
       "domain_names"                = try(coalesce(lookup(v, "domain_names", null), local.merged_default_settings.domain_names), local.merged_default_settings.domain_names)
       "xray_tracing_enabled"        = coalesce(lookup(v, "xray_tracing_enabled", null), local.merged_default_settings.xray_tracing_enabled)
       "lambda_function"             = v.lambda_function
@@ -79,7 +83,7 @@ resource "aws_api_gateway_integration" "root_path_integration" {
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   timeout_milliseconds    = each.value.timeout_milliseconds
-  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${data.aws_lambda_function.lambda_function[each.key].arn}:$${stageVariables.lambdaAliasName}/invocations"
+  uri                     = each.value.enable_lambda_alias ? "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${data.aws_lambda_function.lambda_function[each.key].arn}:$${stageVariables.lambdaAliasName}/invocations" : data.aws_lambda_function.lambda_function[each.key].invoke_arn
 }
 
 resource "aws_api_gateway_resource" "any_path_slashed" {
@@ -105,7 +109,7 @@ resource "aws_api_gateway_integration" "any_path_slashed_integration" {
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   timeout_milliseconds    = each.value.timeout_milliseconds
-  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${data.aws_lambda_function.lambda_function[each.key].arn}:$${stageVariables.lambdaAliasName}/invocations"
+  uri                     = each.value.enable_lambda_alias ? "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${data.aws_lambda_function.lambda_function[each.key].arn}:$${stageVariables.lambdaAliasName}/invocations" : data.aws_lambda_function.lambda_function[each.key].invoke_arn
 }
 
 resource "aws_api_gateway_deployment" "deployment" {
@@ -149,9 +153,9 @@ resource "aws_api_gateway_stage" "stage" {
   xray_tracing_enabled = each.value.xray_tracing_enabled
 
 
-  variables = {
+  variables = each.value.enable_lambda_alias ? {
     lambdaAliasName = each.value.stage_name
-  }
+  } : null
 
   dynamic "access_log_settings" {
     for_each = each.value.apigw_exec_log_level == "OFF" && each.value.create_log_group ? [1] : []
@@ -164,7 +168,6 @@ resource "aws_api_gateway_stage" "stage" {
 
   depends_on = [
     aws_cloudwatch_log_group.log_group,
-    aws_api_gateway_account.apigateway_cloudwatch_logs,
   ]
   tags = local.tags
 }
@@ -190,26 +193,26 @@ resource "aws_api_gateway_method_settings" "rest_api" {
 
 resource "aws_cloudwatch_log_group" "apigateway_exec_log_group" {
   for_each          = { for k, v in local.apigateway_map : k => v if v.create && v.apigw_exec_log_level != "OFF" }
-  name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.rest_api[each.key].id}/${aws_api_gateway_stage.stage[each.key].stage_name}"
+  name              = each.value.enable_stage ? "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.rest_api[each.key].id}/${aws_api_gateway_stage.stage[each.key].stage_name}" : "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.rest_api[each.key].id}"
   retention_in_days = each.value.log_group_retention_in_days
   tags              = local.tags
 }
 
 resource "aws_api_gateway_stage" "test" {
-  for_each      = local.apigateway_map
+  for_each      = { for k, v in local.apigateway_map : k => v if v.enable_stage }
   rest_api_id   = aws_api_gateway_rest_api.rest_api[each.key].id
   deployment_id = aws_api_gateway_deployment.deployment[each.key].id
   stage_name    = "test"
 
-  variables = {
+  variables = each.value.enable_lambda_alias ? {
     lambdaAliasName = "test"
-  }
+  } : null
 
   tags = local.tags
 }
 
 resource "aws_lambda_permission" "api_gateway" {
-  for_each      = local.apigateway_map
+  for_each      = { for k, v in local.apigateway_map : k => v if v.enable_lambda_alias }
   action        = "lambda:InvokeFunction"
   function_name = each.value.lambda_function
   principal     = "apigateway.amazonaws.com"
@@ -218,7 +221,7 @@ resource "aws_lambda_permission" "api_gateway" {
 }
 
 resource "aws_lambda_permission" "api_gateway_test" {
-  for_each      = local.apigateway_map
+  for_each      = { for k, v in local.apigateway_map : k => v if v.enable_lambda_alias && v.enable_stage }
   action        = "lambda:InvokeFunction"
   function_name = each.value.lambda_function
   principal     = "apigateway.amazonaws.com"
@@ -233,59 +236,6 @@ resource "aws_lambda_permission" "api_gateway_all" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.rest_api[each.key].execution_arn}/*"
 }
-
-resource "aws_api_gateway_account" "apigateway_cloudwatch_logs" {
-  for_each            = { for k, v in local.apigateway_map : k => v if v.create_log_group }
-  cloudwatch_role_arn = aws_iam_role.apigateway_cloudwatch_logs[each.key].arn
-}
-
-resource "aws_iam_role" "apigateway_cloudwatch_logs" {
-  for_each           = { for k, v in local.apigateway_map : k => v if v.create_log_group }
-  name               = "${module.context.id}-${each.key}-logs"
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "",
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "apigateway.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
-  tags               = local.tags
-}
-
-resource "aws_iam_role_policy" "apigateway_cloudwatch_logs" {
-  for_each = { for k, v in local.apigateway_map : k => v if v.create_log_group }
-  name     = "${module.context.id}-${each.key}-logs"
-  role     = aws_iam_role.apigateway_cloudwatch_logs[each.key].id
-  policy   = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:DescribeLogGroups",
-                "logs:DescribeLogStreams",
-                "logs:PutLogEvents",
-                "logs:GetLogEvents",
-                "logs:FilterLogEvents"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-EOF
-}
-
 
 ###############
 # Enable CORS #
@@ -471,6 +421,7 @@ locals {
       for k1, v1 in v.domain_names : "${k}|${k1}" => {
         "domain_name"         = v1.domain_name
         "use_wildcard_domain" = coalesce(lookup(v1, "use_wildcard_domain", true), true)
+        "create_domain_name"  = coalesce(lookup(v1, "create_domain_name", true), true)
         "use_acm"             = coalesce(lookup(v1, "use_acm", true), true)
         "endpoint_type"       = v.endpoint_type[0]
       }
@@ -479,33 +430,33 @@ locals {
 }
 
 data "aws_acm_certificate" "wildcard" {
-  for_each = { for k, v in local.domain_names : k => v if v.use_wildcard_domain && v.endpoint_type == "EDGE" && v.use_acm }
+  for_each = { for k, v in local.domain_names : k => v if v.use_wildcard_domain && v.endpoint_type == "EDGE" && v.use_acm && v.create_domain_name }
   domain   = length(split(".", each.value.domain_name)) > 2 ? join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name)))) : each.value.domain_name
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "non_wildcard" {
-  for_each = { for k, v in local.domain_names : k => v if !v.use_wildcard_domain && v.endpoint_type == "EDGE" && v.use_acm }
+  for_each = { for k, v in local.domain_names : k => v if !v.use_wildcard_domain && v.endpoint_type == "EDGE" && v.use_acm && v.create_domain_name }
   domain   = each.value.domain_name
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "regional_wildcard" {
-  for_each = { for k, v in local.domain_names : k => v if v.use_wildcard_domain && v.endpoint_type == "REGIONAL" && v.use_acm }
+  for_each = { for k, v in local.domain_names : k => v if v.use_wildcard_domain && v.endpoint_type == "REGIONAL" && v.use_acm && v.create_domain_name }
   domain   = length(split(".", each.value.domain_name)) > 2 ? join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name)))) : each.value.domain_name
   statuses = ["ISSUED"]
 }
 
 data "aws_acm_certificate" "regional_non_wildcard" {
-  for_each = { for k, v in local.domain_names : k => v if !v.use_wildcard_domain && v.endpoint_type == "REGIONAL" && v.use_acm }
+  for_each = { for k, v in local.domain_names : k => v if !v.use_wildcard_domain && v.endpoint_type == "REGIONAL" && v.use_acm && v.create_domain_name }
   domain   = each.value.domain_name
   statuses = ["ISSUED"]
 }
 
 resource "aws_api_gateway_domain_name" "domain_name" {
-  for_each                 = local.domain_names
+  for_each                 = { for k, v in local.domain_names : k => v if v.create_domain_name }
   domain_name              = each.value.domain_name
   certificate_arn          = each.value.endpoint_type == "EDGE" && each.value.use_acm ? (each.value.use_wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn) : null
   regional_certificate_arn = each.value.endpoint_type == "REGIONAL" && each.value.use_acm ? (each.value.use_wildcard_domain ? data.aws_acm_certificate.regional_wildcard[each.key].arn : data.aws_acm_certificate.regional_non_wildcard[each.key].arn) : null
@@ -516,8 +467,8 @@ resource "aws_api_gateway_domain_name" "domain_name" {
 }
 
 resource "aws_api_gateway_base_path_mapping" "domain_name_mapping" {
-  for_each    = local.domain_names
+  for_each    = { for k, v in local.domain_names : k => v if v.create_domain_name }
   domain_name = aws_api_gateway_domain_name.domain_name[each.key].id
   api_id      = aws_api_gateway_rest_api.rest_api[split("|", each.key)[0]].id
-  stage_name  = aws_api_gateway_stage.stage[split("|", each.key)[0]].stage_name
+  stage_name  = local.apigateway_map[split("|", each.key)[0]].enable_stage ? aws_api_gateway_stage.stage[split("|", each.key)[0]].stage_name : null
 }

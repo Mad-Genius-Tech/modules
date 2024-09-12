@@ -6,7 +6,7 @@ variable "cloudfront" {
     enabled                                = optional(bool)
     price_class                            = optional(string)
     s3_bucket                              = optional(string)
-    presigned_url                          = optional(bool)
+    default_presigned_url                  = optional(bool)
     use_acm_cert                           = optional(bool)
     wildcard_domain                        = optional(bool)
     domain_name                            = string

@@ -42,8 +42,8 @@ module "alb" {
     },
     https = var.domain_name != "" ? {
       port            = 443
-      protocol        = "HTTPS"
-      certificate_arn = var.wildcard_domain ? data.aws_acm_certificate.wildcard[0].arn : data.aws_acm_certificate.non_wildcard[0].arn
+      protocol        = var.attach_ssl ? "HTTPS" : "HTTP"
+      certificate_arn = var.attach_ssl ? (var.wildcard_domain ? data.aws_acm_certificate.wildcard[0].arn : data.aws_acm_certificate.non_wildcard[0].arn) : null
       forward = {
         target_group_key = "wordpress"
       }
@@ -74,13 +74,13 @@ module "alb" {
 }
 
 data "aws_acm_certificate" "wildcard" {
-  count    = var.wildcard_domain && var.domain_name != "" ? 1 : 0
+  count    = var.wildcard_domain && var.domain_name != "" && var.attach_ssl ? 1 : 0
   domain   = join(".", slice(split(".", var.domain_name), 1, length(split(".", var.domain_name))))
   statuses = ["ISSUED"]
 }
 
 data "aws_acm_certificate" "non_wildcard" {
-  count    = !var.wildcard_domain && var.domain_name != "" ? 1 : 0
+  count    = !var.wildcard_domain && var.domain_name != "" && var.attach_ssl ? 1 : 0
   domain   = var.domain_name
   statuses = ["ISSUED"]
 }

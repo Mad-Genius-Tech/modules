@@ -5,7 +5,7 @@ locals {
     enabled                                = true
     enable_logs                            = false
     price_class                            = "PriceClass_100"
-    presigned_url                          = false
+    default_presigned_url                  = false
     s3_bucket                              = ""
     attach_cloudfront_policy               = true
     use_acm_cert                           = true
@@ -47,7 +47,7 @@ locals {
       "enabled"                                = try(coalesce(lookup(v, "enabled", null), local.merged_default_settings.enabled), local.merged_default_settings.enabled)
       "enable_logs"                            = try(coalesce(lookup(v, "enable_logs", null), local.merged_default_settings.enable_logs), local.merged_default_settings.enable_logs)
       "s3_bucket"                              = try(coalesce(lookup(v, "s3_bucket", null), local.merged_default_settings.s3_bucket), local.merged_default_settings.s3_bucket)
-      "presigned_url"                          = try(coalesce(lookup(v, "presigned_url", null), local.merged_default_settings.presigned_url), local.merged_default_settings.presigned_url)
+      "default_presigned_url"                          = try(coalesce(lookup(v, "default_presigned_url", null), local.merged_default_settings.default_presigned_url), local.merged_default_settings.default_presigned_url)
       "attach_cloudfront_policy"               = try(coalesce(lookup(v, "attach_cloudfront_policy", null), local.merged_default_settings.attach_cloudfront_policy), local.merged_default_settings.attach_cloudfront_policy)
       "use_acm_cert"                           = try(coalesce(lookup(v, "use_acm_cert", null), local.merged_default_settings.use_acm_cert), local.merged_default_settings.use_acm_cert)
       "wildcard_domain"                        = try(coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain), local.merged_default_settings.wildcard_domain)
@@ -171,8 +171,8 @@ module "cloudfront" {
     cached_methods         = contains(each.value.default_cache_behavior_allowed_methods, "OPTIONS") ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD"]
     compress               = each.value.compress
 
-    trusted_signers    = each.value.presigned_url ? [] : null
-    trusted_key_groups = each.value.presigned_url ? [aws_cloudfront_key_group.cloudfront_key_group[each.key].id] : null
+    trusted_signers    = each.value.default_presigned_url ? [] : null
+    trusted_key_groups = each.value.default_presigned_url ? [aws_cloudfront_key_group.cloudfront_key_group[each.key].id] : null
 
     cache_policy_id            = try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
     use_forwarded_values       = false
@@ -261,33 +261,33 @@ data "aws_iam_policy_document" "bucket_policy" {
 }
 
 resource "tls_private_key" "private_key" {
-  for_each  = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.presigned_url }
+  for_each  = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.default_presigned_url }
   algorithm = "RSA"
   rsa_bits  = 2048
 }
 
 resource "aws_cloudfront_public_key" "public_key" {
-  for_each    = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.presigned_url }
+  for_each    = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.default_presigned_url }
   name        = "cloudfront-public-key-${replace(each.value.identifier, ".", "_")}"
   comment     = "Public key signing cloudfront urls for ${each.value.identifier}"
   encoded_key = tls_private_key.private_key[each.key].public_key_pem
 }
 
 resource "aws_cloudfront_key_group" "cloudfront_key_group" {
-  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.presigned_url }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.default_presigned_url }
   name     = "cloudfront-key-group-${replace(each.value.identifier, ".", "_")}"
   comment  = "Key group containing public key signing cloudfront urls for ${each.value.identifier}"
   items    = [aws_cloudfront_public_key.public_key[each.key].id]
 }
 
 resource "local_file" "private_key" {
-  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.presigned_url && var.output_keyfile }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.default_presigned_url && var.output_keyfile }
   content  = tls_private_key.private_key[each.key].private_key_pem
   filename = "${var.terragrunt_directory}/${each.key}-private-key.pem"
 }
 
 resource "local_file" "public_key" {
-  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.presigned_url && var.output_keyfile }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.s3_bucket != "" && v.default_presigned_url && var.output_keyfile }
   content  = tls_private_key.private_key[each.key].public_key_pem
   filename = "${var.terragrunt_directory}/${each.key}-public-key.pem"
 }

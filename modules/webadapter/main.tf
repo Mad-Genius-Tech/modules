@@ -15,7 +15,7 @@ locals {
     "policy_statements"                 = {}
     "create_lambda_function_url"        = true
     "keep_warm"                         = true
-    "keep_warm_expression"              = "rate(5 minutes)"
+    "keep_warm_expression"              = "rate(3 minutes)"
     "secret_vars"                       = {}
   }
 
@@ -23,6 +23,7 @@ locals {
     prod = merge(local.default_settings,
       {
         "provisioned_concurrent_executions" = -1
+        "keep_warm_expression"              = "rate(1 minute)"
       }
     )
   }

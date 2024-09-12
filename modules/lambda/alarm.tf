@@ -1,5 +1,5 @@
 resource "aws_cloudwatch_metric_alarm" "duration" {
-  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" }
+  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" && v.enable_monitoring }
   alarm_name          = "${each.value.identifier}-duration"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = each.value.duration_evaluation_periods
@@ -23,7 +23,7 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "errors" {
-  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" }
+  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" && v.enable_monitoring }
   alarm_name          = "${each.value.identifier}-errors"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = each.value.errors_evaluation_periods
@@ -47,7 +47,7 @@ resource "aws_cloudwatch_metric_alarm" "errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "concurrent_executions" {
-  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" }
+  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" && v.enable_monitoring }
   alarm_name          = "${each.value.identifier}-concurrent-executions"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = each.value.concurrent_executions_evaluation_periods
@@ -72,7 +72,7 @@ resource "aws_cloudwatch_metric_alarm" "concurrent_executions" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "throttles" {
-  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" }
+  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" && v.enable_monitoring }
   alarm_name          = "${each.value.identifier}-throttles"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = each.value.throttles_evaluation_periods
@@ -97,7 +97,7 @@ resource "aws_cloudwatch_metric_alarm" "throttles" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "error_rate" {
-  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" }
+  for_each            = { for k, v in local.lambda_map : k => v if v.create && var.sns_topic_arn != "" && v.enable_monitoring }
   alarm_name          = "${each.value.identifier}-error-rate"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = each.value.error_rate_evaluation_periods

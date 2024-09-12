@@ -45,7 +45,7 @@ function configuringNginx {
     sed -i 's|;error_log = php_errors.log|error_log = /var/log/php-fpm/php_errors.log|g' /etc/php.ini
     sed -i 's|; max_input_vars = 1000|max_input_vars = 2000|g' /etc/php.ini
     sed -i '/user = apache/c\user = nginx' /etc/php-fpm.d/www.conf
-    sed -i '/group = apache/c\user = nginx' /etc/php-fpm.d/www.conf
+    sed -i '/group = apache/c\group = nginx' /etc/php-fpm.d/www.conf
     sed -i 's|php_value\[session.save_handler\] = files|php_value\[session.save_handler\] = redis|g' /etc/php-fpm.d/www.conf
     sed -i 's|php_value\[session.save_path\]    = /var/lib/php/session|php_value\[session.save_path\]    = "tcp://${redis_endpoint}"|g' /etc/php-fpm.d/www.conf
     sed -i 's|pm.max_children = 50|pm.max_children = 150|g' /etc/php-fpm.d/www.conf

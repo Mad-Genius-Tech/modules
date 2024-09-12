@@ -1,6 +1,7 @@
 locals {
   default_settings = {
     "handler"                                     = "handler.lambda_handler"
+    "enable_monitoring"                           = true
     "runtime"                                     = "python3.10"
     "timeout"                                     = 300
     "memory_size"                                 = 512
@@ -33,7 +34,9 @@ locals {
       max_age_seconds   = null
       allow_credentials = null
     }
+    "create_s3_bucket"                         = true
     "lambda_bucket_name"                       = ""
+    "lambda_object_name"                       = ""
     "duration_evaluation_periods"              = 1
     "duration_threshold"                       = 29000
     "throttles_evaluation_periods"             = 1
@@ -50,6 +53,7 @@ locals {
   env_default_settings = {
     prod = merge(local.default_settings,
       {
+        "enable_monitoring"                 = true
         "provisioned_concurrent_executions" = 2
         "cloudwatch_logs_retention_in_days" = 30
         "keep_warm_expression"              = "rate(4 minutes)"
@@ -63,6 +67,7 @@ locals {
     for k, v in var.lambda : k => {
       "create"                                      = coalesce(lookup(v, "create", null), true)
       "identifier"                                  = "${module.context.id}-${k}"
+      "enable_monitoring"                           = coalesce(lookup(v, "enable_monitoring", null), local.merged_default_settings.enable_monitoring)
       "description"                                 = coalesce(lookup(v, "description", null), "Lambda ${module.context.id}-${k}")
       "project_name"                                = coalesce(lookup(v, "project_name", null), "${module.context.id}-${k}")
       "handler"                                     = coalesce(lookup(v, "handler", null), local.merged_default_settings.handler)
@@ -94,7 +99,9 @@ locals {
       "create_lambda_function_url"                  = coalesce(lookup(v, "create_lambda_function_url", null), local.merged_default_settings.create_lambda_function_url)
       "keep_warm_expression"                        = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
       "cors"                                        = coalesce(lookup(v, "cors", null), local.merged_default_settings.cors)
+      "create_s3_bucket"                            = coalesce(lookup(v, "create_s3_bucket", null), local.merged_default_settings.create_s3_bucket)
       "lambda_bucket_name"                          = try(coalesce(lookup(v, "lambda_bucket_name", null), local.merged_default_settings.lambda_bucket_name), local.merged_default_settings.lambda_bucket_name)
+      "lambda_object_name"                          = try(coalesce(lookup(v, "lambda_object_name", null), local.merged_default_settings.lambda_object_name), local.merged_default_settings.lambda_object_name)
       "duration_evaluation_periods"                 = coalesce(lookup(v, "duration_evaluation_periods", null), local.merged_default_settings.duration_evaluation_periods)
       "duration_threshold"                          = coalesce(lookup(v, "duration_threshold", null), local.merged_default_settings.duration_threshold)
       "throttles_evaluation_periods"                = coalesce(lookup(v, "throttles_evaluation_periods", null), local.merged_default_settings.throttles_evaluation_periods)
@@ -157,7 +164,7 @@ locals {
 }
 
 module "s3_bucket" {
-  for_each      = local.lambda_map
+  for_each      = { for k,v in local.lambda_map : k => v if v.create_s3_bucket }
   source        = "terraform-aws-modules/s3-bucket/aws"
   version       = "~> 3.15.0"
   bucket        = each.value.lambda_bucket_name == "" ? "${each.value.identifier}-lambda-builds" : each.value.lambda_bucket_name
@@ -178,7 +185,7 @@ module "s3_bucket" {
 }
 
 resource "aws_s3_object" "s3_object" {
-  for_each = local.lambda_map
+  for_each = { for k,v in local.lambda_map : k => v if v.create_s3_bucket }
   bucket   = module.s3_bucket[each.key].s3_bucket_id
   key      = "placeholder.zip"
   source   = "${path.module}/placeholder.zip"
@@ -218,13 +225,13 @@ module "lambda" {
   cors                                        = each.value.cors
   provisioned_concurrent_executions           = each.value.provisioned_concurrent_executions
   s3_existing_package = {
-    bucket = module.s3_bucket[each.key].s3_bucket_id
-    key    = aws_s3_object.s3_object[each.key].id
+    bucket = each.value.create_s3_bucket ? module.s3_bucket[each.key].s3_bucket_id : each.value.lambda_bucket_name
+    key    = each.value.create_s3_bucket ? aws_s3_object.s3_object[each.key].id : each.value.lambda_object_name
   }
   environment_variables = merge(
     each.value.environment_variables,
     {
-      LAMBDA_CONFIG_S3_BUCKET    = module.s3_bucket[each.key].s3_bucket_id
+      LAMBDA_CONFIG_S3_BUCKET    = each.value.create_s3_bucket ?module.s3_bucket[each.key].s3_bucket_id : each.value.lambda_bucket_name
       LAMBDA_CONFIG_PROJECT_NAME = each.value.project_name
       LAMBDA_CONFIG_AWS_REGION   = data.aws_region.current.name
     },
@@ -250,7 +257,7 @@ module "lambda" {
                   "s3:PutObject",
                   "s3:GetObject"
                 ],
-                "Resource": ["${module.s3_bucket[each.key].s3_bucket_arn}/*"]
+                "Resource": ["arn:aws:s3:::${each.value.create_s3_bucket ? module.s3_bucket[each.key].s3_bucket_id : each.value.lambda_bucket_name}/*"]
             }
         ]
     }

@@ -95,6 +95,7 @@ locals {
       "monitoring_interval"                   = local.merged_default_settings.monitoring_interval
       "monitoring_role_name"                  = local.merged_default_settings.monitoring_role_name
       "monitoring_role_use_name_prefix"       = local.merged_default_settings.monitoring_role_use_name_prefix
+      "snapshot_identifier"                   = v.snapshot_identifier
       "lambda_functions"                      = coalesce(lookup(v, "lambda_functions", null), local.merged_default_settings.lambda_functions)
       "apply_immediately"                     = coalesce(lookup(v, "apply_immediately", null), local.merged_default_settings.apply_immediately)
       "secret_rotation_enabled"               = coalesce(lookup(v, "secret_rotation_enabled", null), local.merged_default_settings.secret_rotation_enabled)
@@ -141,6 +142,7 @@ module "rds" {
   maintenance_window                    = each.value.maintenance_window
   backup_window                         = each.value.backup_window
   backup_retention_period               = each.value.backup_retention_period
+  snapshot_identifier                   = each.value.snapshot_identifier
   skip_final_snapshot                   = each.value.skip_final_snapshot
   deletion_protection                   = each.value.deletion_protection
   performance_insights_enabled          = each.value.performance_insights_enabled
