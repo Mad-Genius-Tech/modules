@@ -14,6 +14,10 @@ locals {
     viewer_protocol_policy                 = "redirect-to-https"
     origin_request_policy                  = ""
     cache_policy                           = ""
+    default_allowed_http_methods           = ["GET", "HEAD", "OPTIONS"]
+    default_cache_policy                   = ""
+    default_origin_request_policy          = ""
+    default_response_headers_policy        = ""
     response_headers_policy                = ""
     enable_upload_to_s3_origin             = false
     compress                               = true
@@ -47,17 +51,21 @@ locals {
       "enabled"                                = try(coalesce(lookup(v, "enabled", null), local.merged_default_settings.enabled), local.merged_default_settings.enabled)
       "enable_logs"                            = try(coalesce(lookup(v, "enable_logs", null), local.merged_default_settings.enable_logs), local.merged_default_settings.enable_logs)
       "s3_bucket"                              = try(coalesce(lookup(v, "s3_bucket", null), local.merged_default_settings.s3_bucket), local.merged_default_settings.s3_bucket)
-      "default_presigned_url"                          = try(coalesce(lookup(v, "default_presigned_url", null), local.merged_default_settings.default_presigned_url), local.merged_default_settings.default_presigned_url)
+      "default_presigned_url"                  = try(coalesce(lookup(v, "default_presigned_url", null), local.merged_default_settings.default_presigned_url), local.merged_default_settings.default_presigned_url)
       "attach_cloudfront_policy"               = try(coalesce(lookup(v, "attach_cloudfront_policy", null), local.merged_default_settings.attach_cloudfront_policy), local.merged_default_settings.attach_cloudfront_policy)
       "use_acm_cert"                           = try(coalesce(lookup(v, "use_acm_cert", null), local.merged_default_settings.use_acm_cert), local.merged_default_settings.use_acm_cert)
       "wildcard_domain"                        = try(coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain), local.merged_default_settings.wildcard_domain)
       "price_class"                            = try(coalesce(lookup(v, "price_class", null), local.merged_default_settings.price_class), local.merged_default_settings.price_class)
       "default_cache_behavior_allowed_methods" = try(coalesce(lookup(v, "default_cache_behavior_allowed_methods", null), local.merged_default_settings.default_cache_behavior_allowed_methods), local.merged_default_settings.default_cache_behavior_allowed_methods)
+      "default_allowed_http_methods"           = try(coalesce(lookup(v, "default_allowed_http_methods", null), local.merged_default_settings.default_allowed_http_methods), local.merged_default_settings.default_allowed_http_methods)
       "domain_name"                            = v.domain_name
       "origin_request_policy"                  = try(coalesce(lookup(v, "origin_request_policy", null), local.merged_default_settings.origin_request_policy), local.merged_default_settings.origin_request_policy)
       "response_headers_policy"                = try(coalesce(lookup(v, "response_headers_policy", null), local.merged_default_settings.response_headers_policy), local.merged_default_settings.response_headers_policy)
       "custom_error_response"                  = coalesce(lookup(v, "custom_error_response", null), local.merged_default_settings.custom_error_response)
       "cache_policy"                           = try(coalesce(lookup(v, "cache_policy", null), local.merged_default_settings.cache_policy), local.merged_default_settings.cache_policy)
+      "default_cache_policy"                   = try(coalesce(lookup(v, "default_cache_policy", null), local.merged_default_settings.default_cache_policy), local.merged_default_settings.default_cache_policy)
+      "default_origin_request_policy"          = try(coalesce(lookup(v, "default_origin_request_policy", null), local.merged_default_settings.default_origin_request_policy), local.merged_default_settings.default_origin_request_policy)
+      "default_response_headers_policy"        = try(coalesce(lookup(v, "default_response_headers_policy", null), local.merged_default_settings.default_response_headers_policy), local.merged_default_settings.default_response_headers_policy)
       "viewer_protocol_policy"                 = try(coalesce(lookup(v, "viewer_protocol_policy", null), local.merged_default_settings.viewer_protocol_policy), local.merged_default_settings.viewer_protocol_policy)
       "origin_domain_name"                     = try(coalesce(lookup(v, "origin_domain_name", null), local.merged_default_settings.origin_domain_name), local.merged_default_settings.origin_domain_name)
       "viewer_request_function_code"           = try(coalesce(lookup(v, "viewer_request_function_code", null), local.merged_default_settings.viewer_request_function_code), local.merged_default_settings.viewer_request_function_code)
@@ -112,7 +120,7 @@ module "cloudfront" {
   version                       = "~> 3.4.0"
   for_each                      = local.cloudfront_map
   aliases                       = each.value.aliases
-  comment                       = each.value.s3_bucket != "" ? "CloudFront for S3 bucket ${each.value.s3_bucket}" : "CloudFront for domain ${each.value.origin_domain_name}"
+  comment                       = each.value.s3_bucket != "" && each.value.origin_domain_name == "" ? "CloudFront for S3 bucket ${each.value.s3_bucket}" : (each.value.s3_bucket != "" && each.value.origin_domain_name != "" ? "CloudFront for domain ${each.value.domain_name}" : "CloudFront for domain ${each.value.origin_domain_name}")
   enabled                       = each.value.enabled
   price_class                   = each.value.price_class
   default_root_object           = each.value.default_root_object
@@ -151,34 +159,34 @@ module "cloudfront" {
       }
     } : {}
   )
-
-  ordered_cache_behavior = length(each.value.ordered_cache_behavior) > 0 ? [for obj in each.value.ordered_cache_behavior : merge(obj, {
-    target_origin_id           = each.value.s3_bucket != "" ? each.value.s3_bucket : each.value.origin_domain_name
-    viewer_protocol_policy     = each.value.viewer_protocol_policy
-    allowed_methods            = each.value.default_cache_behavior_allowed_methods
-    cached_methods             = contains(each.value.default_cache_behavior_allowed_methods, "OPTIONS") ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD"]
-    compress                   = each.value.compress
-    cache_policy_id            = try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
-    use_forwarded_values       = false
-    origin_request_policy_id   = length(try(coalesce(each.value.origin_request_policy, ""), "")) > 0 ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null
-    response_headers_policy_id = length(try(coalesce(each.value.response_headers_policy, ""), "")) > 0 ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null
-  })] : []
+  ordered_cache_behavior = each.value.ordered_cache_behavior
+  # ordered_cache_behavior = length(each.value.ordered_cache_behavior) > 0 ? [for obj in each.value.ordered_cache_behavior : merge(obj, {
+  #   target_origin_id           = each.value.s3_bucket != "" ? each.value.s3_bucket : each.value.origin_domain_name
+  #   path_pattern               = each.value.path_pattern == "" ? null : obj.path_pattern
+  #   viewer_protocol_policy     = each.value.viewer_protocol_policy
+  #   allowed_methods            = each.value.default_cache_behavior_allowed_methods
+  #   cached_methods             = contains(each.value.default_cache_behavior_allowed_methods, "OPTIONS") ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD"]
+  #   compress                   = each.value.compress
+  #   cache_policy_id            = try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
+  #   use_forwarded_values       = false
+  #   origin_request_policy_id   = length(try(coalesce(each.value.origin_request_policy, ""), "")) > 0 ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null
+  #   response_headers_policy_id = length(try(coalesce(each.value.response_headers_policy, ""), "")) > 0 ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null
+  # })] : []
 
   default_cache_behavior = {
-    target_origin_id       = each.value.s3_bucket != "" ? each.value.s3_bucket : each.value.origin_domain_name
+    target_origin_id       = each.value.s3_bucket != "" && each.value.origin_domain_name == "" ? each.value.s3_bucket : each.value.origin_domain_name
     viewer_protocol_policy = each.value.viewer_protocol_policy
-    allowed_methods        = each.value.default_cache_behavior_allowed_methods
+    allowed_methods        = each.value.default_allowed_http_methods
     cached_methods         = contains(each.value.default_cache_behavior_allowed_methods, "OPTIONS") ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD"]
     compress               = each.value.compress
 
     trusted_signers    = each.value.default_presigned_url ? [] : null
     trusted_key_groups = each.value.default_presigned_url ? [aws_cloudfront_key_group.cloudfront_key_group[each.key].id] : null
 
-    cache_policy_id            = try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
+    cache_policy_id            = each.value.default_cache_policy != "" ? data.aws_cloudfront_cache_policy.default_cache_policy[each.key].id : try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
     use_forwarded_values       = false
-    origin_request_policy_id   = length(try(coalesce(each.value.origin_request_policy, ""), "")) > 0 ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null
-    response_headers_policy_id = length(try(coalesce(each.value.response_headers_policy, ""), "")) > 0 ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null
-
+    origin_request_policy_id   = each.value.default_origin_request_policy != "" ? data.aws_cloudfront_origin_request_policy.default_request_policy[each.key].id : (length(try(coalesce(each.value.origin_request_policy, ""), "")) > 0 ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null)
+    response_headers_policy_id = each.value.default_response_headers_policy != "" ? data.aws_cloudfront_response_headers_policy.default_response_policy[each.key].id : (length(try(coalesce(each.value.response_headers_policy, ""), "")) > 0 ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null)
 
     function_association = each.value.viewer_request_function_code != "" ? {
       # Valid keys: viewer-request, viewer-response
@@ -221,6 +229,22 @@ data "aws_cloudfront_response_headers_policy" "response_policy" {
   for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.response_headers_policy, ""), "")) > 0 }
   name     = each.value.response_headers_policy
 }
+
+data "aws_cloudfront_cache_policy" "default_cache_policy" {
+  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.default_cache_policy, ""), "")) > 0 }
+  name     = each.value.default_cache_policy
+}
+
+data "aws_cloudfront_origin_request_policy" "default_request_policy" {
+  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.default_origin_request_policy, ""), "")) > 0 }
+  name     = each.value.default_origin_request_policy
+}
+
+data "aws_cloudfront_response_headers_policy" "default_response_policy" {
+  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.default_response_headers_policy, ""), "")) > 0 }
+  name     = each.value.default_response_headers_policy
+}
+
 
 data "aws_s3_bucket" "s3_bucket" {
   for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.s3_bucket, ""), "")) > 0 }

@@ -10,8 +10,12 @@ variable "cloudfront" {
     use_acm_cert                           = optional(bool)
     wildcard_domain                        = optional(bool)
     domain_name                            = string
+    default_allowed_http_methods           = optional(list(string))
     default_cache_behavior_allowed_methods = optional(list(string))
     origin_request_policy                  = optional(string)
+    default_cache_policy                   = optional(string)
+    default_origin_request_policy          = optional(string)
+    default_response_headers_policy        = optional(string)
     response_headers_policy                = optional(string)
     cache_policy                           = optional(string)
     compress                               = optional(bool)
@@ -26,14 +30,16 @@ variable "cloudfront" {
       error_caching_min_ttl = optional(number)
     })))
     ordered_cache_behavior = optional(list(object({
-      path_pattern            = string
-      viewer_protocol_policy  = optional(string)
-      allowed_methods         = optional(list(string))
-      cached_methods          = optional(list(string))
-      compress                = optional(bool)
-      cache_policy            = optional(string)
-      origin_request_policy   = optional(string)
-      response_headers_policy = optional(string)
+      path_pattern                 = string
+      target_origin_id             = string
+      viewer_protocol_policy       = optional(string)
+      allowed_methods              = optional(list(string))
+      cached_methods               = optional(list(string))
+      compress                     = optional(bool)
+      use_forwarded_values         = optional(bool)
+      cache_policy_name            = optional(string)
+      origin_request_policy_name   = optional(string)
+      response_headers_policy_name = optional(string)
     })), [])
     origin_domain_name = optional(string)
     custom_origin_config = optional(object({
