@@ -5,9 +5,9 @@ variable "ecs_cluster_name" {
 
 variable "github_repos" {
   type = map(object({
-    create                 = optional(bool)
-    github_org_name        = string
-    github_repo_names      = map(object({
+    create          = optional(bool)
+    github_org_name = string
+    github_repo_names = map(object({
       org    = optional(string)
       repo   = string
       branch = string

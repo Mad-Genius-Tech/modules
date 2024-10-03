@@ -37,13 +37,14 @@ data "aws_region" "current" {}
 
 
 data "aws_lambda_function" "lambda_function" {
-  count         = var.image_uri == "" ? 1 : 0
+  count         = var.image_uri == "" && var.create ? 1 : 0
   function_name = module.context.id
 }
 
 module "webadapter" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 7.2.1"
+  create                            = var.create
   function_name                     = module.context.id
   description                       = "${module.context.id} webadapter"
   create_package                    = false
@@ -95,7 +96,7 @@ module "webadapter" {
     local.secret_vars_env,
   )
   package_type  = "Image"
-  image_uri     = var.image_uri == "" ? data.aws_lambda_function.lambda_function[0].image_uri : var.image_uri
+  image_uri     = var.image_uri == "" ? join("", data.aws_lambda_function.lambda_function[*].image_uri) : var.image_uri
   architectures = local.merged_default_settings.architectures
   tags          = local.tags
 }
@@ -103,7 +104,7 @@ module "webadapter" {
 module "lambda_sg" {
   source      = "terraform-aws-modules/security-group/aws"
   version     = "~> 5.1.0"
-  create      = var.vpc_id == "" ? false : true
+  create      = var.create && var.vpc_id != ""
   name        = "${module.context.id}-sg"
   description = "Lambda ${module.context.id} Security group"
   egress_with_cidr_blocks = [
@@ -120,6 +121,7 @@ module "lambda_sg" {
 module "stage_alias" {
   source           = "terraform-aws-modules/lambda/aws//modules/alias"
   version          = "~> 6.0.0"
+  create           = var.create
   refresh_alias    = false
   name             = var.stage_name
   function_name    = module.webadapter.lambda_function_name
@@ -129,6 +131,7 @@ module "stage_alias" {
 module "test_alias" {
   source           = "terraform-aws-modules/lambda/aws//modules/alias"
   version          = "~> 6.0.0"
+  create           = var.create
   refresh_alias    = false
   name             = "test"
   function_name    = module.webadapter.lambda_function_name
@@ -136,7 +139,7 @@ module "test_alias" {
 }
 
 resource "aws_cloudwatch_event_rule" "cron" {
-  count               = local.merged_default_settings.keep_warm ? 1 : 0
+  count               = local.merged_default_settings.keep_warm && var.create ? 1 : 0
   name                = "${module.context.id}-keepwarm"
   description         = "Sends event to lambda ${module.context.id} based on cronjob"
   schedule_expression = local.merged_default_settings.keep_warm_expression
@@ -144,14 +147,14 @@ resource "aws_cloudwatch_event_rule" "cron" {
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {
-  count     = local.merged_default_settings.keep_warm ? 1 : 0
+  count     = local.merged_default_settings.keep_warm && var.create ? 1 : 0
   target_id = module.context.id
   rule      = aws_cloudwatch_event_rule.cron[0].name
   arn       = module.webadapter.lambda_function_arn
 }
 
 resource "aws_lambda_permission" "cloudwatch" {
-  count         = local.merged_default_settings.keep_warm ? 1 : 0
+  count         = local.merged_default_settings.keep_warm && var.create ? 1 : 0
   statement_id  = "AllowExecutionFromCloudWatch"
   action        = "lambda:InvokeFunction"
   function_name = module.webadapter.lambda_function_name
@@ -160,18 +163,18 @@ resource "aws_lambda_permission" "cloudwatch" {
 }
 
 data "aws_secretsmanager_secret" "secret" {
-  for_each = var.secret_vars
+  for_each = { for k, v in var.secret_vars : k => v if var.create }
   name     = each.value.secret_path
 }
 
 data "aws_secretsmanager_secret_version" "secret" {
-  for_each  = var.secret_vars
+  for_each  = { for k, v in var.secret_vars : k => v if var.create }
   secret_id = data.aws_secretsmanager_secret.secret[each.key].id
 }
 
 locals {
   secret_vars_env = {
     for k, v in var.secret_vars : k =>
-    jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.secret[k].secret_string))[v.property] if length(var.secret_vars) > 0
+    jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.secret[k].secret_string))[v.property] if length(var.secret_vars) > 0 && var.create
   }
 }

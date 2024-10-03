@@ -33,6 +33,7 @@ locals {
       "datapoints_to_alarm"     = 2
       "dimensions"              = {}
       "cloudwatch_alarm_action" = ""
+      "treat_missing_data"      = "breaching"
     }
     policy              = {}
     root_volume_encrypt = false
@@ -90,6 +91,7 @@ locals {
           "datapoints_to_alarm"     = coalesce(lookup(v1, "datapoints_to_alarm", null), local.merged_default_settings.alarms.datapoints_to_alarm)
           "dimensions"              = coalesce(lookup(v1, "dimensions", null), local.merged_default_settings.alarms.dimensions)
           "comparison_operator"     = coalesce(lookup(v1, "comparison_operator", null), local.merged_default_settings.alarms.comparison_operator)
+          "treat_missing_data"      = coalesce(lookup(v1, "treat_missing_data", null), local.merged_default_settings.alarms.treat_missing_data)
           "statistic"               = coalesce(lookup(v1, "statistic", null), local.merged_default_settings.alarms.statistic)
           "namespace"               = coalesce(lookup(v1, "namespace", null), local.merged_default_settings.alarms.namespace)
           "cloudwatch_alarm_action" = try(coalesce(lookup(v1, "cloudwatch_alarm_action", null), local.merged_default_settings.alarms.cloudwatch_alarm_action), local.merged_default_settings.alarms.cloudwatch_alarm_action)
@@ -337,7 +339,7 @@ locals {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alarm" {
-  for_each            = { for k,v in local.alarms_map : k => v if v.enabled }
+  for_each            = { for k, v in local.alarms_map : k => v if v.enabled }
   alarm_name          = local.alarms_map[each.key].identifier
   alarm_description   = "This metric monitors EC2 ${local.ec2_map[split("|", each.key)[0]].identifier} ${local.alarms_map[each.key].metric_name}"
   metric_name         = local.alarms_map[each.key].metric_name
@@ -348,6 +350,7 @@ resource "aws_cloudwatch_metric_alarm" "alarm" {
   evaluation_periods  = local.alarms_map[each.key].evaluation_periods
   namespace           = local.alarms_map[each.key].namespace
   datapoints_to_alarm = local.alarms_map[each.key].datapoints_to_alarm
+  treat_missing_data  = local.alarms_map[each.key].treat_missing_data
   dimensions = merge({
     InstanceId = module.ec2[split("|", each.key)[0]].id
   }, lookup(local.alarms_map[each.key], "dimensions", {}))

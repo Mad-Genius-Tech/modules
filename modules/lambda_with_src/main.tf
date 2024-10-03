@@ -6,6 +6,8 @@ locals {
     "memory_size"                       = 512
     "ephemeral_storage_size"            = 512
     "create_async_event_config"         = false
+    "keep_warm"                         = false
+    "keep_warm_expression"              = "rate(60 minutes)"
     "maximum_retry_attempts"            = 2
     "maximum_event_age_in_seconds"      = 21600
     "architectures"                     = ["x86_64"]
@@ -58,6 +60,8 @@ locals {
       "handler"                           = coalesce(lookup(v, "handler", null), local.merged_default_settings.handler)
       "runtime"                           = coalesce(lookup(v, "runtime", null), local.merged_default_settings.runtime)
       "timeout"                           = coalesce(lookup(v, "timeout", null), local.merged_default_settings.timeout)
+      "keep_warm"                         = coalesce(lookup(v, "keep_warm", null), local.merged_default_settings.keep_warm)
+      "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
       "memory_size"                       = coalesce(lookup(v, "memory_size", null), local.merged_default_settings.memory_size)
       "ephemeral_storage_size"            = coalesce(lookup(v, "ephemeral_storage_size", null), local.merged_default_settings.ephemeral_storage_size)
       "create_async_event_config"         = coalesce(lookup(v, "create_async_event_config", null), local.merged_default_settings.create_async_event_config)
@@ -174,6 +178,30 @@ module "lambda_sg" {
     }
   ]
   vpc_id = var.vpc_id
+}
+
+resource "aws_cloudwatch_event_rule" "cron" {
+  for_each            = { for k, v in local.lambda_map : k => v if v.keep_warm == true }
+  name                = "${each.value.identifier}-handler.keep_warm_callback"
+  description         = "Sends event to lambda ${each.value.identifier} based on cronjob"
+  schedule_expression = each.value.keep_warm_expression
+  tags                = local.tags
+}
+
+resource "aws_cloudwatch_event_target" "cron" {
+  for_each  = { for k, v in local.lambda_map : k => v if v.keep_warm == true }
+  target_id = each.value.identifier
+  rule      = aws_cloudwatch_event_rule.cron[each.key].name
+  arn       = module.lambda[each.key].lambda_function_arn
+}
+
+resource "aws_lambda_permission" "cloudwatch" {
+  for_each      = { for k, v in local.lambda_map : k => v if v.keep_warm == true }
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambda[each.key].lambda_function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.cron[each.key].arn
 }
 
 

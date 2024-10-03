@@ -22,6 +22,8 @@ variable "lambda" {
     maximum_retry_attempts       = optional(number)
     maximum_event_age_in_seconds = optional(number)
     create_async_event_config    = optional(bool)
+    keep_warm                    = optional(bool)
+    keep_warm_expression         = optional(string)
     policy_statements = optional(map(object({
       effect    = string
       actions   = list(string)

@@ -1,3 +1,8 @@
+variable "create" {
+  type    = bool
+  default = true
+}
+
 variable "image_uri" {
   type    = string
   default = ""

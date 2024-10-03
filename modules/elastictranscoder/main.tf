@@ -13,17 +13,17 @@ locals {
 
   elastictranscoder_pipeline_map = {
     for k, v in var.elastictranscoder_pipeline : k => {
-      "identifier"       = "${module.context.id}-${k}"
-      "name"             = length("${module.context.id}-${k}") > 40 && v.name != null ? v.name : "${module.context.id}-${k}"
-      "create"           = coalesce(lookup(v, "create", null), true)
-      "container"        = coalesce(lookup(v, "container", null), local.merged_default_settings.container)
-      "input_bucket"     = lookup(v, "input_bucket", null)
-      "output_bucket"    = lookup(v, "output_bucket", null)
-      "content_config"   = lookup(v, "content_config", null)
-      "thumbnail_config" = lookup(v, "thumbnail_config", null)
-      "content_config_permissions" = lookup(v, "content_config_permissions", null)
+      "identifier"                   = "${module.context.id}-${k}"
+      "name"                         = length("${module.context.id}-${k}") > 40 && v.name != null ? v.name : "${module.context.id}-${k}"
+      "create"                       = coalesce(lookup(v, "create", null), true)
+      "container"                    = coalesce(lookup(v, "container", null), local.merged_default_settings.container)
+      "input_bucket"                 = lookup(v, "input_bucket", null)
+      "output_bucket"                = lookup(v, "output_bucket", null)
+      "content_config"               = lookup(v, "content_config", null)
+      "thumbnail_config"             = lookup(v, "thumbnail_config", null)
+      "content_config_permissions"   = lookup(v, "content_config_permissions", null)
       "thumbnail_config_permissions" = lookup(v, "thumbnail_config_permissions", null)
-      "notifications"    = lookup(v, "notifications", null)
+      "notifications"                = lookup(v, "notifications", null)
     } if coalesce(lookup(v, "create", null), true)
   }
 
@@ -72,7 +72,7 @@ resource "aws_iam_role" "transcoder_role" {
 }
 
 resource "aws_sns_topic" "topic" {
-  for_each = { for k,v in local.elastictranscoder_pipeline_map : k => v if var.enable_notification }
+  for_each = { for k, v in local.elastictranscoder_pipeline_map : k => v if var.enable_notification }
   name     = "${each.value.identifier}-sns"
   tags     = local.tags
 }

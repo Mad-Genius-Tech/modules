@@ -1,8 +1,8 @@
 locals {
   default_settings = {
-    enable_awscc = false
+    enable_awscc                                              = false
     recording_configuration_thumbnail_recording_mode          = "INTERVAL"
-    recording_reconnect_window_seconds  = 0
+    recording_reconnect_window_seconds                        = 0
     recording_configuration_thumbnail_target_interval_seconds = 10
     thumbnail_configuration = {
       recording_mode          = "INTERVAL"
@@ -23,17 +23,17 @@ locals {
   ivs_map = {
     for k, v in var.ivs : k => {
       "identifier"                             = "${module.context.id}-${k}"
-      "enable_awscc" = try(coalesce(lookup(v, "enable_awscc", null), local.merged_default_settings.enable_awscc), local.merged_default_settings.enable_awscc)
+      "enable_awscc"                           = try(coalesce(lookup(v, "enable_awscc", null), local.merged_default_settings.enable_awscc), local.merged_default_settings.enable_awscc)
       "recording_configuration_s3_bucket_name" = v.recording_configuration_s3_bucket_name
-      "recording_reconnect_window_seconds" = coalesce(v.recording_reconnect_window_seconds, local.default_settings.recording_reconnect_window_seconds)
+      "recording_reconnect_window_seconds"     = coalesce(v.recording_reconnect_window_seconds, local.default_settings.recording_reconnect_window_seconds)
       "thumbnail_configuration"                = try(coalesce(lookup(v, "thumbnail_configuration", null), local.merged_default_settings.thumbnail_configuration), local.merged_default_settings.thumbnail_configuration)
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }
 
 resource "aws_ivs_recording_configuration" "recording_configuration" {
-  for_each = { for k,v in local.ivs_map : k => v if !v.enable_awscc }
-  name     = "${each.value.identifier}-recording-configuration"
+  for_each                           = { for k, v in local.ivs_map : k => v if !v.enable_awscc }
+  name                               = "${each.value.identifier}-recording-configuration"
   recording_reconnect_window_seconds = each.value.recording_reconnect_window_seconds
   destination_configuration {
     s3 {
@@ -61,8 +61,8 @@ resource "aws_ivs_recording_configuration" "recording_configuration" {
 # }
 
 resource "awscc_ivs_recording_configuration" "recording_configuration" {
-  for_each = { for k,v in local.ivs_map : k => v if v.enable_awscc }
-  name     = "${each.value.identifier}-recording-configuration"
+  for_each                           = { for k, v in local.ivs_map : k => v if v.enable_awscc }
+  name                               = "${each.value.identifier}-recording-configuration"
   recording_reconnect_window_seconds = each.value.recording_reconnect_window_seconds
   destination_configuration = {
     s3 = {

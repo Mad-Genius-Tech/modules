@@ -88,7 +88,7 @@ resource "aws_synthetics_canary" "canary" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "canary_alarm" {
-  for_each            = { for k,v in local.canary_map : k => v if v.enable_notification }
+  for_each            = { for k, v in local.canary_map : k => v if v.enable_notification }
   alarm_name          = "${each.value.identifier}-alarm"
   comparison_operator = "LessThanThreshold"
   period              = "300"

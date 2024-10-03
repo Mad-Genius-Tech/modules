@@ -66,7 +66,7 @@ data "aws_iam_policy_document" "github_actions_assume_role_policy" {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        for v in values(each.value.github_repo_names): (v.org != null ? "repo:${v.org}/${v.repo}:ref:refs/heads/${v.branch}" : "repo:${each.value.github_org_name}/${v.repo}:ref:refs/heads/${v.branch}")
+        for v in values(each.value.github_repo_names) : (v.org != null ? "repo:${v.org}/${v.repo}:ref:refs/heads/${v.branch}" : "repo:${each.value.github_org_name}/${v.repo}:ref:refs/heads/${v.branch}")
       ]
     }
   }

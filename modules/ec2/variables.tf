@@ -65,6 +65,7 @@ variable "ec2" {
       statistic               = optional(string)
       namespace               = optional(string)
       cloudwatch_alarm_action = optional(string)
+      treat_missing_data      = optional(string)
     })))
   }))
 }

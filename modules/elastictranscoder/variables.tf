@@ -75,16 +75,16 @@ variable "elastictranscoder_pipeline" {
       storage_class = optional(string)
     }))
     content_config_permissions = optional(object({
-      access = optional(string)
-      grantee = optional(string)
+      access       = optional(string)
+      grantee      = optional(string)
       grantee_type = optional(string)
     }))
     thumbnail_config = optional(object({
       storage_class = optional(string)
     }))
     thumbnail_config_permissions = optional(object({
-      access = optional(string)
-      grantee = optional(string)
+      access       = optional(string)
+      grantee      = optional(string)
       grantee_type = optional(string)
     }))
     notifications = optional(object({

@@ -146,19 +146,19 @@ locals {
 
   bucket_lambda_map = merge([
     for bucket, lambdas in local.bucket_lambda_list : zipmap(
-      [for lambda in lambdas : "${bucket}|${lambda}"], 
+      [for lambda in lambdas : "${bucket}|${lambda}"],
       lambdas
     )
   ]...)
 }
 
 resource "aws_lambda_permission" "lambda_permission" {
-  for_each = local.bucket_lambda_map
-  statement_id = "AllowExecutionFromS3Bucket"
-  action = "lambda:InvokeFunction"
-  principal = "s3.amazonaws.com"
+  for_each      = local.bucket_lambda_map
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  principal     = "s3.amazonaws.com"
   function_name = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${each.value}"
-  source_arn = module.s3_bucket[split("|",each.key)[0]].s3_bucket_arn
+  source_arn    = module.s3_bucket[split("|", each.key)[0]].s3_bucket_arn
 }
 
 module "s3_bucket" {

@@ -84,7 +84,7 @@ locals {
       "policy_statements"                           = merge(coalesce(lookup(v, "policy_statements", null), local.merged_default_settings.policy_statements), local.merged_default_settings.policy_statements)
       "policies"                                    = distinct(compact(concat(coalesce(lookup(v, "policies", null), local.merged_default_settings.policies), local.merged_default_settings.policies)))
       "architectures"                               = coalesce(lookup(v, "architectures", null), local.merged_default_settings.architectures)
-      "keep_warm"                                   = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm)
+      "keep_warm"                                   = coalesce(lookup(v, "keep_warm", null), local.merged_default_settings.keep_warm)
       "keep_warm_expression"                        = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
       "cloudwatch_logs_retention_in_days"           = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
       "stage_name"                                  = coalesce(lookup(v, "stage_name", null), var.stage_name)
@@ -113,7 +113,7 @@ locals {
       "error_rate_threshold"                        = coalesce(lookup(v, "error_rate_threshold", null), local.merged_default_settings.error_rate_threshold)
       "error_rate_evaluation_periods"               = coalesce(lookup(v, "error_rate_evaluation_periods", null), local.merged_default_settings.error_rate_evaluation_periods)
       "enable_insights"                             = coalesce(lookup(v, "enable_insights", null), local.merged_default_settings.enable_insights)
-      "tracing_mode"                               = try(coalesce(lookup(v, "tracing_mode", null), local.merged_default_settings.tracing_mode), local.merged_default_settings.tracing_mode)
+      "tracing_mode"                                = try(coalesce(lookup(v, "tracing_mode", null), local.merged_default_settings.tracing_mode), local.merged_default_settings.tracing_mode)
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }
@@ -164,7 +164,7 @@ locals {
 }
 
 module "s3_bucket" {
-  for_each      = { for k,v in local.lambda_map : k => v if v.create_s3_bucket }
+  for_each      = { for k, v in local.lambda_map : k => v if v.create_s3_bucket }
   source        = "terraform-aws-modules/s3-bucket/aws"
   version       = "~> 3.15.0"
   bucket        = each.value.lambda_bucket_name == "" ? "${each.value.identifier}-lambda-builds" : each.value.lambda_bucket_name
@@ -185,7 +185,7 @@ module "s3_bucket" {
 }
 
 resource "aws_s3_object" "s3_object" {
-  for_each = { for k,v in local.lambda_map : k => v if v.create_s3_bucket }
+  for_each = { for k, v in local.lambda_map : k => v if v.create_s3_bucket }
   bucket   = module.s3_bucket[each.key].s3_bucket_id
   key      = "placeholder.zip"
   source   = "${path.module}/placeholder.zip"
@@ -231,7 +231,7 @@ module "lambda" {
   environment_variables = merge(
     each.value.environment_variables,
     {
-      LAMBDA_CONFIG_S3_BUCKET    = each.value.create_s3_bucket ?module.s3_bucket[each.key].s3_bucket_id : each.value.lambda_bucket_name
+      LAMBDA_CONFIG_S3_BUCKET    = each.value.create_s3_bucket ? module.s3_bucket[each.key].s3_bucket_id : each.value.lambda_bucket_name
       LAMBDA_CONFIG_PROJECT_NAME = each.value.project_name
       LAMBDA_CONFIG_AWS_REGION   = data.aws_region.current.name
     },

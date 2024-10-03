@@ -60,7 +60,7 @@ locals {
       "instances_count"              = try(coalesce(lookup(v, "instances_count", null), local.merged_default_settings.instances_count), local.merged_default_settings.instances_count)
       "instances"                    = try(coalesce(lookup(v, "instances", null), local.merged_default_settings.instances), local.merged_default_settings.instances)
       "enable_proxy"                 = coalesce(lookup(v, "enable_proxy", null), local.merged_default_settings.enable_proxy)
-      "log_group_retention_in_days"           = local.merged_default_settings.log_group_retention_in_days
+      "log_group_retention_in_days"  = local.merged_default_settings.log_group_retention_in_days
       "enable_cloudwatch_alarm"      = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
       "alarms" = {
         for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
