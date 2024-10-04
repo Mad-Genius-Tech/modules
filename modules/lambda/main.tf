@@ -2,6 +2,7 @@ locals {
   default_settings = {
     "handler"                                     = "handler.lambda_handler"
     "enable_monitoring"                           = true
+    "enable_alias"                                = true
     "runtime"                                     = "python3.10"
     "timeout"                                     = 300
     "memory_size"                                 = 512
@@ -67,6 +68,7 @@ locals {
     for k, v in var.lambda : k => {
       "create"                                      = coalesce(lookup(v, "create", null), true)
       "identifier"                                  = "${module.context.id}-${k}"
+      "enable_alias"                                = coalesce(lookup(v, "enable_alias", null), local.merged_default_settings.enable_alias)
       "enable_monitoring"                           = coalesce(lookup(v, "enable_monitoring", null), local.merged_default_settings.enable_monitoring)
       "description"                                 = coalesce(lookup(v, "description", null), "Lambda ${module.context.id}-${k}")
       "project_name"                                = coalesce(lookup(v, "project_name", null), "${module.context.id}-${k}")
@@ -266,7 +268,7 @@ module "lambda" {
 }
 
 module "stage_alias" {
-  for_each         = local.lambda_map
+  for_each         = { for k, v in local.lambda_map : k => v if v.enable_alias }
   source           = "terraform-aws-modules/lambda/aws//modules/alias"
   version          = "~> 6.0.0"
   refresh_alias    = false
@@ -276,7 +278,7 @@ module "stage_alias" {
 }
 
 module "test_alias" {
-  for_each         = local.lambda_map
+  for_each         = { for k, v in local.lambda_map : k => v if v.enable_alias }
   source           = "terraform-aws-modules/lambda/aws//modules/alias"
   version          = "~> 6.0.0"
   refresh_alias    = false
@@ -315,7 +317,7 @@ resource "aws_cloudwatch_event_target" "lambda" {
   for_each  = { for k, v in local.lambda_map : k => v if v.keep_warm == true }
   target_id = each.value.identifier
   rule      = aws_cloudwatch_event_rule.cron[each.key].name
-  arn       = module.stage_alias[each.key].lambda_alias_arn
+  arn       = each.value.enable_alias ? module.stage_alias[each.key].lambda_alias_arn : module.lambda[each.key].lambda_function_arn
 
   input_transformer {
     input_paths = {
@@ -342,7 +344,7 @@ resource "aws_lambda_permission" "cloudwatch" {
   function_name = module.lambda[each.key].lambda_function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.cron[each.key].arn
-  qualifier     = module.stage_alias[each.key].lambda_alias_name
+  qualifier     = each.value.enable_alias ? module.stage_alias[each.key].lambda_alias_name : null
 }
 
 locals {
@@ -365,7 +367,7 @@ resource "aws_cloudwatch_event_target" "event_rule_target" {
   for_each  = local.cloudwatch_events_map
   target_id = each.value.rule_name
   rule      = aws_cloudwatch_event_rule.event_rule[each.key].name
-  arn       = module.stage_alias[split("|", each.key)[0]].lambda_alias_arn
+  arn       = local.lambda_map[split("|", each.key)[0]].enable_alias ? module.stage_alias[split("|", each.key)[0]].lambda_alias_arn : module.lambda[split("|", each.key)[0]].lambda_function_arn
 
   input_transformer {
     input_paths = {
@@ -391,7 +393,7 @@ resource "aws_lambda_permission" "event_permission" {
   function_name = module.lambda[split("|", each.key)[0]].lambda_function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.event_rule[each.key].arn
-  qualifier     = module.stage_alias[split("|", each.key)[0]].lambda_alias_name
+  qualifier     = local.lambda_map[split("|", each.key)[0]].enable_alias ? module.stage_alias[split("|", each.key)[0]].lambda_alias_name : null
 }
 
 locals {
@@ -410,7 +412,7 @@ data "aws_dynamodb_table" "table" {
 resource "aws_lambda_event_source_mapping" "map_events" {
   for_each                       = local.dynamodb_map
   event_source_arn               = data.aws_dynamodb_table.table[each.key].stream_arn
-  function_name                  = module.stage_alias[split("|", each.key)[0]].lambda_alias_arn
+  function_name                  = local.lambda_map[split("|", each.key)[0]].enable_alias ? module.stage_alias[split("|", each.key)[0]].lambda_alias_arn : module.lambda[split("|", each.key)[0]].lambda_function_arn
   enabled                        = coalesce(each.value.enabled, true)
   batch_size                     = coalesce(each.value.batch_size, 100)
   parallelization_factor         = coalesce(each.value.parallelization_factor, 1)
@@ -423,7 +425,7 @@ resource "aws_lambda_event_source_mapping" "map_events" {
 resource "aws_lambda_function_event_invoke_config" "stage_invoke_config" {
   for_each                     = { for k, v in local.lambda_map : k => v if v.create_async_event_config == true }
   function_name                = module.lambda[each.key].lambda_function_name
-  qualifier                    = module.stage_alias[each.key].lambda_alias_name
+  qualifier                    = each.value.enable_alias ? module.stage_alias[each.key].lambda_alias_name : null
   maximum_event_age_in_seconds = each.value.maximum_event_age_in_seconds
   maximum_retry_attempts       = each.value.maximum_retry_attempts
 }
@@ -444,7 +446,7 @@ data "aws_sqs_queue" "queue" {
 resource "aws_lambda_event_source_mapping" "sqs_map_events" {
   for_each         = local.sqs_map
   event_source_arn = data.aws_sqs_queue.queue[each.key].arn
-  function_name    = module.stage_alias[split("|", each.key)[0]].lambda_alias_arn
+  function_name    = local.lambda_map[split("|", each.key)[0]].enable_alias ? module.stage_alias[split("|", each.key)[0]].lambda_alias_arn : module.lambda[split("|", each.key)[0]].lambda_function_arn
   enabled          = coalesce(each.value.enabled, true)
   # filter_criteria {
   #   filter {
@@ -462,7 +464,7 @@ resource "aws_lambda_event_source_mapping" "sqs_map_events" {
 resource "aws_lambda_function_event_invoke_config" "sqs_stage_invoke_config" {
   for_each                     = { for k, v in local.lambda_map : k => v if v.create_async_event_config == true }
   function_name                = module.lambda[each.key].lambda_function_name
-  qualifier                    = module.stage_alias[each.key].lambda_alias_name
+  qualifier                    = each.value.enable_alias ? module.stage_alias[each.key].lambda_alias_name : null
   maximum_event_age_in_seconds = each.value.maximum_event_age_in_seconds
   maximum_retry_attempts       = each.value.maximum_retry_attempts
 }

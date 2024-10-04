@@ -1,11 +1,9 @@
 
 locals {
-  default_role = [
-    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/terraform",
-  ]
+  terraform_role = var.terraform_role == "" ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/terraform" : var.terraform_role
 
   default_settings = {
-    key_administrators = distinct(concat(["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"], local.default_role))
+    key_administrators = distinct(concat(["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"], [local.terraform_role]))
     key_users          = []
   }
 

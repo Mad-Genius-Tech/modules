@@ -6,8 +6,6 @@ locals {
     "memory_size"                       = 512
     "ephemeral_storage_size"            = 512
     "create_async_event_config"         = false
-    "keep_warm"                         = false
-    "keep_warm_expression"              = "rate(60 minutes)"
     "maximum_retry_attempts"            = 2
     "maximum_event_age_in_seconds"      = 21600
     "architectures"                     = ["x86_64"]
@@ -19,6 +17,9 @@ locals {
     "ignore_source_code_hash"           = true
     "policies"                          = []
     "policy_statements"                 = {}
+    "keep_warm"                         = false
+    "keep_warm_expression"              = "rate(60 minutes)"
+    "sqs"                               = {}
     "secret_vars"                       = {}
     "cloudwatch_events"                 = {}
     "create_lambda_function_url"        = false
@@ -27,7 +28,6 @@ locals {
       "source_arn" = ""
     }
     "scaling_config" = [{}]
-    "sqs"            = {}
     "cors" = {
       allow_origins     = null
       allow_methods     = null
@@ -60,8 +60,6 @@ locals {
       "handler"                           = coalesce(lookup(v, "handler", null), local.merged_default_settings.handler)
       "runtime"                           = coalesce(lookup(v, "runtime", null), local.merged_default_settings.runtime)
       "timeout"                           = coalesce(lookup(v, "timeout", null), local.merged_default_settings.timeout)
-      "keep_warm"                         = coalesce(lookup(v, "keep_warm", null), local.merged_default_settings.keep_warm)
-      "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
       "memory_size"                       = coalesce(lookup(v, "memory_size", null), local.merged_default_settings.memory_size)
       "ephemeral_storage_size"            = coalesce(lookup(v, "ephemeral_storage_size", null), local.merged_default_settings.ephemeral_storage_size)
       "create_async_event_config"         = coalesce(lookup(v, "create_async_event_config", null), local.merged_default_settings.create_async_event_config)
@@ -71,8 +69,11 @@ locals {
       "policy_statements"                 = merge(coalesce(lookup(v, "policy_statements", null), local.merged_default_settings.policy_statements), local.merged_default_settings.policy_statements)
       "policies"                          = distinct(compact(concat(coalesce(lookup(v, "policies", null), local.merged_default_settings.policies), local.merged_default_settings.policies)))
       "architectures"                     = coalesce(lookup(v, "architectures", null), local.merged_default_settings.architectures)
+      "keep_warm"                         = coalesce(lookup(v, "keep_warm", null), local.merged_default_settings.keep_warm)
+      "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
       "cloudwatch_logs_retention_in_days" = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
       "stage_name"                        = coalesce(lookup(v, "stage_name", null), var.stage_name)
+      "sqs"                               = coalesce(lookup(v, "sqs", null), local.merged_default_settings.sqs)
       "secret_vars"                       = coalesce(lookup(v, "secret_vars", null), local.merged_default_settings.secret_vars)
       "cloudwatch_events"                 = coalesce(lookup(v, "cloudwatch_events", null), local.merged_default_settings.cloudwatch_events)
       "layers"                            = distinct(compact(concat(coalesce(lookup(v, "layers", null), local.merged_default_settings.layers), local.merged_default_settings.layers)))
@@ -80,7 +81,6 @@ locals {
       "provisioned_concurrent_executions" = coalesce(lookup(v, "provisioned_concurrent_executions", null), local.merged_default_settings.provisioned_concurrent_executions)
       "create_lambda_function_url"        = coalesce(lookup(v, "create_lambda_function_url", null), local.merged_default_settings.create_lambda_function_url)
       "cors"                              = coalesce(lookup(v, "cors", null), local.merged_default_settings.cors)
-      "sqs"                               = coalesce(lookup(v, "sqs", null), local.merged_default_settings.sqs)
       "local_existing_package"            = try(coalesce(lookup(v, "local_existing_package", ""), local.merged_default_settings.local_existing_package), local.merged_default_settings.local_existing_package)
       "lambda_permissions"                = coalesce(lookup(v, "lambda_permissions", null), local.merged_default_settings.lambda_permissions)
       "eventbridge_rules"                 = coalesce(lookup(v, "eventbridge_rules", null), local.merged_default_settings.eventbridge_rules)

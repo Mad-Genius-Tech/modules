@@ -15,6 +15,7 @@ variable "lambda" {
     handler                                     = optional(string)
     runtime                                     = optional(string)
     timeout                                     = optional(number)
+    enable_alias                                = optional(bool)
     enable_monitoring                           = optional(bool)
     memory_size                                 = optional(number)
     ephemeral_storage_size                      = optional(number)

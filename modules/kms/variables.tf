@@ -10,3 +10,8 @@ variable "terragrunt_directory" {
   type    = string
   default = ""
 }
+
+variable "terraform_role" {
+  type    = string
+  default = ""
+}
