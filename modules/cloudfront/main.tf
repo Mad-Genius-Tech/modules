@@ -185,8 +185,8 @@ module "cloudfront" {
 
     cache_policy_id            = each.value.default_cache_policy != "" ? data.aws_cloudfront_cache_policy.default_cache_policy[each.key].id : try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
     use_forwarded_values       = false
-    origin_request_policy_id   = each.value.default_origin_request_policy != "" ? data.aws_cloudfront_origin_request_policy.default_request_policy[each.key].id : (length(try(coalesce(each.value.origin_request_policy, ""), "")) > 0 ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null)
-    response_headers_policy_id = each.value.default_response_headers_policy != "" ? data.aws_cloudfront_response_headers_policy.default_response_policy[each.key].id : (length(try(coalesce(each.value.response_headers_policy, ""), "")) > 0 ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null)
+    origin_request_policy_id   = each.value.default_origin_request_policy != "" ? data.aws_cloudfront_origin_request_policy.default_request_policy[each.key].id : (each.value.origin_request_policy != "" ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null)
+    response_headers_policy_id = each.value.default_response_headers_policy != "" ? data.aws_cloudfront_response_headers_policy.default_response_policy[each.key].id : (each.value.response_headers_policy != "" ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null)
 
     function_association = each.value.viewer_request_function_code != "" ? {
       # Valid keys: viewer-request, viewer-response
@@ -221,12 +221,12 @@ data "aws_cloudfront_cache_policy" "customized_cache_policy" {
 }
 
 data "aws_cloudfront_origin_request_policy" "request_policy" {
-  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.origin_request_policy, ""), "")) > 0 }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.origin_request_policy != "" }
   name     = each.value.origin_request_policy
 }
 
 data "aws_cloudfront_response_headers_policy" "response_policy" {
-  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.response_headers_policy, ""), "")) > 0 }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.response_headers_policy != "" }
   name     = each.value.response_headers_policy
 }
 
@@ -236,12 +236,12 @@ data "aws_cloudfront_cache_policy" "default_cache_policy" {
 }
 
 data "aws_cloudfront_origin_request_policy" "default_request_policy" {
-  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.default_origin_request_policy, ""), "")) > 0 }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.default_origin_request_policy != "" }
   name     = each.value.default_origin_request_policy
 }
 
 data "aws_cloudfront_response_headers_policy" "default_response_policy" {
-  for_each = { for k, v in local.cloudfront_map : k => v if length(try(coalesce(v.default_response_headers_policy, ""), "")) > 0 }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.default_response_headers_policy != "" }
   name     = each.value.default_response_headers_policy
 }
 

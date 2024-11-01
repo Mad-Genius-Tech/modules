@@ -1,10 +1,11 @@
+data "aws_region" "current" {}
 
 locals {
   default_settings = {
     base_path_template  = ""
     gcm_channel_api_key = null
     email_from_address  = null
-
+    ses_region          = data.aws_region.current.name
   }
 
   env_default_settings = {
@@ -20,20 +21,11 @@ locals {
       "identifier"          = "${module.context.id}-${k}"
       "gcm_channel_api_key" = try(coalesce(lookup(v, "gcm_channel_api_key", null), local.merged_default_settings.gcm_channel_api_key), local.merged_default_settings.gcm_channel_api_key)
       "email_from_address"  = try(coalesce(lookup(v, "email_from_address", null), local.merged_default_settings.email_from_address), local.merged_default_settings.email_from_address)
+      "ses_region"          = try(coalesce(lookup(v, "ses_region", null), local.merged_default_settings.ses_region), local.merged_default_settings.ses_region)
       "base_path_template"  = try(coalesce(lookup(v, "base_path_template", null), local.merged_default_settings.base_path_template), local.merged_default_settings.base_path_template)
 
     } if coalesce(lookup(v, "create", null), true)
   }
-}
-
-variable "pinpoint" {
-  type = map(object({
-    create              = optional(bool)
-    gcm_channel_api_key = optional(string)
-    email_from_address  = optional(string)
-    base_path_template  = optional(string)
-  }))
-  default = {}
 }
 
 resource "aws_pinpoint_app" "app" {
@@ -49,15 +41,26 @@ resource "aws_pinpoint_gcm_channel" "gcm" {
 }
 
 data "aws_ses_email_identity" "ses_identity" {
-  for_each = { for k, v in local.pinpoint_map : k => v if v.email_from_address != null }
+  for_each = { for k, v in local.pinpoint_map : k => v if v.email_from_address != null && v.ses_region != "us-east-1" }
   email    = each.value.email_from_address
+}
+
+data "aws_ses_email_identity" "ses_identity_default" {
+  for_each = { for k, v in local.pinpoint_map : k => v if v.email_from_address != null && v.ses_region == "us-east-1" }
+  email    = each.value.email_from_address
+  provider = aws.us-east-1
+}
+
+provider "aws" {
+  alias  = "us-east-1"
+  region = "us-east-1"
 }
 
 resource "aws_pinpoint_email_channel" "email" {
   for_each       = { for k, v in local.pinpoint_map : k => v if v.email_from_address != null }
   application_id = aws_pinpoint_app.app[each.key].application_id
   from_address   = each.value.email_from_address
-  identity       = data.aws_ses_email_identity.ses_identity[each.key].arn
+  identity       = each.value.ses_region != "us-east-1" ? data.aws_ses_email_identity.ses_identity[each.key].arn : data.aws_ses_email_identity.ses_identity_default[each.key].arn
 }
 
 

@@ -60,7 +60,7 @@ module "server" {
   handler                           = "index.handler"
   runtime                           = var.opennext_version == "v2" ? "nodejs18.x" : "nodejs20.x"
   memory_size                       = local.merged_settings.server_memory_size
-  timeout                           = 30
+  timeout                           = 60
   cloudwatch_logs_retention_in_days = local.merged_settings.server_cloudwatch_log_retention_in_days
   reserved_concurrent_executions    = local.merged_settings.server_reserved_concurrent_executions
   architectures                     = ["x86_64"]
