@@ -32,7 +32,10 @@ locals {
     domain_name                            = ""
     health_check_start_period              = null
     health_check_grace_period_seconds      = null
-    environment = [{}]
+    environment = [{
+      name  = "ECS_CLUSTER_NAME"
+      value = local.cluster_name
+    }]
     secrets = []
     repository_credentials = {
       credentialsParameter = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.org_name}-${var.stage_name}/github_token"
