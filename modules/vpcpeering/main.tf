@@ -3,19 +3,20 @@ resource "aws_vpc_peering_connection" "requester" {
   vpc_id      = var.requester_vpc_id
   peer_vpc_id = var.accepter_vpc_id
   auto_accept = false
-  requester {
-    allow_remote_vpc_dns_resolution = var.requester_allow_remote_vpc_dns_resolution
-  }
-  accepter {
-    allow_remote_vpc_dns_resolution = var.accepter_allow_remote_vpc_dns_resolution
-  }
   tags = merge({ Side = "Requester" }, local.tags)
   lifecycle {
     ignore_changes = [
       auto_accept,
-      accepter[0].allow_remote_vpc_dns_resolution,
       tags
     ]
+  }
+}
+
+resource "aws_vpc_peering_connection_options" "requester" {
+  count       = var.create && length(var.requester_cidr_blocks) == 0 ? 1 : 0
+  vpc_peering_connection_id = join("", aws_vpc_peering_connection.requester[*].id)
+  requester {
+    allow_remote_vpc_dns_resolution = var.requester_allow_remote_vpc_dns_resolution
   }
 }
 
@@ -28,9 +29,6 @@ resource "aws_vpc_peering_connection_accepter" "accepter" {
   count                     = var.create && length(var.accepter_cidr_blocks) == 0 ? 1 : 0
   vpc_peering_connection_id = join("", data.aws_vpc_peering_connection.vpc_peering_connection[*].id)
   auto_accept               = true
-  accepter {
-    allow_remote_vpc_dns_resolution = var.accepter_allow_remote_vpc_dns_resolution
-  }
   tags = merge({ Side = "Accepter" }, local.tags)
   lifecycle {
     ignore_changes = [
@@ -38,6 +36,15 @@ resource "aws_vpc_peering_connection_accepter" "accepter" {
       tags
     ]
   }
+}
+
+resource "aws_vpc_peering_connection_options" "accepter" {
+  count                     = var.create && length(var.accepter_cidr_blocks) == 0 ? 1 : 0
+  vpc_peering_connection_id = join("", data.aws_vpc_peering_connection.vpc_peering_connection[*].id)
+  accepter {
+    allow_remote_vpc_dns_resolution = var.accepter_allow_remote_vpc_dns_resolution
+  }
+  depends_on = [aws_vpc_peering_connection_accepter.accepter]
 }
 
 data "aws_vpc" "requester" {
@@ -82,6 +89,11 @@ data "aws_subnet" "accepter" {
   id       = each.value
 }
 
+locals {
+  requester_cidr_blocks = var.create ? (length(var.requester_cidr_blocks) == 0 ? [for s in data.aws_subnet.requester : s.cidr_block] : var.requester_cidr_blocks) : []
+  accepter_cidr_blocks  = var.create ? (length(var.accepter_cidr_blocks) == 0 ? [for s in data.aws_subnet.accepter : s.cidr_block] : var.accepter_cidr_blocks) : []
+}
+
 data "aws_route_table" "requester" {
   count  = var.create && length(var.requester_cidr_blocks) == 0 ? 1 : 0
   vpc_id = var.requester_vpc_id
@@ -98,11 +110,6 @@ data "aws_route_table" "accepter" {
     name   = "tag:Name"
     values = ["*-private"]
   }
-}
-
-locals {
-  requester_cidr_blocks = var.create ? (length(var.requester_cidr_blocks) == 0 ? [for s in data.aws_subnet.requester : s.cidr_block] : var.requester_cidr_blocks) : []
-  accepter_cidr_blocks  = var.create ? (length(var.accepter_cidr_blocks) == 0 ? [for s in data.aws_subnet.accepter : s.cidr_block] : var.accepter_cidr_blocks) : []
 }
 
 resource "aws_route" "requester" {
