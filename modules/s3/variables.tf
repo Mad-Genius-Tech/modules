@@ -49,6 +49,7 @@ variable "s3_buckets" {
     restrict_public_buckets  = optional(bool)
     control_object_ownership = optional(bool)
     object_ownership         = optional(string)
+    acceleration_status      = optional(string)
     cors_rule = optional(list(object({
       allowed_headers = optional(list(string))
       allowed_methods = optional(list(string))

@@ -5,6 +5,7 @@ locals {
     attach_public_read_policy = false
     policy                    = null
     attach_public_policy      = false
+    acceleration_status       = null
     versioning = {
       status = "Enabled"
     }
@@ -84,6 +85,7 @@ locals {
       "identifier"                           = "${module.context.id}-${k}"
       "create"                               = coalesce(lookup(v, "create", null), true)
       "acl"                                  = try(coalesce(lookup(v, "acl", null), local.merged_default_settings.acl), local.merged_default_settings.acl)
+      "acceleration_status"                  = try(coalesce(lookup(v, "acceleration_status", null), local.merged_default_settings.acceleration_status), local.merged_default_settings.acceleration_status)
       "attach_policy"                        = try(coalesce(lookup(v, "attach_policy", null), lookup(v, "attach_public_read_policy", local.default_settings.attach_public_read_policy)), false) ? true : coalesce(lookup(v, "attach_policy", null), local.default_settings.attach_policy)
       "attach_public_read_policy"            = coalesce(lookup(v, "attach_public_read_policy", null), local.default_settings.attach_public_read_policy)
       "attach_public_policy"                 = coalesce(lookup(v, "attach_public_policy", null), local.default_settings.attach_public_policy)
@@ -168,6 +170,7 @@ module "s3_bucket" {
   create_bucket                        = each.value.create
   bucket                               = each.key
   acl                                  = each.value.acl
+  acceleration_status                  = each.value.acceleration_status
   attach_policy                        = each.value.attach_policy
   policy                               = each.value.attach_public_read_policy ? data.aws_iam_policy_document.public_read[each.key].json : each.value.policy
   attach_public_policy                 = each.value.attach_public_policy
