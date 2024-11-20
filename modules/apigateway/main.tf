@@ -83,7 +83,7 @@ resource "aws_api_gateway_integration" "root_path_integration" {
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   timeout_milliseconds    = each.value.timeout_milliseconds
-  uri                     = each.value.enable_lambda_alias ? "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${data.aws_lambda_function.lambda_function[each.key].arn}:$${stageVariables.lambdaAliasName}/invocations" : data.aws_lambda_function.lambda_function[each.key].invoke_arn
+  uri                     = each.value.enable_lambda_alias ? "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${data.aws_lambda_function.lambda_function[each.key].arn}:$${stageVariables.lambdaAliasName}/invocations" : "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${data.aws_lambda_function.lambda_function[each.key].arn}/invocations"
 }
 
 resource "aws_api_gateway_resource" "any_path_slashed" {
@@ -470,5 +470,5 @@ resource "aws_api_gateway_base_path_mapping" "domain_name_mapping" {
   for_each    = { for k, v in local.domain_names : k => v if v.create_domain_name }
   domain_name = aws_api_gateway_domain_name.domain_name[each.key].id
   api_id      = aws_api_gateway_rest_api.rest_api[split("|", each.key)[0]].id
-  stage_name  = local.apigateway_map[split("|", each.key)[0]].enable_stage ? aws_api_gateway_stage.stage[split("|", each.key)[0]].stage_name : null
+  stage_name  = aws_api_gateway_stage.stage[split("|", each.key)[0]].stage_name
 }
