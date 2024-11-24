@@ -11,6 +11,7 @@ variable "apigateway" {
     })))
     enable_stage                = optional(bool)
     enable_lambda_alias         = optional(bool)
+    enable_api_key              = optional(bool)
     xray_tracing_enabled        = optional(bool)
     lambda_function             = string
     create_log_group            = optional(bool)

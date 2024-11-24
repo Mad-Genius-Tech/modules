@@ -21,3 +21,8 @@ output "regional_domain_name" {
 output "global_domain_name" {
   value = { for k, v in aws_api_gateway_domain_name.domain_name : k => v.cloudfront_domain_name }
 }
+
+output "api_key" {
+  value     = { for k, v in aws_api_gateway_api_key.api_key : k => v.value }
+  sensitive = true 
+}

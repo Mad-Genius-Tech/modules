@@ -6,6 +6,7 @@ locals {
     "endpoint_type"               = ["REGIONAL"]
     "enable_lambda_alias"         = true
     "enable_stage"                = true
+    "enable_api_key"              = false
     "xray_tracing_enabled"        = false
     "create_log_group"            = false
     "apigw_exec_log_level"        = "OFF"
@@ -33,6 +34,7 @@ locals {
       "endpoint_type"               = coalesce(lookup(v, "endpoint_type", null), local.merged_default_settings.endpoint_type)
       "enable_lambda_alias"         = coalesce(lookup(v, "enable_lambda_alias", null), local.merged_default_settings.enable_lambda_alias)
       "enable_stage"                = coalesce(lookup(v, "enable_stage", null), local.merged_default_settings.enable_stage)
+      "enable_api_key"              = coalesce(lookup(v, "enable_api_key", null), local.merged_default_settings.enable_api_key)
       "domain_names"                = try(coalesce(lookup(v, "domain_names", null), local.merged_default_settings.domain_names), local.merged_default_settings.domain_names)
       "xray_tracing_enabled"        = coalesce(lookup(v, "xray_tracing_enabled", null), local.merged_default_settings.xray_tracing_enabled)
       "lambda_function"             = v.lambda_function
@@ -49,6 +51,35 @@ locals {
 
 data "aws_region" "current" {}
 
+resource "aws_api_gateway_api_key" "api_key" {
+  for_each    = { for k, v in local.apigateway_map : k => v if v.enable_api_key }
+  name        = "${each.value.identifier}-api-key"
+  enabled     = true
+  description = "API Key for ${upper(var.stage_name)} ${each.value.identifier}"
+  tags        = local.tags
+}
+
+resource "aws_api_gateway_usage_plan" "usage_plan" {
+  for_each = { for k, v in local.apigateway_map : k => v if v.enable_api_key }
+  name     = "${each.value.identifier}-internal-use"
+  api_stages {
+    api_id = aws_api_gateway_rest_api.rest_api[each.key].id
+    stage  = aws_api_gateway_stage.stage[each.key].stage_name
+  }
+
+  throttle_settings {
+    rate_limit  = 20
+    burst_limit = 10
+  }
+}
+
+resource "aws_api_gateway_usage_plan_key" "usage_plan_key" {
+  for_each      = { for k, v in local.apigateway_map : k => v if v.enable_api_key }
+  key_id        = aws_api_gateway_api_key.api_key[each.key].id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.usage_plan[each.key].id
+}
+
 resource "aws_api_gateway_rest_api" "rest_api" {
   for_each           = local.apigateway_map
   name               = each.value.identifier
@@ -63,11 +94,12 @@ resource "aws_api_gateway_rest_api" "rest_api" {
 }
 
 resource "aws_api_gateway_method" "root_path" {
-  for_each      = local.apigateway_map
-  rest_api_id   = aws_api_gateway_rest_api.rest_api[each.key].id
-  resource_id   = aws_api_gateway_rest_api.rest_api[each.key].root_resource_id
-  http_method   = "ANY"
-  authorization = "NONE"
+  for_each         = local.apigateway_map
+  rest_api_id      = aws_api_gateway_rest_api.rest_api[each.key].id
+  resource_id      = aws_api_gateway_rest_api.rest_api[each.key].root_resource_id
+  http_method      = "ANY"
+  authorization    = "NONE"
+  api_key_required = each.value.enable_api_key
 }
 
 data "aws_lambda_function" "lambda_function" {
@@ -94,11 +126,12 @@ resource "aws_api_gateway_resource" "any_path_slashed" {
 }
 
 resource "aws_api_gateway_method" "any_path_slashed" {
-  for_each      = local.apigateway_map
-  rest_api_id   = aws_api_gateway_rest_api.rest_api[each.key].id
-  resource_id   = aws_api_gateway_resource.any_path_slashed[each.key].id
-  http_method   = "ANY"
-  authorization = "NONE"
+  for_each         = local.apigateway_map
+  rest_api_id      = aws_api_gateway_rest_api.rest_api[each.key].id
+  resource_id      = aws_api_gateway_resource.any_path_slashed[each.key].id
+  http_method      = "ANY"
+  authorization    = "NONE"
+  api_key_required = each.value.enable_api_key
 }
 
 resource "aws_api_gateway_integration" "any_path_slashed_integration" {
@@ -130,6 +163,7 @@ resource "aws_api_gateway_deployment" "deployment" {
       aws_api_gateway_rest_api.rest_api[each.key].body,
       aws_api_gateway_method.any_path_slashed[each.key].id,
       aws_api_gateway_integration.any_path_slashed_integration[each.key].id,
+      aws_api_gateway_resource.any_path_slashed[each.key].id,
     ]))
   }
 
