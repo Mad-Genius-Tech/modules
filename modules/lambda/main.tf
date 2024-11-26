@@ -350,15 +350,20 @@ resource "aws_lambda_permission" "cloudwatch" {
 locals {
   cloudwatch_events_map = merge([
     for k, v in local.lambda_map : {
-      for k1, v1 in v.cloudwatch_events : "${k}|${k1}" => v1
+      for k1, v1 in v.cloudwatch_events : "${k}|${k1}" => merge(
+        v1, {
+          "lambda_name"       = v.identifier
+          "default_rule_name" = "${substr(sha1(v.identifier), 0, 64 - length(coalesce(v1.function_name, "null")) - 1)}-${coalesce(v1.function_name, "null")}"
+        }
+      )
     } if length(v.cloudwatch_events) > 0
   ]...)
 }
 
 resource "aws_cloudwatch_event_rule" "event_rule" {
   for_each            = local.cloudwatch_events_map
-  name                = each.value.rule_name
-  description         = each.value.rule_name
+  name                = each.value.function_name == null ? each.value.rule_name : each.value.default_rule_name
+  description         = "${each.value.lambda_name}-${each.value.function_name == null ? each.value.rule_name : each.value.function_name}"
   schedule_expression = each.value.schedule_expression
   tags                = local.tags
 }

@@ -90,6 +90,7 @@ variable "lambda" {
     })))
     cloudwatch_events = optional(map(object({
       rule_name           = optional(string)
+      function_name       = optional(string)
       schedule_expression = optional(string)
     })))
   }))

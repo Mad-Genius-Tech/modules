@@ -22,6 +22,11 @@ variable "ec2" {
     associate_public_ip_address = optional(bool)
     disable_api_stop            = optional(bool)
     disable_api_termination     = optional(bool)
+    enable_alb                  = optional(bool)
+    wildcard_domain             = optional(bool)
+    domain_name                 = optional(string)
+    listening_port              = optional(number)
+    health_check_path           = optional(string)
     create_iam_instance_profile = optional(bool)
     iam_role_policies           = optional(map(string))
     policy = optional(map(object({

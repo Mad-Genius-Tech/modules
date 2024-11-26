@@ -85,6 +85,24 @@ resource "aws_ec2_client_vpn_authorization_rule" "authorization_rule" {
   access_group_id        = var.access_group_id == "" ? null : var.access_group_id
 }
 
+data "aws_vpc" "vpc" {
+  id = var.vpc_id
+}
+
+# resource "aws_ec2_client_vpn_route" "saml" {
+#   count                  = var.create && var.authentication_type == "federated-authentication" ? 1 : 0
+#   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.saml[0].id
+#   destination_cidr_block = data.aws_vpc.vpc.cidr_block
+#   target_vpc_subnet_id   = aws_ec2_client_vpn_network_association.subnet_association[0].subnet_id
+# }
+
+# resource "aws_ec2_client_vpn_route" "mtls" {
+#   count                  = var.create && var.authentication_type == "certificate-authentication" ? 1 : 0
+#   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.mtls[0].id
+#   destination_cidr_block = data.aws_vpc.vpc.cidr_block
+#   target_vpc_subnet_id   = aws_ec2_client_vpn_network_association.subnet_association[0].subnet_id
+# }
+
 resource "aws_security_group" "sg" {
   count       = var.create ? 1 : 0
   name_prefix = local.service_name

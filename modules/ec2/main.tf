@@ -7,6 +7,10 @@ locals {
     associate_public_ip_address = false
     disable_api_stop            = false
     disable_api_termination     = false
+    enable_alb                  = false
+    wildcard_domain             = true
+    listening_port              = 8000
+    health_check_path           = "/"
     create_iam_instance_profile = true
     assign_eip                  = false
     iam_role_policies = {
@@ -65,6 +69,11 @@ locals {
       "associate_public_ip_address" = coalesce(lookup(v, "associate_public_ip_address", null), local.merged_default_settings.associate_public_ip_address)
       "disable_api_stop"            = coalesce(lookup(v, "disable_api_stop", null), local.merged_default_settings.disable_api_stop)
       "disable_api_termination"     = coalesce(lookup(v, "disable_api_termination", null), local.merged_default_settings.disable_api_termination)
+      "enable_alb"                  = coalesce(lookup(v, "enable_alb", null), local.merged_default_settings.enable_alb)
+      "wildcard_domain"             = coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain)
+      "domain_name"                 = v.domain_name
+      "listening_port"              = coalesce(lookup(v, "listening_port", null), local.merged_default_settings.listening_port)
+      "health_check_path"           = coalesce(lookup(v, "health_check_path", null), local.merged_default_settings.health_check_path)
       "create_iam_instance_profile" = coalesce(lookup(v, "create_iam_instance_profile", null), local.merged_default_settings.create_iam_instance_profile)
       "iam_role_policies"           = merge(coalesce(lookup(v, "iam_role_policies", null), local.merged_default_settings.iam_role_policies), local.merged_default_settings.iam_role_policies)
       "key_name"                    = try(coalesce(lookup(v, "key_name", null), local.merged_default_settings.key_name), local.merged_default_settings.key_name)
@@ -253,7 +262,6 @@ module "iam_policy" {
   tags          = local.tags
 }
 
-
 data "aws_ami" "amazon_linux" {
   for_each    = { for k, v in local.ec2_map : k => v if v.create && !v.use_amazon_linux_2 }
   most_recent = true
@@ -281,7 +289,6 @@ data "aws_ami" "ubuntu" {
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-*-server*"]
   }
 }
-
 
 data "aws_ami" "amazon_linux_2" {
   for_each    = { for k, v in local.ec2_map : k => v if v.create && v.use_amazon_linux_2 }
@@ -328,8 +335,6 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
   tags = local.tags
 }
 
-
-
 locals {
   alarms_map = merge([
     for k, v in local.ec2_map : {
@@ -362,5 +367,94 @@ resource "aws_cloudwatch_metric_alarm" "alarm" {
     var.sns_topic_arn,
     local.ec2_map[split("|", each.key)[0]].cloudwatch_alarm_action
   ])
+  tags = local.tags
+}
+
+data "aws_acm_certificate" "wildcard" {
+  for_each = { for k, v in local.ec2_map : k => v if v.enable_alb && v.wildcard_domain && v.domain_name != "" }
+  domain   = join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name))))
+  statuses = ["ISSUED"]
+}
+
+data "aws_acm_certificate" "non_wildcard" {
+  for_each = { for k, v in local.ec2_map : k => v if v.enable_alb && !v.wildcard_domain && v.domain_name != "" }
+  domain   = each.value.domain_name
+  statuses = ["ISSUED"]
+}
+
+module "alb" {
+  for_each = {for k,v in local.ec2_map : k => v if v.create && v.enable_alb}
+  source   = "terraform-aws-modules/alb/aws"
+  version  = "~> 9.12.0"
+  create   = each.value.enable_alb && length(var.public_subnets) > 0
+  name     = each.value.identifier
+  vpc_id   = var.vpc_id
+  subnets  = var.public_subnets
+
+  security_group_ingress_rules = {
+    all_http = {
+      from_port   = 80
+      to_port     = 80
+      ip_protocol = "tcp"
+      description = "HTTP web traffic"
+      cidr_ipv4   = "0.0.0.0/0"
+    }
+    all_https = {
+      from_port   = 443
+      to_port     = 443
+      ip_protocol = "tcp"
+      description = "HTTPS web traffic"
+      cidr_ipv4   = "0.0.0.0/0"
+    }
+  }
+  security_group_egress_rules = {
+    all = {
+      ip_protocol = "-1"
+      cidr_ipv4   = "0.0.0.0/0"
+    }
+  }
+
+  listeners = {
+    http-https-redirect = {
+      port     = 80
+      protocol = "HTTP"
+      redirect = {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+    https = {
+      port            = 443
+      protocol        = "HTTPS"
+      certificate_arn = each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn
+
+      forward = {
+        target_group_key = each.value.identifier
+      }
+    }
+  }
+
+  target_groups = {
+    "${each.value.identifier}" = {
+      name_prefix = var.stage_name
+      protocol    = "HTTP"
+      port        = each.value.listening_port
+      target_type = "instance"
+      target_id   = module.ec2[each.key].id
+
+      health_check = {
+        enabled             = true
+        interval            = 30
+        path                = each.value.health_check_path
+        port                = "traffic-port"
+        healthy_threshold   = 3
+        unhealthy_threshold = 3
+        timeout             = 6
+        protocol            = "HTTP"
+        matcher             = "200-399"
+      }
+    }
+  }
   tags = local.tags
 }

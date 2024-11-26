@@ -1,33 +1,13 @@
-
-variable "create" {
-  type    = bool
-  default = true
-}
-
-variable "requester_vpc_id" {
-  type = string
-}
-
-variable "accepter_vpc_id" {
-  type = string
-}
-
-variable "accepter_allow_remote_vpc_dns_resolution" {
-  type    = bool
-  default = true
-}
-
-variable "requester_allow_remote_vpc_dns_resolution" {
-  type    = bool
-  default = true
-}
-
-variable "requester_cidr_blocks" {
-  type    = list(string)
-  default = []
-}
-
-variable "accepter_cidr_blocks" {
-  type    = list(string)
-  default = []
+variable "vpc_peering" {
+  type = map(object({
+    create                                    = optional(bool)
+    requester_vpc_id                          = string
+    accepter_vpc_id                           = string
+    accepter_owner_id                         = optional(string)
+    accepter_region                           = optional(string)
+    accepter_allow_remote_vpc_dns_resolution  = optional(bool)
+    requester_allow_remote_vpc_dns_resolution = optional(bool)
+    requester_cidr_blocks                     = optional(list(string))
+    accepter_cidr_blocks                      = optional(list(string))
+  }))
 }
