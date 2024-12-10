@@ -1,18 +1,22 @@
 
 locals {
   default_settings = {
-    instance_type               = "t3a.nano"
-    architecture                = "amd64"
-    ignore_ami_changes          = true
-    associate_public_ip_address = false
-    disable_api_stop            = false
-    disable_api_termination     = false
-    enable_alb                  = false
-    wildcard_domain             = true
-    listening_port              = 8000
-    health_check_path           = "/"
-    create_iam_instance_profile = true
-    assign_eip                  = false
+    instance_type                    = "t3a.nano"
+    architecture                     = "amd64"
+    ignore_ami_changes               = true
+    associate_public_ip_address      = false
+    disable_api_stop                 = false
+    disable_api_termination          = false
+    enable_alb                       = false
+    wildcard_domain                  = true
+    listening_port                   = 8000
+    health_check_path                = "/"
+    health_check_interval            = 30
+    health_check_timeout             = 6
+    health_check_healthy_threshold   = 3
+    health_check_unhealthy_threshold = 3
+    create_iam_instance_profile      = true
+    assign_eip                       = false
     iam_role_policies = {
       "AmazonEC2RoleforSSM"         = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
       "CloudWatchAgentServerPolicy" = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
@@ -60,35 +64,39 @@ locals {
 
   ec2_map = {
     for k, v in var.ec2 : k => {
-      "identifier"                  = "${module.context.id}-${k}"
-      "create"                      = coalesce(lookup(v, "create", null), true)
-      "instance_type"               = coalesce(lookup(v, "instance_type", null), local.merged_default_settings.instance_type)
-      "architecture"                = coalesce(lookup(v, "architecture", null), local.merged_default_settings.architecture)
-      "ignore_ami_changes"          = coalesce(lookup(v, "ignore_ami_changes", null), local.merged_default_settings.ignore_ami_changes)
-      "subnet_id"                   = try(coalesce(lookup(v, "subnet_id", null), local.merged_default_settings.subnet_id), local.merged_default_settings.subnet_id)
-      "associate_public_ip_address" = coalesce(lookup(v, "associate_public_ip_address", null), local.merged_default_settings.associate_public_ip_address)
-      "disable_api_stop"            = coalesce(lookup(v, "disable_api_stop", null), local.merged_default_settings.disable_api_stop)
-      "disable_api_termination"     = coalesce(lookup(v, "disable_api_termination", null), local.merged_default_settings.disable_api_termination)
-      "enable_alb"                  = coalesce(lookup(v, "enable_alb", null), local.merged_default_settings.enable_alb)
-      "wildcard_domain"             = coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain)
-      "domain_name"                 = v.domain_name
-      "listening_port"              = coalesce(lookup(v, "listening_port", null), local.merged_default_settings.listening_port)
-      "health_check_path"           = coalesce(lookup(v, "health_check_path", null), local.merged_default_settings.health_check_path)
-      "create_iam_instance_profile" = coalesce(lookup(v, "create_iam_instance_profile", null), local.merged_default_settings.create_iam_instance_profile)
-      "iam_role_policies"           = merge(coalesce(lookup(v, "iam_role_policies", null), local.merged_default_settings.iam_role_policies), local.merged_default_settings.iam_role_policies)
-      "key_name"                    = try(coalesce(lookup(v, "key_name", null), local.merged_default_settings.key_name), local.merged_default_settings.key_name)
-      "ingress_cidr_blocks"         = distinct(compact(concat(coalesce(lookup(v, "ingress_cidr_blocks", null), local.merged_default_settings.ingress_cidr_blocks), local.merged_default_settings.ingress_cidr_blocks)))
-      "ingress_rules"               = distinct(compact(concat(coalesce(lookup(v, "ingress_rules", null), local.merged_default_settings.ingress_rules), local.merged_default_settings.ingress_rules)))
-      "assign_eip"                  = coalesce(lookup(v, "assign_eip", null), local.merged_default_settings.assign_eip)
-      "cpu_credits"                 = coalesce(lookup(v, "cpu_credits", null), local.merged_default_settings.cpu_credits)
-      "aws_cloudwatch_auto_reboot"  = coalesce(lookup(v, "aws_cloudwatch_auto_reboot", null), local.merged_default_settings.aws_cloudwatch_auto_reboot)
-      "use_ubuntu"                  = coalesce(lookup(v, "use_ubuntu", null), local.merged_default_settings.use_ubuntu)
-      "use_amazon_linux_2"          = coalesce(lookup(v, "use_amazon_linux_2", null), local.merged_default_settings.use_amazon_linux_2)
-      "cloudwatch_alarm_action"     = try(coalesce(lookup(v, "cloudwatch_alarm_action", null), local.merged_default_settings.cloudwatch_alarm_action), local.merged_default_settings.cloudwatch_alarm_action)
-      "monitoring"                  = coalesce(lookup(v, "monitoring", null), local.merged_default_settings.monitoring)
-      "ingress_with_cidr_blocks"    = coalesce(lookup(v, "ingress_with_cidr_blocks", null), local.merged_default_settings.ingress_with_cidr_blocks)
-      "policy"                      = coalesce(lookup(v, "policy", null), local.merged_default_settings.policy)
-      "enable_cloudwatch_alarm"     = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
+      "identifier"                       = "${module.context.id}-${k}"
+      "create"                           = coalesce(lookup(v, "create", null), true)
+      "instance_type"                    = coalesce(lookup(v, "instance_type", null), local.merged_default_settings.instance_type)
+      "architecture"                     = coalesce(lookup(v, "architecture", null), local.merged_default_settings.architecture)
+      "ignore_ami_changes"               = coalesce(lookup(v, "ignore_ami_changes", null), local.merged_default_settings.ignore_ami_changes)
+      "subnet_id"                        = try(coalesce(lookup(v, "subnet_id", null), local.merged_default_settings.subnet_id), local.merged_default_settings.subnet_id)
+      "associate_public_ip_address"      = coalesce(lookup(v, "associate_public_ip_address", null), local.merged_default_settings.associate_public_ip_address)
+      "disable_api_stop"                 = coalesce(lookup(v, "disable_api_stop", null), local.merged_default_settings.disable_api_stop)
+      "disable_api_termination"          = coalesce(lookup(v, "disable_api_termination", null), local.merged_default_settings.disable_api_termination)
+      "enable_alb"                       = coalesce(lookup(v, "enable_alb", null), local.merged_default_settings.enable_alb)
+      "wildcard_domain"                  = coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain)
+      "domain_name"                      = v.domain_name
+      "listening_port"                   = coalesce(lookup(v, "listening_port", null), local.merged_default_settings.listening_port)
+      "health_check_path"                = coalesce(lookup(v, "health_check_path", null), local.merged_default_settings.health_check_path)
+      "health_check_interval"            = coalesce(lookup(v, "health_check_interval", null), local.merged_default_settings.health_check_interval)
+      "health_check_healthy_threshold"   = coalesce(lookup(v, "health_check_healthy_threshold", null), local.merged_default_settings.health_check_healthy_threshold)
+      "health_check_unhealthy_threshold" = coalesce(lookup(v, "health_check_unhealthy_threshold", null), local.merged_default_settings.health_check_unhealthy_threshold)
+      "health_check_timeout"             = coalesce(lookup(v, "health_check_timeout", null), local.merged_default_settings.health_check_timeout)
+      "create_iam_instance_profile"      = coalesce(lookup(v, "create_iam_instance_profile", null), local.merged_default_settings.create_iam_instance_profile)
+      "iam_role_policies"                = merge(coalesce(lookup(v, "iam_role_policies", null), local.merged_default_settings.iam_role_policies), local.merged_default_settings.iam_role_policies)
+      "key_name"                         = try(coalesce(lookup(v, "key_name", null), local.merged_default_settings.key_name), local.merged_default_settings.key_name)
+      "ingress_cidr_blocks"              = distinct(compact(concat(coalesce(lookup(v, "ingress_cidr_blocks", null), local.merged_default_settings.ingress_cidr_blocks), local.merged_default_settings.ingress_cidr_blocks)))
+      "ingress_rules"                    = distinct(compact(concat(coalesce(lookup(v, "ingress_rules", null), local.merged_default_settings.ingress_rules), local.merged_default_settings.ingress_rules)))
+      "assign_eip"                       = coalesce(lookup(v, "assign_eip", null), local.merged_default_settings.assign_eip)
+      "cpu_credits"                      = coalesce(lookup(v, "cpu_credits", null), local.merged_default_settings.cpu_credits)
+      "aws_cloudwatch_auto_reboot"       = coalesce(lookup(v, "aws_cloudwatch_auto_reboot", null), local.merged_default_settings.aws_cloudwatch_auto_reboot)
+      "use_ubuntu"                       = coalesce(lookup(v, "use_ubuntu", null), local.merged_default_settings.use_ubuntu)
+      "use_amazon_linux_2"               = coalesce(lookup(v, "use_amazon_linux_2", null), local.merged_default_settings.use_amazon_linux_2)
+      "cloudwatch_alarm_action"          = try(coalesce(lookup(v, "cloudwatch_alarm_action", null), local.merged_default_settings.cloudwatch_alarm_action), local.merged_default_settings.cloudwatch_alarm_action)
+      "monitoring"                       = coalesce(lookup(v, "monitoring", null), local.merged_default_settings.monitoring)
+      "ingress_with_cidr_blocks"         = coalesce(lookup(v, "ingress_with_cidr_blocks", null), local.merged_default_settings.ingress_with_cidr_blocks)
+      "policy"                           = coalesce(lookup(v, "policy", null), local.merged_default_settings.policy)
+      "enable_cloudwatch_alarm"          = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
       "alarms" = {
         for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
           "enabled"                 = v1.enabled
@@ -138,6 +146,12 @@ module "ec2" {
   disable_api_termination     = each.value.disable_api_termination
   create_iam_instance_profile = each.value.create_iam_instance_profile
   iam_role_description        = "IAM role for EC2 ${each.value.identifier}"
+  metadata_options = {
+    "http_endpoint"               = "enabled"
+    "http_put_response_hop_limit" = 1
+    "http_tokens"                 = "optional"
+    "instance_metadata_tags"      = "enabled"
+  }
   iam_role_policies = merge(
     {
       for k, v in local.ec2_policy : k => module.iam_policy[k].arn if startswith(k, "${each.key}|")
@@ -383,7 +397,7 @@ data "aws_acm_certificate" "non_wildcard" {
 }
 
 module "alb" {
-  for_each = {for k,v in local.ec2_map : k => v if v.create && v.enable_alb}
+  for_each = { for k, v in local.ec2_map : k => v if v.create && v.enable_alb }
   source   = "terraform-aws-modules/alb/aws"
   version  = "~> 9.12.0"
   create   = each.value.enable_alb && length(var.public_subnets) > 0
@@ -445,12 +459,12 @@ module "alb" {
 
       health_check = {
         enabled             = true
-        interval            = 30
+        interval            = each.value.health_check_interval
         path                = each.value.health_check_path
         port                = "traffic-port"
-        healthy_threshold   = 3
-        unhealthy_threshold = 3
-        timeout             = 6
+        healthy_threshold   = each.value.health_check_healthy_threshold
+        unhealthy_threshold = each.value.health_check_unhealthy_threshold
+        timeout             = each.value.health_check_timeout
         protocol            = "HTTP"
         matcher             = "200-399"
       }

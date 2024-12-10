@@ -232,6 +232,7 @@ resource "aws_cognito_user_pool" "user_pool" {
       from_email_address    = lookup(email_configuration.value, "from_email_address", null)
       source_arn            = lookup(email_configuration.value, "source_arn", null)
       email_sending_account = lookup(email_configuration.value, "email_sending_account", null)
+      configuration_set     = coalesce(lookup(email_configuration.value, "configuration_set", null), "default")
     }
   }
 
