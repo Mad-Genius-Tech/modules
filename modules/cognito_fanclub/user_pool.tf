@@ -342,6 +342,7 @@ resource "aws_cognito_identity_provider" "google" {
     "email"              = "email"
     "username"           = "sub"
     "custom:google_name" = "name"
+    "email_verified"     = "email_verified"
   }
 }
 

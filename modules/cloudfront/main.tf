@@ -107,12 +107,15 @@ resource "aws_cloudfront_function" "function" {
 
 
 module "s3_bucket" {
-  for_each      = local.cloudfront_map
-  source        = "terraform-aws-modules/s3-bucket/aws"
-  version       = "~> 3.15.1"
-  create_bucket = each.value.enable_logs ? true : false
-  bucket        = "${each.value.identifier}-logs"
-  tags          = local.tags
+  for_each                 = local.cloudfront_map
+  source                   = "terraform-aws-modules/s3-bucket/aws"
+  version                  = "~> 3.15.1"
+  create_bucket            = each.value.enable_logs ? true : false
+  bucket                   = "${each.value.identifier}-logs"
+  acl                      = "private"
+  control_object_ownership = true
+  object_ownership         = "ObjectWriter"
+  tags                     = local.tags
 }
 
 module "cloudfront" {
@@ -139,7 +142,7 @@ module "cloudfront" {
   } : {}
 
   logging_config = each.value.enable_logs ? {
-    bucket          = module.s3_bucket[each.key].s3_bucket_id
+    bucket          = module.s3_bucket[each.key].s3_bucket_bucket_domain_name
     include_cookies = true
   } : {}
 
