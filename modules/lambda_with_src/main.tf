@@ -19,6 +19,7 @@ locals {
     "policy_statements"                 = {}
     "keep_warm"                         = false
     "keep_warm_expression"              = "rate(60 minutes)"
+    "create_event_scheduler_role"       = false
     "sqs"                               = {}
     "secret_vars"                       = {}
     "cloudwatch_events"                 = {}
@@ -71,6 +72,7 @@ locals {
       "architectures"                     = coalesce(lookup(v, "architectures", null), local.merged_default_settings.architectures)
       "keep_warm"                         = coalesce(lookup(v, "keep_warm", null), local.merged_default_settings.keep_warm)
       "keep_warm_expression"              = coalesce(lookup(v, "keep_warm_expression", null), local.merged_default_settings.keep_warm_expression)
+      "create_event_scheduler_role"       = coalesce(lookup(v, "create_event_scheduler_role", null), local.merged_default_settings.create_event_scheduler_role)
       "cloudwatch_logs_retention_in_days" = coalesce(lookup(v, "cloudwatch_logs_retention_in_days", null), local.merged_default_settings.cloudwatch_logs_retention_in_days)
       "stage_name"                        = coalesce(lookup(v, "stage_name", null), var.stage_name)
       "sqs"                               = coalesce(lookup(v, "sqs", null), local.merged_default_settings.sqs)
@@ -204,6 +206,27 @@ resource "aws_lambda_permission" "cloudwatch" {
   source_arn    = aws_cloudwatch_event_rule.cron[each.key].arn
 }
 
+module "event_scheduler_role" {
+  for_each          = { for k, v in local.lambda_map : k => v if v.create_event_scheduler_role }
+  source            = "git::https://github.com/terraform-aws-modules/terraform-aws-iam//modules/iam-assumable-role?ref=v5.52.1"
+  create_role       = true
+  role_name         = "${each.value.identifier}-scheduler"
+  role_requires_mfa = false
+  trusted_role_actions = [
+    "sts:AssumeRole"
+  ]
+  trusted_role_services = [
+    "scheduler.amazonaws.com"
+  ]
+  inline_policy_statements = [
+    {
+      sid       = "LambdaInvoke"
+      actions   = ["lambda:InvokeFunction"]
+      effect    = "Allow"
+      resources = ["arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${module.lambda[each.key].lambda_function_name}"]
+    }
+  ]
+}
 
 locals {
   lambda_permission_map = merge([

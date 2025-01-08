@@ -7,3 +7,7 @@ output "lambda_info" {
     }
   }
 }
+
+# output "lambda_map" {
+#   value = local.lambda_map
+# }

@@ -120,7 +120,7 @@ module "s3_bucket" {
 
 module "cloudfront" {
   source                        = "terraform-aws-modules/cloudfront/aws"
-  version                       = "~> 3.4.0"
+  version                       = "~> 3.4.1"
   for_each                      = local.cloudfront_map
   aliases                       = each.value.aliases
   comment                       = each.value.s3_bucket != "" && each.value.origin_domain_name == "" ? "CloudFront for S3 bucket ${each.value.s3_bucket}" : (each.value.s3_bucket != "" && each.value.origin_domain_name != "" ? "CloudFront for domain ${each.value.domain_name}" : "CloudFront for domain ${each.value.origin_domain_name}")
@@ -162,6 +162,31 @@ module "cloudfront" {
       }
     } : {}
   )
+  # ordered_cache_behavior = [
+  #   for obj in each.value.ordered_cache_behavior : merge(
+  #     {
+  #       target_origin_id       = each.value.s3_bucket != "" && each.value.origin_domain_name == "" ? each.value.s3_bucket : each.value.origin_domain_name
+  #       viewer_protocol_policy = each.value.viewer_protocol_policy
+  #       allowed_methods        = each.value.default_allowed_http_methods
+  #       cached_methods         = contains(each.value.default_cache_behavior_allowed_methods, "OPTIONS") ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD"]
+  #       compress               = each.value.compress
+
+  #       trusted_signers    = coalesce(obj.presigned_url, each.value.default_presigned_url) ? [] : null
+  #       trusted_key_groups = coalesce(obj.presigned_url, each.value.default_presigned_url) ? [aws_cloudfront_key_group.cloudfront_key_group[each.key].id] : null
+
+  #       cache_policy_id            = each.value.default_cache_policy != "" ? data.aws_cloudfront_cache_policy.default_cache_policy[each.key].id : try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
+  #       use_forwarded_values       = false
+  #       origin_request_policy_id   = each.value.default_origin_request_policy != "" ? data.aws_cloudfront_origin_request_policy.default_request_policy[each.key].id : (each.value.origin_request_policy != "" ? data.aws_cloudfront_origin_request_policy.request_policy[each.key].id : null)
+  #       response_headers_policy_id = each.value.default_response_headers_policy != "" ? data.aws_cloudfront_response_headers_policy.default_response_policy[each.key].id : (each.value.response_headers_policy != "" ? data.aws_cloudfront_response_headers_policy.response_policy[each.key].id : null)
+
+  #       function_association = each.value.viewer_request_function_code != "" ? {
+  #         # Valid keys: viewer-request, viewer-response
+  #         viewer-request = {
+  #           function_arn = aws_cloudfront_function.function[each.key].arn
+  #         }
+  #       } : {}
+  #   }, obj)
+  # ]
   ordered_cache_behavior = each.value.ordered_cache_behavior
   # ordered_cache_behavior = length(each.value.ordered_cache_behavior) > 0 ? [for obj in each.value.ordered_cache_behavior : merge(obj, {
   #   target_origin_id           = each.value.s3_bucket != "" ? each.value.s3_bucket : each.value.origin_domain_name

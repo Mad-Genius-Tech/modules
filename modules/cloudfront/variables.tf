@@ -32,6 +32,7 @@ variable "cloudfront" {
     ordered_cache_behavior = optional(list(object({
       path_pattern                 = string
       target_origin_id             = string
+      presigned_url                = optional(bool)
       viewer_protocol_policy       = optional(string)
       allowed_methods              = optional(list(string))
       cached_methods               = optional(list(string))
@@ -53,7 +54,7 @@ variable "cloudfront" {
 
 variable "output_keyfile" {
   type    = bool
-  default = false
+  default = true
 }
 
 variable "terragrunt_directory" {

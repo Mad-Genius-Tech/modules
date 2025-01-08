@@ -24,6 +24,7 @@ variable "lambda" {
     create_async_event_config    = optional(bool)
     keep_warm                    = optional(bool)
     keep_warm_expression         = optional(string)
+    create_event_scheduler_role  = optional(bool)
     policy_statements = optional(map(object({
       effect    = string
       actions   = list(string)

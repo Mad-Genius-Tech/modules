@@ -23,6 +23,7 @@ variable "lambda" {
     environment_variables                       = optional(map(string))
     maximum_retry_attempts                      = optional(number)
     maximum_event_age_in_seconds                = optional(number)
+    create_event_scheduler_role                 = optional(bool)
     create_async_event_config                   = optional(bool)
     create_current_version_async_event_config   = optional(bool)
     create_unqualified_alias_async_event_config = optional(bool)
@@ -31,11 +32,15 @@ variable "lambda" {
       actions   = list(string)
       resources = list(string)
     })))
-    provisioned_concurrent_executions        = optional(number)
-    cloudwatch_logs_retention_in_days        = optional(number)
-    keep_warm                                = optional(bool)
-    keep_warm_expression                     = optional(string)
-    policies                                 = optional(list(string))
+    provisioned_concurrent_executions = optional(number)
+    cloudwatch_logs_retention_in_days = optional(number)
+    keep_warm                         = optional(bool)
+    keep_warm_expression              = optional(string)
+    policies                          = optional(list(string))
+    lambda_permissions = optional(map(object({
+      principal  = string
+      source_arn = string
+    })))
     db_instance_address                      = optional(string)
     db_instance_arn                          = optional(string)
     db_instance_endpoint                     = optional(string)

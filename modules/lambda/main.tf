@@ -21,6 +21,7 @@ locals {
     "policy_statements"                           = {}
     "keep_warm"                                   = true
     "keep_warm_expression"                        = "rate(15 minutes)"
+    "create_event_scheduler_role"                 = false
     "dynamodb_tables"                             = {}
     "sqs"                                         = {}
     "secret_vars"                                 = {}
@@ -49,6 +50,7 @@ locals {
     "error_rate_evaluation_periods"            = 1
     "error_rate_threshold"                     = 50
     "enable_insights"                          = false
+    "lambda_permissions"                       = {}
   }
 
   env_default_settings = {
@@ -78,6 +80,7 @@ locals {
       "memory_size"                                 = coalesce(lookup(v, "memory_size", null), local.merged_default_settings.memory_size)
       "ephemeral_storage_size"                      = coalesce(lookup(v, "ephemeral_storage_size", null), local.merged_default_settings.ephemeral_storage_size)
       "create_async_event_config"                   = coalesce(lookup(v, "create_async_event_config", null), local.merged_default_settings.create_async_event_config)
+      "create_event_scheduler_role"                 = coalesce(lookup(v, "create_event_scheduler_role", null), local.merged_default_settings.create_event_scheduler_role)
       "create_current_version_async_event_config"   = coalesce(lookup(v, "create_current_version_async_event_config", null), local.merged_default_settings.create_current_version_async_event_config)
       "create_unqualified_alias_async_event_config" = coalesce(lookup(v, "create_unqualified_alias_async_event_config", null), local.merged_default_settings.create_unqualified_alias_async_event_config)
       "maximum_retry_attempts"                      = try(coalesce(lookup(v, "maximum_retry_attempts", null), local.merged_default_settings.maximum_retry_attempts), local.merged_default_settings.maximum_retry_attempts)
@@ -116,6 +119,7 @@ locals {
       "error_rate_evaluation_periods"               = coalesce(lookup(v, "error_rate_evaluation_periods", null), local.merged_default_settings.error_rate_evaluation_periods)
       "enable_insights"                             = coalesce(lookup(v, "enable_insights", null), local.merged_default_settings.enable_insights)
       "tracing_mode"                                = try(coalesce(lookup(v, "tracing_mode", null), local.merged_default_settings.tracing_mode), local.merged_default_settings.tracing_mode)
+      "lambda_permissions"                          = coalesce(lookup(v, "lambda_permissions", null), local.merged_default_settings.lambda_permissions)
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }
@@ -347,7 +351,35 @@ resource "aws_lambda_permission" "cloudwatch" {
   qualifier     = each.value.enable_alias ? module.stage_alias[each.key].lambda_alias_name : null
 }
 
+module "event_scheduler_role" {
+  for_each          = { for k, v in local.lambda_map : k => v if v.create_event_scheduler_role }
+  source            = "git::https://github.com/terraform-aws-modules/terraform-aws-iam//modules/iam-assumable-role?ref=v5.52.1"
+  create_role       = true
+  role_name         = "${each.value.identifier}-scheduler"
+  role_requires_mfa = false
+  trusted_role_actions = [
+    "sts:AssumeRole"
+  ]
+  trusted_role_services = [
+    "scheduler.amazonaws.com"
+  ]
+  inline_policy_statements = [
+    {
+      sid       = "LambdaInvoke"
+      actions   = ["lambda:InvokeFunction"]
+      effect    = "Allow"
+      resources = ["arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${module.lambda[each.key].lambda_function_name}"]
+    }
+  ]
+}
+
 locals {
+  lambda_permission_map = merge([
+    for k, v in local.lambda_map : {
+      for permission in keys(v.lambda_permissions) : "${k}|${permission}" => v.lambda_permissions[permission]
+    } if length(v.lambda_permissions) > 0
+  ]...)
+
   cloudwatch_events_map = merge([
     for k, v in local.lambda_map : {
       for k1, v1 in v.cloudwatch_events : "${k}|${k1}" => merge(
@@ -358,6 +390,15 @@ locals {
       )
     } if length(v.cloudwatch_events) > 0
   ]...)
+}
+
+resource "aws_lambda_permission" "lambda_permission" {
+  for_each            = local.lambda_permission_map
+  statement_id_prefix = "${local.lambda_map[split("|", each.key)[0]].identifier}-"
+  action              = "lambda:InvokeFunction"
+  function_name       = module.lambda[split("|", each.key)[0]].lambda_function_name
+  principal           = each.value.principal
+  source_arn          = each.value.source_arn
 }
 
 resource "aws_cloudwatch_event_rule" "event_rule" {
