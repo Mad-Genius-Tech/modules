@@ -230,6 +230,7 @@ resource "aws_cognito_user_pool" "user_pool" {
       from_email_address    = lookup(email_configuration.value, "from_email_address", null)
       source_arn            = lookup(email_configuration.value, "source_arn", null)
       email_sending_account = lookup(email_configuration.value, "email_sending_account", null)
+      configuration_set     = coalesce(lookup(email_configuration.value, "configuration_set", null), "default")
     }
   }
 
@@ -347,7 +348,7 @@ resource "aws_cognito_user_pool_domain" "domain" {
   for_each        = local.cognito_map
   domain          = each.value.domain_name
   user_pool_id    = aws_cognito_user_pool.user_pool[each.key].id
-  certificate_arn = each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn
+  certificate_arn = !strcontains(each.value.domain_name, ".") ? null : (each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn)
 }
 
 
@@ -357,14 +358,14 @@ provider "aws" {
 }
 
 data "aws_acm_certificate" "wildcard" {
-  for_each = { for k, v in local.cognito_map : k => v if v.wildcard_domain }
+  for_each = { for k, v in local.cognito_map : k => v if v.wildcard_domain && strcontains(v.domain_name, ".") }
   domain   = join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name))))
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "non_wildcard" {
-  for_each = { for k, v in local.cognito_map : k => v if !v.wildcard_domain }
+  for_each = { for k, v in local.cognito_map : k => v if !v.wildcard_domain && strcontains(v.domain_name, ".") }
   domain   = each.value.domain_name
   statuses = ["ISSUED"]
   provider = aws.us-east-1

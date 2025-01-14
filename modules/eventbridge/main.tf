@@ -72,3 +72,32 @@ module "eventbus" {
 
   tags = local.tags
 }
+
+
+# module "eventbridge" {
+#   source  = "terraform-aws-modules/eventbridge/aws"
+#   version = ">=2.3.0, <3.0.0"
+
+#   create     = local.producer.to_create
+#   create_bus = false
+
+#   rules = {
+#     crons = {
+#       description         = "Kafka producer lambda schedule"
+#       schedule_expression = local.producer.schedule_rate
+#     }
+#   }
+
+#   targets = {
+#     crons = [for i in range(local.producer.concurrency) : {
+#       name = "lambda-target-${i}"
+#       arn  = module.kafka_producer.lambda_function_arn
+#     }]
+#   }
+
+#   depends_on = [
+#     module.kafka_producer
+#   ]
+
+#   tags = local.tags
+# }

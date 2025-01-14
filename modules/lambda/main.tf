@@ -520,3 +520,20 @@ resource "aws_lambda_runtime_management_config" "runtime_management" {
   function_name     = module.lambda[each.key].lambda_function_name
   update_runtime_on = "FunctionUpdate"
 }
+
+resource "aws_cloudwatch_metric_alarm" "lambda_alarm" {
+  for_each = { for k, v in local.lambda_map : k => v if v.enable_monitoring }
+  alarm_name          = "${each.value.identifier}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = "60"
+  statistic           = "Sum"
+  threshold           = "1"
+  dimensions = {
+    FunctionName = module.lambda[each.key].lambda_function_name
+  }
+  alarm_description = "This metric monitors lambda errors for function: ${module.lambda[each.key].lambda_function_name}"
+  # alarm_actions     = [var.alarm_topic_arn]
+}

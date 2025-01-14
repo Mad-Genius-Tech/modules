@@ -38,7 +38,9 @@ locals {
         value = local.cluster_name
       }
     ]
-    secrets = []
+    secrets               = []
+    multiple_containers   = false
+    container_definitions = {}
     repository_credentials = {
       credentialsParameter = "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.org_name}-${var.stage_name}/github_token"
     }
@@ -107,6 +109,9 @@ locals {
       "task_exec_secret_arns"                  = try(coalesce(lookup(v, "task_exec_secret_arns", null), local.merged_default_settings.task_exec_secret_arns), local.merged_default_settings.task_exec_secret_arns)
       "security_group_rules"                   = merge(coalesce(lookup(v, "security_group_rules", {}), {}), local.merged_default_settings.security_group_rules)
       "repository_credentials"                 = try(coalesce(lookup(v, "repository_credentials", null), local.merged_default_settings.repository_credentials), local.merged_default_settings.repository_credentials)
+      "container_name"                         = lookup(v, "container_name", null)
+      "multiple_containers"                    = try(coalesce(lookup(v, "multiple_containers", null), local.merged_default_settings.multiple_containers), local.merged_default_settings.multiple_containers)
+      "container_definitions"                  = merge(coalesce(lookup(v, "container_definitions", {}), {}), local.merged_default_settings.container_definitions)
       "health_check_start_period"              = try(coalesce(lookup(v, "health_check_start_period", null), local.merged_default_settings.health_check_start_period), local.merged_default_settings.health_check_start_period)
       "health_check_grace_period_seconds"      = try(coalesce(lookup(v, "health_check_grace_period_seconds", null), local.merged_default_settings.health_check_grace_period_seconds), local.merged_default_settings.health_check_grace_period_seconds)
     }
@@ -174,7 +179,7 @@ locals {
 
 module "ecs_service" {
   source                            = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v5.5.0"
-  for_each                          = local.ecs_map
+  for_each                          = { for k, v in local.ecs_map : k => v if v.create && !v.multiple_containers }
   name                              = each.value.identifier
   desired_count                     = each.value.desired_count
   autoscaling_min_capacity          = each.value.enable_autoscaling ? each.value.desired_count : 1
@@ -186,7 +191,7 @@ module "ecs_service" {
   task_exec_secret_arns             = each.value.task_exec_secret_arns
   task_exec_ssm_param_arns          = []
   health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
-  container_definitions = {
+  container_definitions =  {
     (each.key) = {
       essential              = true
       cpu                    = max(ceil(each.value.container_cpu / 256) * 256, 256)
@@ -296,6 +301,94 @@ module "ecs_service" {
           container_port   = each.value.container_port
         }
   }) : {})
+  tasks_iam_role_name        = "${each.value.identifier}-taskrole"
+  tasks_iam_role_description = "Tasks IAM role for ${each.value.identifier}"
+  # tasks_iam_role_policies = {
+  #   ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+  # }
+  tasks_iam_role_statements = each.value.tasks_iam_role_statements
+  # tasks_iam_role_statements = { 
+  #   for k, v in each.value.tasks_iam_role_statements: k => {
+  #     resources = v.resources
+  #     actions   = v.actions
+  #     conditions = v.conditions != null ? v.conditions : []
+  #   }
+  # }
+  subnet_ids = var.private_subnets
+  security_group_rules = merge({
+    "ingress_${each.value.container_port}" = {
+      type        = "ingress"
+      from_port   = each.value.container_port
+      to_port     = each.value.container_port
+      protocol    = "tcp"
+      description = "ECS Container Service port"
+      cidr_blocks = [var.vpc_cidr]
+    },
+    egress_all = {
+      type        = "egress"
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }, each.value.security_group_rules)
+  tags = local.tags
+}
+
+module "ecs_service_multiples" {
+  source                            = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v5.12.0"
+  for_each                          = { for k, v in local.ecs_map : k => v if v.create && v.multiple_containers }
+  name                              = each.value.identifier
+  desired_count                     = each.value.desired_count
+  autoscaling_min_capacity          = each.value.enable_autoscaling ? each.value.desired_count : 1
+  cluster_arn                       = module.ecs_cluster.arn
+  cpu                               = max(ceil(each.value.container_cpu / 256) * 256, 256)
+  memory                            = max(ceil(each.value.container_memory / 512) * 512, 512)
+  enable_autoscaling                = each.value.enable_autoscaling
+  enable_execute_command            = true
+  task_exec_secret_arns             = each.value.task_exec_secret_arns
+  task_exec_ssm_param_arns          = []
+  health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
+  container_definitions =  each.value.container_definitions
+
+  load_balancer = each.value.create_alb ? (each.value.external_alb ?
+    {
+      external_alb = {
+        target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
+        container_name   = lookup(each.value, "container_name", each.key)
+        container_port   = each.value.container_port
+      }
+      internal_alb = {
+        target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+        container_name   = lookup(each.value, "container_name", each.key)
+        container_port   = each.value.container_port
+      }
+      } : {
+      internal_alb = {
+        target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+        container_name   = lookup(each.value, "container_name", each.key)
+        container_port   = each.value.container_port
+      }
+      }) : (each.value.create_nlb ? (each.value.multiple_ports ?
+      {
+        service_80 = {
+          target_group_arn = module.nlb[each.key].target_groups["${each.value.identifier}-80"].arn
+          container_name   = lookup(each.value, "container_name", each.key)
+          container_port   = 80
+        }
+        service_443 = {
+          target_group_arn = module.nlb[each.key].target_groups["${each.value.identifier}-443"].arn
+          container_name   = lookup(each.value, "container_name", each.key)
+          container_port   = 443
+        }
+        } : {
+        service = {
+          target_group_arn = module.nlb[each.key].target_groups[each.value.identifier].arn
+          container_name   = lookup(each.value, "container_name", each.key)
+          container_port   = each.value.container_port
+        }
+  }) : {})
+
   tasks_iam_role_name        = "${each.value.identifier}-taskrole"
   tasks_iam_role_description = "Tasks IAM role for ${each.value.identifier}"
   # tasks_iam_role_policies = {

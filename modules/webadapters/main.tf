@@ -83,6 +83,7 @@ locals {
       "reserved_concurrent_executions"    = coalesce(lookup(v, "reserved_concurrent_executions", null), local.merged_default_settings.reserved_concurrent_executions)
       "image_uri"                         = v.image_uri != "" ? v.image_uri : ""
       "vpc_id"                            = v.vpc_id != "" ? v.vpc_id : ""
+      "subnet_ids"                        = v.vpc_id != "" ? v.subnet_ids : []
     } if coalesce(lookup(v, "create", null), true) == true
   }
 }

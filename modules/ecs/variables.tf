@@ -47,6 +47,7 @@ variable "ecs_services" {
     task_exec_secret_arns                  = optional(list(string))
     health_check_start_period              = optional(number)
     health_check_grace_period_seconds      = optional(number)
+    multiple_containers                    = optional(bool)
     environment = optional(list(object({
       name  = string
       value = string
@@ -63,6 +64,42 @@ variable "ecs_services" {
       protocol    = string
       description = optional(string)
       cidr_blocks = list(string)
+    })))
+    container_name     = optional(string)
+    container_definitions = optional(map(object({
+      essential          = bool
+      cpu                = number
+      memory             = number
+      memory_reservation = optional(number)
+      image              = string
+      repository_credentials = optional(object({
+        credentialsParameter = string
+      }))
+      health_check = optional(object({
+        command     = list(string)
+        interval    = number
+        timeout     = number
+        retries     = number
+        startPeriod = number
+      }), null)
+      environment = optional(list(object({
+        name  = string
+        value = string
+      })))
+      command = optional(list(string))
+      port_mappings = optional(list(object({
+        containerPort = number
+        hostPort      = number
+        protocol       = string
+      })))
+      readonly_root_filesystem               = optional(bool, false)
+      enable_cloudwatch_logging              = optional(bool, true)
+      create_cloudwatch_log_group            = optional(bool, true)
+      cloudwatch_log_group_retention_in_days = optional(number)
+      dependencies = optional(list(object({
+        containerName = string
+        condition     = string
+      })))
     })))
     tasks_iam_role_statements = optional(map(object({
       resources = list(string)

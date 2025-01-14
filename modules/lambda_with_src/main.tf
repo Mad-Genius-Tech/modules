@@ -321,3 +321,21 @@ resource "aws_lambda_function_event_invoke_config" "sqs_stage_invoke_config" {
   maximum_event_age_in_seconds = each.value.maximum_event_age_in_seconds
   maximum_retry_attempts       = each.value.maximum_retry_attempts
 }
+
+
+resource "aws_cloudwatch_metric_alarm" "lambda_alarm" {
+  for_each = { for k, v in local.lambda_map : k => v if v.create }
+  alarm_name          = "${each.value.identifier}-errors"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = "60"
+  statistic           = "Sum"
+  threshold           = "1"
+  dimensions = {
+    FunctionName = module.lambda[each.key].lambda_function_name
+  }
+  alarm_description = "This metric monitors lambda errors for function: ${module.lambda[each.key].lambda_function_name}"
+  # alarm_actions     = [var.alarm_topic_arn]
+}

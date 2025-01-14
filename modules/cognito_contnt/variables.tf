@@ -44,6 +44,7 @@ variable "cognito" {
       from_email_address    = optional(string)
       source_arn            = optional(string)
       email_sending_account = optional(string)
+      configuration_set     = optional(string)
     })))
     lambda_config = optional(list(object({
       create_auth_challenge          = optional(string)
