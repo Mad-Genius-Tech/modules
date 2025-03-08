@@ -34,6 +34,23 @@ variable "redis" {
       name  = string
       value = string
     })))
+    enable_cloudwatch_alarm      = optional(bool)
+    alarms = optional(map(object({
+      metric_name             = string
+      comparison_operator     = optional(string)
+      dimensions              = optional(map(string), {})
+      threshold               = number
+      evaluation_periods      = number
+      period                  = number
+      statistic               = optional(string)
+      namespace               = optional(string)
+      cloudwatch_alarm_action = optional(string)
+    })))
   }))
   default = {}
+}
+
+variable "sns_topic_arn" {
+  type    = string
+  default = ""
 }

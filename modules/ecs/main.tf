@@ -30,6 +30,7 @@ locals {
     desired_count                          = 1
     wildcard_domain                        = true
     domain_name                            = ""
+    health_check_command                   = []
     health_check_start_period              = null
     health_check_grace_period_seconds      = null
     environment = [
@@ -98,6 +99,7 @@ locals {
       "create_nlb"                             = try(coalesce(lookup(v, "create_nlb", null), local.merged_default_settings.create_nlb), local.merged_default_settings.create_nlb)
       "create_eip"                             = try(coalesce(lookup(v, "create_eip", null), local.merged_default_settings.create_eip), local.merged_default_settings.create_eip)
       "multiple_ports"                         = try(coalesce(lookup(v, "multiple_ports", null), local.merged_default_settings.multiple_ports), local.merged_default_settings.multiple_ports)
+      "health_check_command"                   = distinct(concat(try(coalesce(lookup(v, "health_check_command", null), local.merged_default_settings.health_check_command), local.merged_default_settings.health_check_command), local.merged_default_settings.health_check_command))
       "health_check_port"                      = try(coalesce(lookup(v, "health_check_port", null), local.merged_default_settings.health_check_port), local.merged_default_settings.health_check_port)
       "health_check_path"                      = try(coalesce(lookup(v, "health_check_path", null), local.merged_default_settings.health_check_path), local.merged_default_settings.health_check_path)
       "healthy_threshold"                      = try(coalesce(lookup(v, "healthy_threshold", null), local.merged_default_settings.healthy_threshold), local.merged_default_settings.healthy_threshold)
@@ -200,7 +202,7 @@ module "ecs_service" {
       image                  = each.value.container_image == null ? data.external.current_image[each.key].result["IMAGE_NAME"] : each.value.container_image
       repository_credentials = each.value.container_image != null && strcontains(coalesce(each.value.container_image, "null_value"), "ecr.${data.aws_region.current.name}.amazonaws.com") ? {} : each.value.repository_credentials
       health_check = {
-        "command"     = ["CMD-SHELL", "curl -f http://localhost:${each.value.health_check_port == null ? each.value.container_port : each.value.health_check_port}${each.value.health_check_path} || exit 1"]
+        "command"     = length(each.value.health_check_command) > 0 ? each.value.health_check_command : ["CMD-SHELL", "curl -f http://localhost:${each.value.health_check_port == null ? each.value.container_port : each.value.health_check_port}${each.value.health_check_path} || exit 1"]
         "interval"    = 30
         "timeout"     = 5
         "retries"     = 3

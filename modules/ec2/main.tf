@@ -44,6 +44,7 @@ locals {
       "treat_missing_data"      = "breaching"
     }
     policy              = {}
+    tags                = {}
     root_volume_encrypt = false
     root_volume_type    = "gp2"
     root_volume_size    = 8
@@ -96,6 +97,7 @@ locals {
       "monitoring"                       = coalesce(lookup(v, "monitoring", null), local.merged_default_settings.monitoring)
       "ingress_with_cidr_blocks"         = coalesce(lookup(v, "ingress_with_cidr_blocks", null), local.merged_default_settings.ingress_with_cidr_blocks)
       "policy"                           = coalesce(lookup(v, "policy", null), local.merged_default_settings.policy)
+      "tags"                             = merge(coalesce(lookup(v, "tags", null), local.merged_default_settings.tags), local.merged_default_settings.tags)
       "enable_cloudwatch_alarm"          = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
       "alarms" = {
         for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
@@ -169,7 +171,7 @@ module "ec2" {
   vpc_security_group_ids = [module.sg[each.key].security_group_id]
   cpu_credits            = replace(each.value.instance_type, "/^t(2|3|3a){1}\\..*$/", "1") == "1" ? each.value.cpu_credits : null
   monitoring             = each.value.monitoring
-  tags                   = local.tags
+  tags                   = merge(local.tags, each.value.tags)
 }
 
 resource "aws_eip" "eip" {

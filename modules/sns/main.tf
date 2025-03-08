@@ -18,19 +18,20 @@ locals {
   lambda_layer = {
     "us-east-1" = "arn:aws:lambda:us-east-1:668099181075:layer:AWSLambda-Python-AWS-SDK:4"
     "us-west-2" = "arn:aws:lambda:us-west-2:420165488524:layer:AWSLambda-Python-AWS-SDK:5"
+    "eu-north-1" = "arn:aws:lambda:eu-north-1:642425348156:layer:AWSLambda-Python-AWS-SDK:4"
   }
 }
 
-module "discord" {
+module "sns" {
   #source                                 = "ganexcloud/lambda-notifications/aws"
   #version                                = "~> 1.0.7"
   source                                 = "git::https://github.com/debu99/terraform-aws-lambda-notifications.git"
-  create                                 = var.create && var.discord_webhook_url != ""
+  create                                 = var.create && var.webhook_url != ""
   create_sns_topic                       = false
-  lambda_function_name                   = "${module.context.id}-discord"
+  lambda_function_name                   = "${module.context.id}-slack"
   sns_topic_name                         = aws_sns_topic.topic[0].name
-  messenger                              = "discord"
-  webhook_url                            = var.discord_webhook_url
+  messenger                              = "slack"
+  webhook_url                            = var.webhook_url
   lambda_layers                          = [local.lambda_layer[data.aws_region.current.name]]
   cloudwatch_log_group_retention_in_days = 1
   tags                                   = local.tags
@@ -39,7 +40,7 @@ module "discord" {
 data "aws_caller_identity" "current" {}
 
 resource "aws_sns_topic_policy" "aws_budget" {
-  arn = module.discord.sns_topic_arn
+  arn = module.sns.sns_topic_arn
   policy = jsonencode({
     Version = "2012-10-17"
     Id      = "AWSBudgetPermission"
@@ -51,7 +52,7 @@ resource "aws_sns_topic_policy" "aws_budget" {
           Service = "budgets.amazonaws.com"
         }
         Action   = "SNS:Publish"
-        Resource = module.discord.sns_topic_arn
+        Resource = module.sns.sns_topic_arn
       },
       {
         Sid    = "CloudwatchSNSPublishingPermissions"
@@ -60,7 +61,7 @@ resource "aws_sns_topic_policy" "aws_budget" {
           Service = "cloudwatch.amazonaws.com"
         }
         Action   = "SNS:Publish"
-        Resource = module.discord.sns_topic_arn
+        Resource = module.sns.sns_topic_arn
       }
     ]
   })

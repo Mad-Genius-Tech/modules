@@ -9,3 +9,7 @@ variable "pinpoint" {
   }))
   default = {}
 }
+
+variable "templates_dir" {
+  type = string
+}

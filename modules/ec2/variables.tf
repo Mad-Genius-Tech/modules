@@ -76,6 +76,7 @@ variable "ec2" {
       cloudwatch_alarm_action = optional(string)
       treat_missing_data      = optional(string)
     })))
+    tags = optional(map(string))
   }))
 }
 

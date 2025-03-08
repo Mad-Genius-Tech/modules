@@ -6,3 +6,13 @@ output "app" {
     }
   }
 }
+
+output "email_templates" {
+  description = "ARNs of the created email templates"
+  value = {
+    for k, v in aws_pinpoint_email_template.templates : k => {
+      "name" = v.name
+      "arn"  = v.arn
+    }
+  }
+}

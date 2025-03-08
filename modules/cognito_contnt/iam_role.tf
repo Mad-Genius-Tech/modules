@@ -50,7 +50,7 @@ resource "aws_iam_role" "auth_iam_role" {
             Action = [
               "s3:GetObject",
             ]
-            Resource = ["arn:aws:s3:::contnt-${var.stage_name}-chat/protected/*"]
+            Resource = ["arn:aws:s3:::${var.org_name}-${var.stage_name}-chat/protected/*"]
           }
         ]
       }

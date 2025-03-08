@@ -49,6 +49,10 @@ resource "aws_s3_bucket_notification" "object_lambda_trigger" {
     ]
     filter_prefix = "_assets/"
   }
+  depends_on = [
+    module.object_header,
+    aws_lambda_permission.object_lambda_permission
+  ]
 }
 
 resource "aws_lambda_permission" "object_lambda_permission" {
@@ -57,4 +61,5 @@ resource "aws_lambda_permission" "object_lambda_permission" {
   function_name = module.object_header.lambda_function_name
   principal     = "s3.amazonaws.com"
   source_arn    = module.s3_bucket.s3_bucket_arn
+  depends_on    = [module.object_header]
 }

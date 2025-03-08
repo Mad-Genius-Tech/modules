@@ -2,7 +2,6 @@ data "aws_region" "current" {}
 
 locals {
   default_settings = {
-    base_path_template  = ""
     gcm_channel_api_key = null
     email_from_address  = null
     ses_region          = data.aws_region.current.name
@@ -22,8 +21,6 @@ locals {
       "gcm_channel_api_key" = try(coalesce(lookup(v, "gcm_channel_api_key", null), local.merged_default_settings.gcm_channel_api_key), local.merged_default_settings.gcm_channel_api_key)
       "email_from_address"  = try(coalesce(lookup(v, "email_from_address", null), local.merged_default_settings.email_from_address), local.merged_default_settings.email_from_address)
       "ses_region"          = try(coalesce(lookup(v, "ses_region", null), local.merged_default_settings.ses_region), local.merged_default_settings.ses_region)
-      "base_path_template"  = try(coalesce(lookup(v, "base_path_template", null), local.merged_default_settings.base_path_template), local.merged_default_settings.base_path_template)
-
     } if coalesce(lookup(v, "create", null), true)
   }
 }
@@ -64,10 +61,36 @@ resource "aws_pinpoint_email_channel" "email" {
 }
 
 
-module "pinpoint_tpl" {
-  for_each           = { for k, v in local.pinpoint_map : k => v if v.base_path_template != "" }
-  source             = "./terraform-aws-pinpoint-create-templates"
-  base_path_template = each.value.base_path_template
-  map_replace        = {}
-  rules_off          = []
+locals {
+  template_dirs = fileset(var.templates_dir, "*")
+
+  discovered_templates = {
+    for dir in local.template_dirs : dir => {
+      yaml_file    = fileexists("${var.templates_dir}/${dir}/main.yml") ? "${var.templates_dir}/${dir}/main.yml" : (fileexists("${var.templates_dir}/${dir}/main.yaml") ? "${var.templates_dir}/${dir}/main.yaml" : null)
+      html_content = fileexists("${var.templates_dir}/${dir}/index.html") ? file("${var.templates_dir}/${dir}/index.html") : ""
+      text_content = fileexists("${var.templates_dir}/${dir}/index.txt") ? file("${var.templates_dir}/${dir}/index.txt") : ""
+    }
+  }
+
+  parsed_templates = {
+    for dir, template in local.discovered_templates :
+    dir => {
+      # If yaml_file exists, parse it to get name and subject
+      name      = template.yaml_file != null ? yamldecode(file(template.yaml_file))["name"] : dir
+      subject   = template.yaml_file != null ? yamldecode(file(template.yaml_file))["subject"] : "Subject for ${dir}"
+      html_part = template.html_content
+      text_part = template.text_content != "" ? template.text_content : null
+    } if template.html_content != ""
+  }
+}
+
+resource "aws_pinpoint_email_template" "templates" {
+  for_each      = local.parsed_templates
+  template_name = each.value.name != null ? each.value.name : each.key
+  email_template {
+    subject   = each.value.subject
+    html_part = each.value.html_part
+    text_part = each.value.text_part
+  }
+  tags = local.tags
 }

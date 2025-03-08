@@ -29,6 +29,7 @@ variable "cognito" {
       require_uppercase                = optional(bool)
       temporary_password_validity_days = optional(number)
     })))
+    allowed_first_auth_factors = optional(list(string))
     string_schemas = optional(list(object({
       attribute_data_type      = optional(string)
       developer_only_attribute = optional(bool)
@@ -78,7 +79,8 @@ variable "cognito" {
     create_identity_pool = optional(bool)
     google_client_id     = optional(string)
     google_client_secret = optional(string)
-    domain_name          = optional(string)
+    custom_domain_name   = optional(string)
+    cognito_domain_name  = optional(string)
     wildcard_domain      = optional(bool)
     secret_vars = optional(map(object({
       secret_path = optional(string)

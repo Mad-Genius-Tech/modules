@@ -45,6 +45,7 @@ variable "ecs_services" {
     wildcard_domain                        = optional(bool)
     domain_name                            = optional(string)
     task_exec_secret_arns                  = optional(list(string))
+    health_check_command                   = optional(list(string))
     health_check_start_period              = optional(number)
     health_check_grace_period_seconds      = optional(number)
     multiple_containers                    = optional(bool)

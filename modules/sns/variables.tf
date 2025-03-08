@@ -8,7 +8,7 @@ variable "sns_email_subscriptions" {
   default = []
 }
 
-variable "discord_webhook_url" {
+variable "webhook_url" {
   type    = string
   default = ""
 }

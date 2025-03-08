@@ -15,6 +15,14 @@ locals {
     auto_minor_version_upgrade = true
     kms_key_id                 = null
     parameters                 = {}
+    enable_cloudwatch_alarm    = false
+    alarms = {
+      "statistic"               = "Average"
+      "namespace"               = "AWS/ElastiCache"
+      "comparison_operator"     = "GreaterThanOrEqualToThreshold"
+      "dimensions"              = {}
+      "cloudwatch_alarm_action" = ""
+    }
   }
 
   env_default_settings = {
@@ -22,6 +30,7 @@ locals {
       {
         node_type                = "cache.t4g.medium"
         snapshot_retention_limit = 3
+        enable_cloudwatch_alarm  = true
     })
   }
 
@@ -44,6 +53,21 @@ locals {
       "auto_minor_version_upgrade" = try(coalesce(lookup(v, "auto_minor_version_upgrade", null), local.merged_default_settings.auto_minor_version_upgrade), local.merged_default_settings.auto_minor_version_upgrade)
       "kms_key_id"                 = try(coalesce(lookup(v, "kms_key_id", null), local.merged_default_settings.kms_key_id), local.merged_default_settings.kms_key_id)
       "parameters"                 = merge(try(coalesce(lookup(v, "parameters", null), local.merged_default_settings.parameters), local.merged_default_settings.parameters), local.merged_default_settings.parameters)
+      "enable_cloudwatch_alarm"    = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
+      "alarms" = {
+        for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
+          "identifier"              = "${module.context.id}-${k}-${k1}"
+          "metric_name"             = v1.metric_name
+          "threshold"               = v1.threshold
+          "period"                  = v1.period
+          "evaluation_periods"      = v1.evaluation_periods
+          "dimensions"              = coalesce(lookup(v1, "dimensions", null), local.merged_default_settings.alarms.dimensions)
+          "comparison_operator"     = coalesce(lookup(v1, "comparison_operator", null), local.merged_default_settings.alarms.comparison_operator)
+          "statistic"               = coalesce(lookup(v1, "statistic", null), local.merged_default_settings.alarms.statistic)
+          "namespace"               = coalesce(lookup(v1, "namespace", null), local.merged_default_settings.alarms.namespace)
+          "cloudwatch_alarm_action" = try(coalesce(lookup(v1, "cloudwatch_alarm_action", null), local.merged_default_settings.alarms.cloudwatch_alarm_action), local.merged_default_settings.alarms.cloudwatch_alarm_action)
+        }
+      }
     } if coalesce(lookup(v, "create", null), true)
   }
 }
@@ -119,4 +143,40 @@ module "redis_sg" {
     }
   ] : []
   number_of_computed_ingress_with_cidr_blocks = length(var.ingress_cidr_blocks) > 0 ? 1 : 0
+}
+
+
+
+
+locals {
+  alarms_map = merge([
+    for k, v in local.redis_map : {
+      for k1, v1 in v.alarms : "${k}|${k1}" => v1
+    } if v.enable_cloudwatch_alarm && length(v.alarms) > 0
+  ]...)
+}
+
+resource "aws_cloudwatch_metric_alarm" "alarm" {
+  for_each            = local.alarms_map
+  alarm_name          = local.alarms_map[each.key].identifier
+  alarm_description   = "This metric monitors Elasticache ${local.redis_map[split("|", each.key)[0]].identifier} ${local.alarms_map[each.key].metric_name}"
+  metric_name         = local.alarms_map[each.key].metric_name
+  comparison_operator = local.alarms_map[each.key].comparison_operator
+  statistic           = local.alarms_map[each.key].statistic
+  threshold           = local.alarms_map[each.key].threshold
+  period              = local.alarms_map[each.key].period
+  evaluation_periods  = local.alarms_map[each.key].evaluation_periods
+  namespace           = local.alarms_map[each.key].namespace
+  dimensions = merge({
+    CacheClusterId = tolist(aws_elasticache_replication_group.redis[split("|", each.key)[0]].member_clusters)[0]
+  }, lookup(local.alarms_map[each.key], "dimensions", {}))
+  alarm_actions = compact([
+    var.sns_topic_arn,
+    lookup(local.redis_map[split("|", each.key)[0]], "cloudwatch_alarm_action", "")
+  ])
+  ok_actions = compact([
+    var.sns_topic_arn,
+    lookup(local.redis_map[split("|", each.key)[0]], "cloudwatch_alarm_action", "")
+  ])
+  tags = local.tags
 }

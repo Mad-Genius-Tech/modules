@@ -38,11 +38,13 @@ locals {
       require_lowercase                = true
       require_symbols                  = false
     }]
-    secret_vars         = {}
-    email_configuration = [{}]
-    lambda_config       = [{}]
-    domain_name         = "${var.org_name}-${var.stage_name}-cognito"
-    wildcard_domain     = true
+    allowed_first_auth_factors = []
+    secret_vars                = {}
+    email_configuration        = [{}]
+    lambda_config              = [{}]
+    custom_domain_name         = "${var.org_name}-${var.stage_name}-cognito"
+    cognito_domain_name        = ""
+    wildcard_domain            = true
     string_schemas = [{
       attribute_data_type      = "String"
       mutable                  = true
@@ -134,7 +136,8 @@ locals {
       "identifier"                                    = "${module.context.id}-${k}"
       "deletion_protection"                           = try(coalesce(lookup(v, "deletion_protection", null), local.merged_default_settings.deletion_protection), local.merged_default_settings.deletion_protection)
       "mfa_configuration"                             = try(coalesce(lookup(v, "mfa_configuration", null), local.merged_default_settings.mfa_configuration), local.merged_default_settings.mfa_configuration)
-      "domain_name"                                   = try(coalesce(lookup(v, "domain_name", null), local.merged_default_settings.domain_name), local.merged_default_settings.domain_name)
+      "custom_domain_name"                            = try(coalesce(lookup(v, "custom_domain_name", null), local.merged_default_settings.custom_domain_name), local.merged_default_settings.custom_domain_name)
+      "cognito_domain_name"                           = try(coalesce(lookup(v, "cognito_domain_name", null), local.merged_default_settings.cognito_domain_name), local.merged_default_settings.cognito_domain_name)
       "wildcard_domain"                               = try(coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain), local.merged_default_settings.wildcard_domain)
       "alias_attributes"                              = try(coalesce(lookup(v, "alias_attributes", null), local.merged_default_settings.alias_attributes), local.merged_default_settings.alias_attributes)
       "username_configuration"                        = try(coalesce(lookup(v, "username_configuration", null), local.merged_default_settings.username_configuration), local.merged_default_settings.username_configuration)
@@ -161,11 +164,12 @@ locals {
       "write_attributes"                              = distinct(concat(try(coalesce(lookup(v, "write_attributes", null), local.merged_default_settings.write_attributes), local.merged_default_settings.write_attributes), local.merged_default_settings.write_attributes))
       "token_validity_units"                          = try(coalesce(lookup(v, "token_validity_units", null), local.merged_default_settings.token_validity_units), local.merged_default_settings.token_validity_units)
       "allow_unauthenticated_identities"              = try(coalesce(lookup(v, "allow_unauthenticated_identities", null), local.merged_default_settings.allow_unauthenticated_identities), local.merged_default_settings.allow_unauthenticated_identities)
-      create_identity_pool                            = try(coalesce(lookup(v, "create_identity_pool", null), local.merged_default_settings.create_identity_pool), local.merged_default_settings.create_identity_pool)
+      "allowed_first_auth_factors"                    = distinct(concat(try(coalesce(lookup(v, "allowed_first_auth_factors", null), local.merged_default_settings.allowed_first_auth_factors), local.merged_default_settings.allowed_first_auth_factors), local.merged_default_settings.allowed_first_auth_factors))
+      "create_identity_pool"                          = try(coalesce(lookup(v, "create_identity_pool", null), local.merged_default_settings.create_identity_pool), local.merged_default_settings.create_identity_pool)
       "allow_classic_flow"                            = try(coalesce(lookup(v, "allow_classic_flow", null), local.merged_default_settings.allow_classic_flow), local.merged_default_settings.allow_classic_flow)
-      google_client_id                                = try(coalesce(lookup(v, "google_client_id", null), local.merged_default_settings.google_client_id), local.merged_default_settings.google_client_id)
-      google_client_secret                            = try(coalesce(lookup(v, "google_client_secret", null), local.merged_default_settings.google_client_secret), local.merged_default_settings.google_client_secret)
-      secret_vars                                     = try(coalesce(lookup(v, "secret_vars", null), local.merged_default_settings.secret_vars), local.merged_default_settings.secret_vars)
+      "google_client_id"                              = try(coalesce(lookup(v, "google_client_id", null), local.merged_default_settings.google_client_id), local.merged_default_settings.google_client_id)
+      "google_client_secret"                          = try(coalesce(lookup(v, "google_client_secret", null), local.merged_default_settings.google_client_secret), local.merged_default_settings.google_client_secret)
+      "secret_vars"                                   = try(coalesce(lookup(v, "secret_vars", null), local.merged_default_settings.secret_vars), local.merged_default_settings.secret_vars)
     } if coalesce(lookup(v, "create", true), true)
   }
 }
@@ -230,7 +234,7 @@ resource "aws_cognito_user_pool" "user_pool" {
       from_email_address    = lookup(email_configuration.value, "from_email_address", null)
       source_arn            = lookup(email_configuration.value, "source_arn", null)
       email_sending_account = lookup(email_configuration.value, "email_sending_account", null)
-      configuration_set     = coalesce(lookup(email_configuration.value, "configuration_set", null), "default")
+      configuration_set     = lookup(email_configuration.value, "configuration_set", null)
     }
   }
 
@@ -273,6 +277,13 @@ resource "aws_cognito_user_pool" "user_pool" {
       require_symbols                  = lookup(password_policy.value, "require_symbols", null)
       require_uppercase                = lookup(password_policy.value, "require_uppercase", null)
       temporary_password_validity_days = lookup(password_policy.value, "temporary_password_validity_days", null)
+    }
+  }
+
+  dynamic "sign_in_policy" {
+    for_each = length(each.value.allowed_first_auth_factors) == 0 ? [] : [1]
+    content {
+      allowed_first_auth_factors = each.value.allowed_first_auth_factors
     }
   }
 
@@ -344,13 +355,18 @@ resource "aws_cognito_identity_provider" "google" {
   }
 }
 
-resource "aws_cognito_user_pool_domain" "domain" {
+resource "aws_cognito_user_pool_domain" "custom_domain_name" {
   for_each        = local.cognito_map
-  domain          = each.value.domain_name
+  domain          = each.value.custom_domain_name
   user_pool_id    = aws_cognito_user_pool.user_pool[each.key].id
-  certificate_arn = !strcontains(each.value.domain_name, ".") ? null : (each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn)
+  certificate_arn = !strcontains(each.value.custom_domain_name, ".") ? null : (each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn)
 }
 
+resource "aws_cognito_user_pool_domain" "cognito_domain_name" {
+  for_each     = { for k, v in local.cognito_map : k => v if v.cognito_domain_name != null && length(v.cognito_domain_name) > 0 }
+  domain       = each.value.cognito_domain_name
+  user_pool_id = aws_cognito_user_pool.user_pool[each.key].id
+}
 
 provider "aws" {
   alias  = "us-east-1"
@@ -358,15 +374,15 @@ provider "aws" {
 }
 
 data "aws_acm_certificate" "wildcard" {
-  for_each = { for k, v in local.cognito_map : k => v if v.wildcard_domain && strcontains(v.domain_name, ".") }
-  domain   = join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name))))
+  for_each = { for k, v in local.cognito_map : k => v if v.wildcard_domain && strcontains(v.custom_domain_name, ".") }
+  domain   = join(".", slice(split(".", each.value.custom_domain_name), 1, length(split(".", each.value.custom_domain_name))))
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "non_wildcard" {
-  for_each = { for k, v in local.cognito_map : k => v if !v.wildcard_domain && strcontains(v.domain_name, ".") }
-  domain   = each.value.domain_name
+  for_each = { for k, v in local.cognito_map : k => v if !v.wildcard_domain && strcontains(v.custom_domain_name, ".") }
+  domain   = each.value.custom_domain_name
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
