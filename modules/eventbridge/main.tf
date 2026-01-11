@@ -34,8 +34,8 @@ locals {
 
   eventbus_map = {
     for k, v in var.eventbus : k => {
-      "identifier"          = "${module.context.id}-${k}"
-      "bus_name"            = try(coalesce(lookup(v, "bus_name", null), local.merged_default_settings.bus_name), local.merged_default_settings.bus_name)
+      "identifier" = "${module.context.id}-${k}"
+      "bus_name"   = try(coalesce(lookup(v, "bus_name", null), local.merged_default_settings.bus_name), local.merged_default_settings.bus_name)
     } if coalesce(lookup(v, "create", null), true)
   }
 }

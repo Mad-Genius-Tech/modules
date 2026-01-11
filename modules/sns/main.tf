@@ -16,15 +16,15 @@ data "aws_region" "current" {}
 
 locals {
   lambda_layer = {
-    "us-east-1" = "arn:aws:lambda:us-east-1:668099181075:layer:AWSLambda-Python-AWS-SDK:4"
-    "us-west-2" = "arn:aws:lambda:us-west-2:420165488524:layer:AWSLambda-Python-AWS-SDK:5"
+    "us-east-1"  = "arn:aws:lambda:us-east-1:668099181075:layer:AWSLambda-Python-AWS-SDK:4"
+    "us-west-2"  = "arn:aws:lambda:us-west-2:420165488524:layer:AWSLambda-Python-AWS-SDK:5"
     "eu-north-1" = "arn:aws:lambda:eu-north-1:642425348156:layer:AWSLambda-Python-AWS-SDK:4"
   }
 }
 
 module "sns" {
   #source                                 = "ganexcloud/lambda-notifications/aws"
-  #version                                = "~> 1.0.7"
+  #version                                = "~> 1.0.8"
   source                                 = "git::https://github.com/debu99/terraform-aws-lambda-notifications.git"
   create                                 = var.create && var.webhook_url != ""
   create_sns_topic                       = false

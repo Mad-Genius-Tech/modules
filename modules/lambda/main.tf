@@ -522,7 +522,7 @@ resource "aws_lambda_runtime_management_config" "runtime_management" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "lambda_alarm" {
-  for_each = { for k, v in local.lambda_map : k => v if v.enable_monitoring }
+  for_each            = { for k, v in local.lambda_map : k => v if v.enable_monitoring }
   alarm_name          = "${each.value.identifier}-errors"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "1"

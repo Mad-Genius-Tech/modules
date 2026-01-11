@@ -6,6 +6,8 @@ locals {
     enable_logs                            = false
     price_class                            = "PriceClass_100"
     default_presigned_url                  = false
+    disable_presigned_url                  = false
+    ordered_cache_enable_signed_url        = false
     s3_bucket                              = ""
     attach_cloudfront_policy               = true
     use_acm_cert                           = true
@@ -25,13 +27,16 @@ locals {
     viewer_request_function_code           = ""
     origin_domain_name                     = ""
     default_root_object                    = null
+    allow_list_bucket_access               = false
     custom_origin_config = {
       http_port              = 80
       https_port             = 443
       origin_protocol_policy = "match-viewer"
       origin_ssl_protocols   = ["SSLv3", "TLSv1", "TLSv1.1", "TLSv1.2"]
+      origin_read_timeout    = 30
     }
-    ordered_cache_behavior = []
+    origin_connection_timeout = 10
+    ordered_cache_behavior    = []
   }
 
   env_default_settings = {
@@ -52,6 +57,8 @@ locals {
       "enable_logs"                            = try(coalesce(lookup(v, "enable_logs", null), local.merged_default_settings.enable_logs), local.merged_default_settings.enable_logs)
       "s3_bucket"                              = try(coalesce(lookup(v, "s3_bucket", null), local.merged_default_settings.s3_bucket), local.merged_default_settings.s3_bucket)
       "default_presigned_url"                  = try(coalesce(lookup(v, "default_presigned_url", null), local.merged_default_settings.default_presigned_url), local.merged_default_settings.default_presigned_url)
+      "disable_presigned_url"                  = try(coalesce(lookup(v, "disable_presigned_url", null), local.merged_default_settings.disable_presigned_url), local.merged_default_settings.disable_presigned_url)
+      "ordered_cache_enable_signed_url"        = try(coalesce(lookup(v, "ordered_cache_enable_signed_url", null), local.merged_default_settings.ordered_cache_enable_signed_url), local.merged_default_settings.ordered_cache_enable_signed_url)
       "attach_cloudfront_policy"               = try(coalesce(lookup(v, "attach_cloudfront_policy", null), local.merged_default_settings.attach_cloudfront_policy), local.merged_default_settings.attach_cloudfront_policy)
       "use_acm_cert"                           = try(coalesce(lookup(v, "use_acm_cert", null), local.merged_default_settings.use_acm_cert), local.merged_default_settings.use_acm_cert)
       "wildcard_domain"                        = try(coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain), local.merged_default_settings.wildcard_domain)
@@ -65,15 +72,18 @@ locals {
       "cache_policy"                           = try(coalesce(lookup(v, "cache_policy", null), local.merged_default_settings.cache_policy), local.merged_default_settings.cache_policy)
       "default_cache_policy"                   = try(coalesce(lookup(v, "default_cache_policy", null), local.merged_default_settings.default_cache_policy), local.merged_default_settings.default_cache_policy)
       "default_origin_request_policy"          = try(coalesce(lookup(v, "default_origin_request_policy", null), local.merged_default_settings.default_origin_request_policy), local.merged_default_settings.default_origin_request_policy)
+      "default_target_origin_id"               = v.default_target_origin_id
       "default_response_headers_policy"        = try(coalesce(lookup(v, "default_response_headers_policy", null), local.merged_default_settings.default_response_headers_policy), local.merged_default_settings.default_response_headers_policy)
       "viewer_protocol_policy"                 = try(coalesce(lookup(v, "viewer_protocol_policy", null), local.merged_default_settings.viewer_protocol_policy), local.merged_default_settings.viewer_protocol_policy)
       "origin_domain_name"                     = try(coalesce(lookup(v, "origin_domain_name", null), local.merged_default_settings.origin_domain_name), local.merged_default_settings.origin_domain_name)
       "viewer_request_function_code"           = try(coalesce(lookup(v, "viewer_request_function_code", null), local.merged_default_settings.viewer_request_function_code), local.merged_default_settings.viewer_request_function_code)
       "custom_origin_config"                   = { for k, v in merge(local.merged_default_settings.custom_origin_config, coalesce(lookup(v, "custom_origin_config", null), local.merged_default_settings.custom_origin_config)) : k => v != null ? v : local.merged_default_settings.custom_origin_config[k] }
+      "origin_connection_timeout"              = try(coalesce(lookup(v, "origin_connection_timeout", null), local.merged_default_settings.origin_connection_timeout), local.merged_default_settings.origin_connection_timeout)
       "enable_upload_to_s3_origin"             = try(coalesce(lookup(v, "enable_upload_to_s3_origin", null), local.merged_default_settings.enable_upload_to_s3_origin), local.merged_default_settings.enable_upload_to_s3_origin)
       "compress"                               = try(coalesce(lookup(v, "compress", null), local.merged_default_settings.compress), local.merged_default_settings.compress)
       "default_root_object"                    = try(coalesce(lookup(v, "default_root_object", null), local.merged_default_settings.default_root_object), local.merged_default_settings.default_root_object)
       "ordered_cache_behavior"                 = try(coalesce(lookup(v, "ordered_cache_behavior", null), local.merged_default_settings.ordered_cache_behavior), local.merged_default_settings.ordered_cache_behavior)
+      "allow_list_bucket_access"               = try(coalesce(lookup(v, "allow_list_bucket_access", null), local.merged_default_settings.allow_list_bucket_access), local.merged_default_settings.allow_list_bucket_access)
     } if coalesce(lookup(v, "create", null), true)
   }
 }
@@ -84,14 +94,14 @@ provider "aws" {
 }
 
 data "aws_acm_certificate" "wildcard" {
-  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.wildcard_domain && v.use_acm_cert }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.create && v.wildcard_domain && v.use_acm_cert && v.domain_name != null }
   domain   = join(".", slice(split(".", each.value.domain_name), 1, length(split(".", each.value.domain_name))))
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "non_wildcard" {
-  for_each = { for k, v in local.cloudfront_map : k => v if v.create && !v.wildcard_domain && v.use_acm_cert }
+  for_each = { for k, v in local.cloudfront_map : k => v if v.create && !v.wildcard_domain && v.use_acm_cert && v.domain_name != null }
   domain   = each.value.domain_name
   statuses = ["ISSUED"]
   provider = aws.us-east-1
@@ -157,10 +167,11 @@ module "cloudfront" {
       "${each.value.origin_domain_name}" = {
         domain_name = each.value.origin_domain_name
         custom_origin_config = strcontains(each.value.origin_domain_name, "s3-website") ? merge(each.value.custom_origin_config, {
-          origin_protocol_policy = "http-only"
+          origin_protocol_policy = "http-only",
+          origin_read_timeout    = 30
         }) : each.value.custom_origin_config
       }
-    } : {}
+    } : {},
   )
   # ordered_cache_behavior = [
   #   for obj in each.value.ordered_cache_behavior : merge(
@@ -187,7 +198,10 @@ module "cloudfront" {
   #       } : {}
   #   }, obj)
   # ]
-  ordered_cache_behavior = each.value.ordered_cache_behavior
+  ordered_cache_behavior = each.value.ordered_cache_enable_signed_url ? [for item in each.value.ordered_cache_behavior : merge(item, {
+    trusted_signers    = []
+    trusted_key_groups = [aws_cloudfront_key_group.cloudfront_key_group[each.key].id]
+  })] : each.value.ordered_cache_behavior
   # ordered_cache_behavior = length(each.value.ordered_cache_behavior) > 0 ? [for obj in each.value.ordered_cache_behavior : merge(obj, {
   #   target_origin_id           = each.value.s3_bucket != "" ? each.value.s3_bucket : each.value.origin_domain_name
   #   path_pattern               = each.value.path_pattern == "" ? null : obj.path_pattern
@@ -202,14 +216,14 @@ module "cloudfront" {
   # })] : []
 
   default_cache_behavior = {
-    target_origin_id       = each.value.s3_bucket != "" && each.value.origin_domain_name == "" ? each.value.s3_bucket : each.value.origin_domain_name
+    target_origin_id       = each.value.default_target_origin_id != null ? each.value.default_target_origin_id : (each.value.s3_bucket != "" && each.value.origin_domain_name == "" ? each.value.s3_bucket : each.value.origin_domain_name)
     viewer_protocol_policy = each.value.viewer_protocol_policy
     allowed_methods        = each.value.default_allowed_http_methods
     cached_methods         = contains(each.value.default_cache_behavior_allowed_methods, "OPTIONS") ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD"]
     compress               = each.value.compress
 
-    trusted_signers    = each.value.default_presigned_url ? [] : null
-    trusted_key_groups = each.value.default_presigned_url ? [aws_cloudfront_key_group.cloudfront_key_group[each.key].id] : null
+    trusted_signers    = each.value.default_presigned_url && !each.value.disable_presigned_url ? [] : null
+    trusted_key_groups = each.value.default_presigned_url && !each.value.disable_presigned_url ? [aws_cloudfront_key_group.cloudfront_key_group[each.key].id] : null
 
     cache_policy_id            = each.value.default_cache_policy != "" ? data.aws_cloudfront_cache_policy.default_cache_policy[each.key].id : try(data.aws_cloudfront_cache_policy.customized_cache_policy[each.key].id, data.aws_cloudfront_cache_policy.cache_policy.id)
     use_forwarded_values       = false
@@ -225,8 +239,8 @@ module "cloudfront" {
   }
 
   viewer_certificate = {
-    acm_certificate_arn            = each.value.use_acm_cert ? (each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn) : null
-    cloudfront_default_certificate = each.value.use_acm_cert ? null : true
+    acm_certificate_arn            = each.value.use_acm_cert && each.value.domain_name != null ? (each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn) : null
+    cloudfront_default_certificate = each.value.use_acm_cert && each.value.domain_name != null ? null : true
     minimum_protocol_version       = "TLSv1.2_2021"
     ssl_support_method             = "sni-only"
   }
@@ -293,16 +307,21 @@ data "aws_iam_policy_document" "bucket_policy" {
       identifiers = ["cloudfront.amazonaws.com"]
     }
 
-    actions = each.value.enable_upload_to_s3_origin ? [
+    actions = concat(each.value.enable_upload_to_s3_origin ? [
       "s3:GetObject",
-      "s3:PutObject"
+      "s3:PutObject",
       ] : [
-      "s3:GetObject"
-    ]
+      "s3:GetObject",
+    ], each.value.allow_list_bucket_access ? [
+      "s3:ListBucket",
+    ] : [])
 
-    resources = [
+    resources = concat([
       "${data.aws_s3_bucket.s3_bucket[each.key].arn}/*",
-    ]
+    ], 
+      each.value.allow_list_bucket_access ? [
+        "${data.aws_s3_bucket.s3_bucket[each.key].arn}",
+      ] : [])
 
     condition {
       test     = "StringEquals"

@@ -9,3 +9,7 @@ output "cloudfront_info" {
     }
   }
 }
+
+# output "cloudfront_map" {
+#   value = local.cloudfront_map
+# }

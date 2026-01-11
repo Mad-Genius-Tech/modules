@@ -31,6 +31,7 @@ variable "ec2" {
     health_check_timeout             = optional(number)
     health_check_healthy_threshold   = optional(number)
     health_check_unhealthy_threshold = optional(number)
+    alb_ingress_cidrs_ipv4           = optional(list(string))
     create_iam_instance_profile      = optional(bool)
     iam_role_policies                = optional(map(string))
     policy = optional(map(object({
@@ -51,6 +52,13 @@ variable "ec2" {
       protocol    = string
       description = optional(string)
       cidr_blocks = string
+    })))
+    ingress_with_ipv6_cidr_blocks = optional(list(object({
+      from_port        = number
+      to_port          = number
+      protocol         = string
+      description      = optional(string)
+      ipv6_cidr_blocks = string
     })))
     assign_eip                 = optional(bool)
     cpu_credits                = optional(string)

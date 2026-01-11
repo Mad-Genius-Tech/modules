@@ -24,5 +24,5 @@ output "global_domain_name" {
 
 output "api_key" {
   value     = { for k, v in aws_api_gateway_api_key.api_key : k => v.value }
-  sensitive = true 
+  sensitive = true
 }

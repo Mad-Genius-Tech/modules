@@ -42,7 +42,7 @@ locals {
     secret_vars                = {}
     email_configuration        = [{}]
     lambda_config              = [{}]
-    custom_domain_name         = "${var.org_name}-${var.stage_name}-cognito"
+    custom_domain_name         = ""
     cognito_domain_name        = ""
     wildcard_domain            = true
     string_schemas = [{
@@ -337,7 +337,7 @@ resource "aws_cognito_identity_provider" "google" {
   provider_type = "Google"
 
   provider_details = {
-    authorize_scopes              = "email profile"
+    authorize_scopes              = "email profile openid"
     client_id                     = jsondecode(data.aws_secretsmanager_secret_version.secret["${each.key}|google_client_id"].secret_string)["COGNITO_GOOGLE_CLIENT_ID"]
     client_secret                 = jsondecode(data.aws_secretsmanager_secret_version.secret["${each.key}|google_client_secret"].secret_string)["COGNITO_GOOGLE_CLIENT_SECRET"]
     attributes_url                = "https://people.googleapis.com/v1/people/me?personFields="
@@ -358,7 +358,7 @@ resource "aws_cognito_identity_provider" "google" {
 }
 
 resource "aws_cognito_user_pool_domain" "custom_domain_name" {
-  for_each        = local.cognito_map
+  for_each        = { for k, v in local.cognito_map : k => v if v.custom_domain_name != null && length(v.custom_domain_name) > 0 }
   domain          = each.value.custom_domain_name
   user_pool_id    = aws_cognito_user_pool.user_pool[each.key].id
   certificate_arn = !strcontains(each.value.custom_domain_name, ".") ? null : (each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn)

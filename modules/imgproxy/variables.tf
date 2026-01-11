@@ -18,3 +18,8 @@ variable "cors" {
   })
   default = {}
 }
+
+variable "keep_warm" {
+  type = bool
+  default = null
+}

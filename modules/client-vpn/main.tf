@@ -11,6 +11,8 @@ resource "aws_ec2_client_vpn_endpoint" "mtls" {
   self_service_portal    = "disabled"
   security_group_ids     = [aws_security_group.sg[0].id]
   vpc_id                 = var.vpc_id
+  session_timeout_hours  = 8
+  dns_servers            = var.enable_private_dns ? ["169.254.169.253", cidrhost(data.aws_vpc.vpc.cidr_block, 2), "8.8.8.8"] : null
 
   client_login_banner_options {
     enabled     = true
@@ -40,6 +42,10 @@ resource "aws_ec2_client_vpn_endpoint" "saml" {
   self_service_portal    = "enabled"
   security_group_ids     = [aws_security_group.sg[0].id]
   vpc_id                 = var.vpc_id
+  session_timeout_hours  = 8
+  dns_servers            = var.enable_private_dns ? ["169.254.169.253", cidrhost(data.aws_vpc.vpc.cidr_block, 2), "8.8.8.8"] : null
+
+
 
   client_login_banner_options {
     enabled     = true
@@ -89,6 +95,20 @@ data "aws_vpc" "vpc" {
   id = var.vpc_id
 }
 
+resource "aws_ec2_client_vpn_route" "mtls_private_dns_aws" {
+  count                  = var.create && var.authentication_type == "certificate-authentication" && var.enable_private_dns ? 1 : 0
+  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.mtls[0].id
+  destination_cidr_block = "169.254.169.253/32"
+  target_vpc_subnet_id   = aws_ec2_client_vpn_network_association.subnet_association[0].subnet_id
+}
+
+resource "aws_ec2_client_vpn_route" "mtls_private_dns_vpc" {
+  count                  = var.create && var.authentication_type == "certificate-authentication" && var.enable_private_dns ? 1 : 0
+  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.mtls[0].id
+  destination_cidr_block = "${cidrhost(data.aws_vpc.vpc.cidr_block, 2)}/32"
+  target_vpc_subnet_id   = aws_ec2_client_vpn_network_association.subnet_association[0].subnet_id
+}
+
 # resource "aws_ec2_client_vpn_route" "saml" {
 #   count                  = var.create && var.authentication_type == "federated-authentication" ? 1 : 0
 #   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.saml[0].id
@@ -109,16 +129,39 @@ resource "aws_security_group" "sg" {
   description = "security group allowing egress for ${local.service_name}"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port   = 443
-    protocol    = "UDP"
-    to_port     = 443
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Incoming VPN connection"
-  }
-
   tags = merge({ "Name" = local.service_name }, local.tags)
 }
+
+resource "aws_security_group_rule" "allow_https" {
+  count             = var.create ? 1 : 0
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.sg[0].id
+}
+
+resource "aws_security_group_rule" "allow_dns" {
+  count             = var.create && var.enable_private_dns ? 1 : 0
+  type              = "ingress"
+  from_port         = 53
+  to_port           = 53
+  protocol          = "udp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.sg[0].id
+}
+
+resource "aws_security_group_rule" "allow_dns_tcp" {
+  count             = var.create && var.enable_private_dns ? 1 : 0
+  type              = "ingress"
+  from_port         = 53
+  to_port           = 53
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.sg[0].id
+}
+
 
 resource "aws_security_group_rule" "egress" {
   count             = var.create ? 1 : 0

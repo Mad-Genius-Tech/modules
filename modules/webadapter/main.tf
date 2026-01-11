@@ -1,8 +1,8 @@
 locals {
   default_settings = {
-    "timeout"                           = 10
-    "memory_size"                       = 1024
-    "ephemeral_storage_size"            = 1024
+    "timeout"                           = var.timeout == null ? 60 : var.timeout
+    "memory_size"                       = var.memory_size == null ? 1024 : var.memory_size
+    "ephemeral_storage_size"            = var.ephemeral_storage_size == null ? 1024 : var.ephemeral_storage_size
     "create_async_event_config"         = false
     "maximum_retry_attempts"            = 2
     "maximum_event_age_in_seconds"      = 21600
@@ -14,8 +14,8 @@ locals {
     "policies"                          = [""]
     "policy_statements"                 = {}
     "create_lambda_function_url"        = true
-    "keep_warm"                         = true
-    "keep_warm_expression"              = "rate(5 minutes)"
+    "keep_warm"                         = var.keep_warm == null ? true : var.keep_warm
+    "keep_warm_expression"              = var.keep_warm_expression == null ? "rate(5 minutes)" : var.keep_warm_expression
     "secret_vars"                       = {}
   }
 
@@ -126,6 +126,20 @@ module "stage_alias" {
   name             = var.stage_name
   function_name    = module.webadapter.lambda_function_name
   function_version = module.webadapter.lambda_function_version
+}
+
+resource "aws_lambda_function_url" "stage_function_url" {
+  count              = var.create && local.merged_default_settings.create_lambda_function_url ? 1 : 0
+  function_name      = module.webadapter.lambda_function_name
+  qualifier          = module.stage_alias.lambda_alias_name
+  authorization_type = "NONE"
+
+  cors {
+    allow_credentials = true
+    allow_origins     = ["*"]
+    allow_headers     = ["*"]
+    allow_methods     = ["*"]
+  }
 }
 
 module "test_alias" {

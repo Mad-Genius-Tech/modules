@@ -2,6 +2,7 @@ module "alb_internal" {
   source                     = "terraform-aws-modules/alb/aws"
   version                    = "~> 9.1.0"
   name                       = "${module.context.id}-internal"
+  create                     = var.create_internal_alb
   load_balancer_type         = "application"
   internal                   = true
   vpc_id                     = var.vpc_id
@@ -47,10 +48,10 @@ module "alb_internal" {
         enabled             = true
         path                = v.health_check_path
         healthy_threshold   = v.healthy_threshold
-        unhealthy_threshold = 3
-        interval            = 15
+        unhealthy_threshold = v.health_check_unhealthy_threshold
+        interval            = v.health_check_interval
         protocol            = "HTTP"
-        matcher             = "200"
+        matcher             = v.health_check_matcher
         port                = "traffic-port"
         timeout             = 5
       }
@@ -138,10 +139,10 @@ module "alb" {
         enabled             = true
         path                = each.value.health_check_path
         healthy_threshold   = each.value.healthy_threshold
-        unhealthy_threshold = 3
-        interval            = 15
+        unhealthy_threshold = each.value.health_check_unhealthy_threshold
+        interval            = each.value.health_check_interval
         protocol            = "HTTP"
-        matcher             = "200"
+        matcher             = each.value.health_check_matcher
         port                = "traffic-port"
         timeout             = 5
       }
@@ -153,6 +154,7 @@ module "alb" {
 module "log_bucket" {
   source                                = "terraform-aws-modules/s3-bucket/aws"
   version                               = "~> 3.15.1"
+  create_bucket                         = true
   bucket                                = "${module.context.id}-alb-logs"
   acl                                   = "log-delivery-write"
   force_destroy                         = true

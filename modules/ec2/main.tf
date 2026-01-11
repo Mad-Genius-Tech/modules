@@ -10,6 +10,7 @@ locals {
     enable_alb                       = false
     wildcard_domain                  = true
     listening_port                   = 8000
+    alb_ingress_cidrs_ipv4           = ["0.0.0.0/0"]
     health_check_path                = "/"
     health_check_interval            = 30
     health_check_timeout             = 6
@@ -21,18 +22,19 @@ locals {
       "AmazonEC2RoleforSSM"         = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
       "CloudWatchAgentServerPolicy" = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
     }
-    ingress_cidr_blocks        = []
-    ingress_rules              = ["ssh-tcp"]
-    ingress_with_cidr_blocks   = []
-    key_name                   = ""
-    subnet_id                  = ""
-    cpu_credits                = "standard"
-    aws_cloudwatch_auto_reboot = false
-    use_ubuntu                 = false
-    use_amazon_linux_2         = true
-    cloudwatch_alarm_action    = ""
-    monitoring                 = false
-    enable_cloudwatch_alarm    = false
+    ingress_cidr_blocks           = []
+    ingress_rules                 = ["ssh-tcp"]
+    ingress_with_cidr_blocks      = []
+    ingress_with_ipv6_cidr_blocks = []
+    key_name                      = ""
+    subnet_id                     = ""
+    cpu_credits                   = "standard"
+    aws_cloudwatch_auto_reboot    = false
+    use_ubuntu                    = false
+    use_amazon_linux_2            = true
+    cloudwatch_alarm_action       = ""
+    monitoring                    = false
+    enable_cloudwatch_alarm       = false
     alarms = {
       "enabled"                 = true
       "statistic"               = "Average"
@@ -77,6 +79,7 @@ locals {
       "enable_alb"                       = coalesce(lookup(v, "enable_alb", null), local.merged_default_settings.enable_alb)
       "wildcard_domain"                  = coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain)
       "domain_name"                      = v.domain_name
+      "alb_ingress_cidrs_ipv4"           = coalesce(lookup(v, "alb_ingress_cidrs_ipv4", null), local.merged_default_settings.alb_ingress_cidrs_ipv4)
       "listening_port"                   = coalesce(lookup(v, "listening_port", null), local.merged_default_settings.listening_port)
       "health_check_path"                = coalesce(lookup(v, "health_check_path", null), local.merged_default_settings.health_check_path)
       "health_check_interval"            = coalesce(lookup(v, "health_check_interval", null), local.merged_default_settings.health_check_interval)
@@ -96,6 +99,7 @@ locals {
       "cloudwatch_alarm_action"          = try(coalesce(lookup(v, "cloudwatch_alarm_action", null), local.merged_default_settings.cloudwatch_alarm_action), local.merged_default_settings.cloudwatch_alarm_action)
       "monitoring"                       = coalesce(lookup(v, "monitoring", null), local.merged_default_settings.monitoring)
       "ingress_with_cidr_blocks"         = coalesce(lookup(v, "ingress_with_cidr_blocks", null), local.merged_default_settings.ingress_with_cidr_blocks)
+      "ingress_with_ipv6_cidr_blocks"    = coalesce(lookup(v, "ingress_with_ipv6_cidr_blocks", null), local.merged_default_settings.ingress_with_ipv6_cidr_blocks)
       "policy"                           = coalesce(lookup(v, "policy", null), local.merged_default_settings.policy)
       "tags"                             = merge(coalesce(lookup(v, "tags", null), local.merged_default_settings.tags), local.merged_default_settings.tags)
       "enable_cloudwatch_alarm"          = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
@@ -136,7 +140,7 @@ resource "random_shuffle" "private_subnet" {
 
 module "ec2" {
   source                      = "terraform-aws-modules/ec2-instance/aws"
-  version                     = "~> 5.5.0"
+  version                     = "~> 6.1.4"
   for_each                    = local.ec2_map
   name                        = each.value.identifier
   instance_type               = each.value.instance_type
@@ -160,15 +164,14 @@ module "ec2" {
     },
     each.value.iam_role_policies
   )
-  root_block_device = [
-    {
-      encrypted   = each.value.root_volume_encrypt
-      volume_type = each.value.root_volume_type
-      volume_size = each.value.root_volume_size
-    },
-  ]
+  root_block_device = {
+    encrypted = each.value.root_volume_encrypt
+    type      = each.value.root_volume_type
+    size      = each.value.root_volume_size
+  }
   key_name               = each.value.key_name == "" ? (var.key_per_instance ? aws_key_pair.key_pair_per_instance[each.key].key_name : one(values(aws_key_pair.key_pair)).key_name) : each.value.key_name
   vpc_security_group_ids = [module.sg[each.key].security_group_id]
+  create_security_group  = false
   cpu_credits            = replace(each.value.instance_type, "/^t(2|3|3a){1}\\..*$/", "1") == "1" ? each.value.cpu_credits : null
   monitoring             = each.value.monitoring
   tags                   = merge(local.tags, each.value.tags)
@@ -226,17 +229,18 @@ resource "local_file" "private_key_per_instance" {
 }
 
 module "sg" {
-  for_each                 = local.ec2_map
-  source                   = "terraform-aws-modules/security-group/aws"
-  version                  = "~> 5.1.0"
-  name                     = each.value.identifier
-  description              = "Security group for EC2 ${each.value.identifier}"
-  vpc_id                   = var.vpc_id
-  ingress_cidr_blocks      = length(each.value.ingress_cidr_blocks) > 0 ? each.value.ingress_cidr_blocks : []
-  ingress_rules            = length(each.value.ingress_cidr_blocks) > 0 ? each.value.ingress_rules : []
-  ingress_with_cidr_blocks = each.value.ingress_with_cidr_blocks
-  egress_rules             = ["all-all"]
-  tags                     = local.tags
+  for_each                      = local.ec2_map
+  source                        = "terraform-aws-modules/security-group/aws"
+  version                       = "~> 5.1.2"
+  name                          = each.value.identifier
+  description                   = "Security group for EC2 ${each.value.identifier}"
+  vpc_id                        = var.vpc_id
+  ingress_cidr_blocks           = length(each.value.ingress_cidr_blocks) > 0 ? each.value.ingress_cidr_blocks : []
+  ingress_rules                 = length(each.value.ingress_cidr_blocks) > 0 ? each.value.ingress_rules : []
+  ingress_with_cidr_blocks      = each.value.ingress_with_cidr_blocks
+  ingress_with_ipv6_cidr_blocks = each.value.ingress_with_ipv6_cidr_blocks
+  egress_rules                  = ["all-all"]
+  tags                          = local.tags
 }
 
 locals {
@@ -398,31 +402,45 @@ data "aws_acm_certificate" "non_wildcard" {
   statuses = ["ISSUED"]
 }
 
-module "alb" {
+resource "random_string" "random" {
   for_each = { for k, v in local.ec2_map : k => v if v.create && v.enable_alb }
-  source   = "terraform-aws-modules/alb/aws"
-  version  = "~> 9.12.0"
-  create   = each.value.enable_alb && length(var.public_subnets) > 0
-  name     = each.value.identifier
-  vpc_id   = var.vpc_id
-  subnets  = var.public_subnets
+  length   = 5
+  special  = false
+  upper    = false
+}
 
-  security_group_ingress_rules = {
-    all_http = {
-      from_port   = 80
-      to_port     = 80
-      ip_protocol = "tcp"
-      description = "HTTP web traffic"
-      cidr_ipv4   = "0.0.0.0/0"
-    }
-    all_https = {
-      from_port   = 443
-      to_port     = 443
-      ip_protocol = "tcp"
-      description = "HTTPS web traffic"
-      cidr_ipv4   = "0.0.0.0/0"
-    }
-  }
+module "alb" {
+  for_each = { for k, v in local.ec2_map : k => merge(v,
+    {
+      alb_ingress_rules_map = merge(
+        { for cidr in v.alb_ingress_cidrs_ipv4 : "${cidr}-80" =>
+          {
+            from_port   = 80
+            to_port     = 80
+            protocol    = "tcp"
+            description = "HTTP"
+            cidr_ipv4   = cidr
+          }
+        },
+        { for cidr in v.alb_ingress_cidrs_ipv4 : "${cidr}-443" =>
+          {
+            from_port   = 443
+            to_port     = 443
+            protocol    = "tcp"
+            description = "HTTPS"
+            cidr_ipv4   = cidr
+          }
+        }
+      )
+  }) if v.create && v.enable_alb }
+  source  = "terraform-aws-modules/alb/aws"
+  version = "~> 9.12.0"
+  create  = each.value.enable_alb && length(var.public_subnets) > 0
+  name    = length(each.value.identifier) > 32 ? "${substr(each.value.identifier, 0, 26)}-${random_string.random[each.key].result}" : each.value.identifier
+  vpc_id  = var.vpc_id
+  subnets = var.public_subnets
+
+  security_group_ingress_rules = each.value.alb_ingress_rules_map
   security_group_egress_rules = {
     all = {
       ip_protocol = "-1"

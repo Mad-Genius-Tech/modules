@@ -324,7 +324,7 @@ resource "aws_lambda_function_event_invoke_config" "sqs_stage_invoke_config" {
 
 
 resource "aws_cloudwatch_metric_alarm" "lambda_alarm" {
-  for_each = { for k, v in local.lambda_map : k => v if v.create }
+  for_each            = { for k, v in local.lambda_map : k => v if v.create }
   alarm_name          = "${each.value.identifier}-errors"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "1"

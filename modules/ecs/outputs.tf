@@ -28,14 +28,23 @@ output "ecs_cluster_arn" {
   value = module.ecs_cluster.arn
 }
 
+output "ecs_map" {
+  value = local.ecs_map
+}
+
 output "ecs_services" {
   value = {
     for k, v in module.ecs_service : k => {
-      service_id             = v.id
-      service_name           = v.name
-      task_exec_iam_role_arn = v.task_exec_iam_role_arn
-      task_set_id            = v.task_set_id
+      service_id              = v.id
+      service_name            = v.name
+      task_exec_iam_role_name = v.task_exec_iam_role_name
+      task_exec_iam_role_arn  = v.task_exec_iam_role_arn
+      task_set_id             = v.task_set_id
       # container_definitions = v.container_definitions
     }
   }
 }
+
+# output "ecs" {
+#   value = var.ecs_services
+# }

@@ -58,11 +58,11 @@ data "aws_lambda_function" "lambda_function" {
 }
 
 resource "aws_apigatewayv2_integration" "integration" {
-  for_each               = local.apigateway_routekey_map
-  api_id                 = aws_apigatewayv2_api.apigateway[split("|", each.key)[0]].id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = data.aws_lambda_function.lambda_function[each.key].invoke_arn
-  integration_method     = "POST"
+  for_each           = local.apigateway_routekey_map
+  api_id             = aws_apigatewayv2_api.apigateway[split("|", each.key)[0]].id
+  integration_type   = "AWS_PROXY"
+  integration_uri    = data.aws_lambda_function.lambda_function[each.key].invoke_arn
+  integration_method = "POST"
 }
 
 resource "aws_apigatewayv2_route" "route" {

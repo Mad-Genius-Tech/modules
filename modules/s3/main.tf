@@ -29,13 +29,18 @@ locals {
         }
       }
     ]
-    server_side_encryption_configuration = {
-      rule = {
-        apply_server_side_encryption_by_default = {
-          sse_algorithm = "AES256"
-        }
+    intelligent_tiering = [
+      {
+        id      = "IntelligentTieringRule"
+        enabled = true
+        transition = [
+          {
+            days          = 7
+            storage_class = "INTELLIGENT_TIERING"
+          }
+        ]
       }
-    }
+    ]
     block_public_acls        = true
     block_public_policy      = true
     ignore_public_acls       = true
@@ -46,6 +51,13 @@ locals {
     lambda_function_name     = ""
     bucket_events            = ["s3:ObjectCreated:*"]
     events_filter            = {}
+    server_side_encryption_configuration = {
+      rule = {
+        apply_server_side_encryption_by_default = {
+          sse_algorithm = "AES256"
+        }
+      }
+    }
   }
 
   env_default_settings = {
@@ -71,8 +83,20 @@ locals {
             #   }
             # ]
             noncurrent_version_expiration = {
-              days = 30
+              days = 7
             }
+          }
+        ]
+        intelligent_tiering = [
+          {
+            id      = "IntelligentTieringRule"
+            enabled = true
+            transition = [
+              {
+                days          = 30
+                storage_class = "INTELLIGENT_TIERING"
+              }
+            ]
           }
         ]
     })
@@ -103,6 +127,10 @@ locals {
       "object_ownership"                     = coalesce(lookup(v, "object_ownership", null), local.default_settings.object_ownership)
       "lambda_function_name"                 = try(coalesce(lookup(v, "lambda_function_name", null), local.default_settings.lambda_function_name), local.default_settings.lambda_function_name)
       "events_filter"                        = try(coalesce(lookup(v, "events_filter", null), local.default_settings.events_filter), local.default_settings.events_filter)
+      "lifecycle_rules" = concat(
+        local.merged_default_settings.lifecycle_rule,
+        try(v.intelligent_tiering.enabled, false) ? local.merged_default_settings.intelligent_tiering : []
+      )
     } if coalesce(lookup(v, "create", null), true)
   }
 }
@@ -174,7 +202,7 @@ module "s3_bucket" {
   attach_policy                        = each.value.attach_policy
   policy                               = each.value.attach_public_read_policy ? data.aws_iam_policy_document.public_read[each.key].json : each.value.policy
   attach_public_policy                 = each.value.attach_public_policy
-  lifecycle_rule                       = each.value.lifecycle_rule
+  lifecycle_rule                       = each.value.lifecycle_rules
   versioning                           = each.value.versioning
   server_side_encryption_configuration = each.value.server_side_encryption_configuration
   block_public_acls                    = each.value.block_public_acls

@@ -45,3 +45,7 @@ output "vpc_cidr_block" {
 output "vgw_id" {
   value = module.vpc.vgw_id
 }
+
+output "nat_public_ips" {
+  value = module.vpc.nat_public_ips
+}

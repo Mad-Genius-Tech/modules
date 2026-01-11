@@ -62,7 +62,11 @@ resource "aws_pinpoint_email_channel" "email" {
 
 
 locals {
-  template_dirs = fileset(var.templates_dir, "*")
+  template_files = fileset(var.templates_dir, "*/index.html")
+  template_dirs = distinct([
+    for file in local.template_files :
+    split("/", file)[0]
+  ])
 
   discovered_templates = {
     for dir in local.template_dirs : dir => {

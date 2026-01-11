@@ -85,6 +85,13 @@ variable "s3_buckets" {
       prefix        = optional(string)
       suffix        = optional(string)
     })))
+    intelligent_tiering = optional(object({
+      enabled = optional(bool, false)
+      transition = optional(list(object({
+        days          = optional(number)
+        storage_class = optional(string)
+      })), [])
+    }))
     tags = optional(map(string))
   }))
   default = {}

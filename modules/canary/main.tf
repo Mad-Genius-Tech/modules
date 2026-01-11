@@ -2,15 +2,17 @@
 
 locals {
   default_settings = {
-    schedule_expression      = "rate(3 minutes)"
-    take_screenshot          = true
-    runtime_version          = "syn-python-selenium-3.0"
-    handler                  = "canary.handler"
-    timeout_in_seconds       = 15
-    memory_in_mb             = 960
-    success_retention_period = 2
-    failure_retention_period = 14
-    enable_notification      = true
+    schedule_expression       = "rate(3 minutes)"
+    period_in_seconds         = 300
+    take_screenshot           = true
+    runtime_version           = "syn-python-selenium-3.0"
+    handler                   = "canary.handler"
+    timeout_in_seconds        = 15
+    threshold_success_percent = 90
+    memory_in_mb              = 960
+    success_retention_period  = 2
+    failure_retention_period  = 14
+    enable_notification       = true
   }
 
   env_default_settings = {
@@ -24,18 +26,20 @@ locals {
 
   canary_map = {
     for k, v in var.canary : k => {
-      "identifier"               = "${module.context.id}-${k}"
-      "create"                   = coalesce(lookup(v, "create", null), true)
-      enable_notification        = coalesce(lookup(v, "enable_notification", null), local.merged_default_settings.enable_notification)
-      "runtime_version"          = try(coalesce(lookup(v, "runtime_version", null), local.merged_default_settings.runtime_version), local.merged_default_settings.runtime_version)
-      "handler"                  = try(coalesce(lookup(v, "handler", null), local.merged_default_settings.handler), local.merged_default_settings.handler)
-      "url"                      = v.url
-      "take_screenshot"          = try(coalesce(lookup(v, "take_screenshot", null), local.merged_default_settings.take_screenshot), local.merged_default_settings.take_screenshot)
-      "schedule_expression"      = try(coalesce(lookup(v, "schedule_expression", null), local.merged_default_settings.schedule_expression), local.merged_default_settings.schedule_expression)
-      "timeout_in_seconds"       = try(coalesce(lookup(v, "timeout_in_seconds", null), local.merged_default_settings.timeout_in_seconds), local.merged_default_settings.timeout_in_seconds)
-      "memory_in_mb"             = try(coalesce(lookup(v, "memory_in_mb", null), local.merged_default_settings.memory_in_mb), local.merged_default_settings.memory_in_mb)
-      "success_retention_period" = try(coalesce(lookup(v, "success_retention_period", null), local.merged_default_settings.success_retention_period), local.merged_default_settings.success_retention_period)
-      "failure_retention_period" = try(coalesce(lookup(v, "failure_retention_period", null), local.merged_default_settings.failure_retention_period), local.merged_default_settings.failure_retention_period)
+      "identifier"                = "${module.context.id}-${k}"
+      "create"                    = coalesce(lookup(v, "create", null), true)
+      enable_notification         = coalesce(lookup(v, "enable_notification", null), local.merged_default_settings.enable_notification)
+      "runtime_version"           = try(coalesce(lookup(v, "runtime_version", null), local.merged_default_settings.runtime_version), local.merged_default_settings.runtime_version)
+      "handler"                   = try(coalesce(lookup(v, "handler", null), local.merged_default_settings.handler), local.merged_default_settings.handler)
+      "url"                       = v.url
+      "take_screenshot"           = try(coalesce(lookup(v, "take_screenshot", null), local.merged_default_settings.take_screenshot), local.merged_default_settings.take_screenshot)
+      "schedule_expression"       = try(coalesce(lookup(v, "schedule_expression", null), local.merged_default_settings.schedule_expression), local.merged_default_settings.schedule_expression)
+      "timeout_in_seconds"        = try(coalesce(lookup(v, "timeout_in_seconds", null), local.merged_default_settings.timeout_in_seconds), local.merged_default_settings.timeout_in_seconds)
+      "memory_in_mb"              = try(coalesce(lookup(v, "memory_in_mb", null), local.merged_default_settings.memory_in_mb), local.merged_default_settings.memory_in_mb)
+      "success_retention_period"  = try(coalesce(lookup(v, "success_retention_period", null), local.merged_default_settings.success_retention_period), local.merged_default_settings.success_retention_period)
+      "failure_retention_period"  = try(coalesce(lookup(v, "failure_retention_period", null), local.merged_default_settings.failure_retention_period), local.merged_default_settings.failure_retention_period)
+      "threshold_success_percent" = try(coalesce(lookup(v, "threshold_success_percent", null), local.merged_default_settings.threshold_success_percent), local.merged_default_settings.threshold_success_percent)
+      "period_in_seconds"         = try(coalesce(lookup(v, "period_in_seconds", null), local.merged_default_settings.period_in_seconds), local.merged_default_settings.period_in_seconds)
     } if coalesce(lookup(v, "create", null), true)
   }
 }
@@ -91,17 +95,17 @@ resource "aws_cloudwatch_metric_alarm" "canary_alarm" {
   for_each            = { for k, v in local.canary_map : k => v if v.enable_notification }
   alarm_name          = "${each.value.identifier}-alarm"
   comparison_operator = "LessThanThreshold"
-  period              = "300"
+  period              = each.value.period_in_seconds
   datapoints_to_alarm = "2"
   evaluation_periods  = "2"
   metric_name         = "SuccessPercent"
   namespace           = "CloudWatchSynthetics"
   statistic           = "Average"
-  threshold           = "90"
+  threshold           = each.value.threshold_success_percent
   treat_missing_data  = "missing" # breaching/missing
   alarm_actions       = var.sns_topic_cloudwatch_alarm_arn == "" ? [] : [var.sns_topic_cloudwatch_alarm_arn]
   ok_actions          = var.sns_topic_cloudwatch_alarm_arn == "" ? [] : [var.sns_topic_cloudwatch_alarm_arn]
-  alarm_description   = "${each.value.url} - SuccessPercent LessThanThreshold 90"
+  alarm_description   = "${each.value.url} - SuccessPercent LessThanThreshold ${each.value.threshold_success_percent}"
   dimensions = {
     CanaryName = aws_synthetics_canary.canary[each.key].name
   }

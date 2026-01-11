@@ -48,3 +48,11 @@ variable "schedule_expression" {
   type    = string
   default = "rate(15 minutes)"
 }
+
+variable "secret_vars" {
+  type = map(object({
+    secret_path = optional(string)
+    property    = optional(string)
+  }))
+  default = {}
+}

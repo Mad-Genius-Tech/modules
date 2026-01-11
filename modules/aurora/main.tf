@@ -24,6 +24,7 @@ locals {
       "dimensions"              = {}
       "cloudwatch_alarm_action" = ""
     }
+    enabled_cloudwatch_logs_exports = []
   }
 
   env_default_settings = {
@@ -37,6 +38,7 @@ locals {
         instances_count              = 2
         enable_cloudwatch_alarm      = true
         log_group_retention_in_days  = 14
+        # enabled_cloudwatch_logs_exports = ["postgresql"]
     })
   }
 
@@ -44,24 +46,25 @@ locals {
 
   aurora_map = {
     for k, v in var.aurora : k => {
-      "create"                       = coalesce(lookup(v, "create", null), true)
-      "identifier"                   = "${module.context.id}-${k}"
-      "version"                      = try(coalesce(lookup(v, "version", null), local.merged_default_settings.version), local.merged_default_settings.version)
-      "min_capacity"                 = try(coalesce(lookup(v, "min_capacity", null), local.merged_default_settings.min_capacity), local.merged_default_settings.min_capacity)
-      "max_capacity"                 = try(coalesce(lookup(v, "max_capacity", null), local.merged_default_settings.max_capacity), local.merged_default_settings.max_capacity)
-      "master_username"              = try(coalesce(lookup(v, "master_username", null), local.merged_default_settings.master_username), local.merged_default_settings.master_username)
-      "skip_final_snapshot"          = try(coalesce(lookup(v, "skip_final_snapshot", null), local.merged_default_settings.skip_final_snapshot), local.merged_default_settings.skip_final_snapshot)
-      "backup_retention_period"      = try(coalesce(lookup(v, "backup_retention_period", null), local.merged_default_settings.backup_retention_period), local.merged_default_settings.backup_retention_period)
-      "performance_insights_enabled" = try(coalesce(lookup(v, "performance_insights_enabled", null), local.merged_default_settings.performance_insights_enabled), local.merged_default_settings.performance_insights_enabled)
-      "monitoring_interval"          = try(coalesce(lookup(v, "monitoring_interval", null), local.merged_default_settings.monitoring_interval), local.merged_default_settings.monitoring_interval)
-      "database_name"                = try(coalesce(lookup(v, "database_name", null), local.merged_default_settings.database_name), local.merged_default_settings.database_name)
-      "deletion_protection"          = try(coalesce(lookup(v, "deletion_protection", null), local.merged_default_settings.deletion_protection), local.merged_default_settings.deletion_protection)
-      "lambda_functions"             = coalesce(lookup(v, "lambda_functions", null), local.merged_default_settings.lambda_functions)
-      "instances_count"              = try(coalesce(lookup(v, "instances_count", null), local.merged_default_settings.instances_count), local.merged_default_settings.instances_count)
-      "instances"                    = try(coalesce(lookup(v, "instances", null), local.merged_default_settings.instances), local.merged_default_settings.instances)
-      "enable_proxy"                 = coalesce(lookup(v, "enable_proxy", null), local.merged_default_settings.enable_proxy)
-      "log_group_retention_in_days"  = local.merged_default_settings.log_group_retention_in_days
-      "enable_cloudwatch_alarm"      = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
+      "create"                          = coalesce(lookup(v, "create", null), true)
+      "identifier"                      = "${module.context.id}-${k}"
+      "version"                         = try(coalesce(lookup(v, "version", null), local.merged_default_settings.version), local.merged_default_settings.version)
+      "min_capacity"                    = try(coalesce(lookup(v, "min_capacity", null), local.merged_default_settings.min_capacity), local.merged_default_settings.min_capacity)
+      "max_capacity"                    = try(coalesce(lookup(v, "max_capacity", null), local.merged_default_settings.max_capacity), local.merged_default_settings.max_capacity)
+      "master_username"                 = try(coalesce(lookup(v, "master_username", null), local.merged_default_settings.master_username), local.merged_default_settings.master_username)
+      "skip_final_snapshot"             = try(coalesce(lookup(v, "skip_final_snapshot", null), local.merged_default_settings.skip_final_snapshot), local.merged_default_settings.skip_final_snapshot)
+      "backup_retention_period"         = try(coalesce(lookup(v, "backup_retention_period", null), local.merged_default_settings.backup_retention_period), local.merged_default_settings.backup_retention_period)
+      "performance_insights_enabled"    = try(coalesce(lookup(v, "performance_insights_enabled", null), local.merged_default_settings.performance_insights_enabled), local.merged_default_settings.performance_insights_enabled)
+      "monitoring_interval"             = try(coalesce(lookup(v, "monitoring_interval", null), local.merged_default_settings.monitoring_interval), local.merged_default_settings.monitoring_interval)
+      "database_name"                   = try(coalesce(lookup(v, "database_name", null), local.merged_default_settings.database_name), local.merged_default_settings.database_name)
+      "deletion_protection"             = try(coalesce(lookup(v, "deletion_protection", null), local.merged_default_settings.deletion_protection), local.merged_default_settings.deletion_protection)
+      "lambda_functions"                = coalesce(lookup(v, "lambda_functions", null), local.merged_default_settings.lambda_functions)
+      "instances_count"                 = try(coalesce(lookup(v, "instances_count", null), local.merged_default_settings.instances_count), local.merged_default_settings.instances_count)
+      "instances"                       = try(coalesce(lookup(v, "instances", null), local.merged_default_settings.instances), local.merged_default_settings.instances)
+      "enable_proxy"                    = coalesce(lookup(v, "enable_proxy", null), local.merged_default_settings.enable_proxy)
+      "log_group_retention_in_days"     = local.merged_default_settings.log_group_retention_in_days
+      "enable_cloudwatch_alarm"         = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
+      "enabled_cloudwatch_logs_exports" = coalesce(lookup(v, "enabled_cloudwatch_logs_exports", null), local.merged_default_settings.enabled_cloudwatch_logs_exports)
       "alarms" = {
         for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
           "identifier"              = "${module.context.id}-${k}-${k1}"
@@ -122,7 +125,7 @@ resource "aws_secretsmanager_secret_version" "secret_version" {
 
 module "aurora_postgresql_v2" {
   source         = "terraform-aws-modules/rds-aurora/aws"
-  version        = "~> 8.3.1"
+  version        = "~> 9.13.0"
   for_each       = local.aurora_map
   name           = each.value.identifier
   engine         = data.aws_rds_engine_version.aurora[each.key].engine
@@ -152,16 +155,21 @@ module "aurora_postgresql_v2" {
       cidr_blocks = ["0.0.0.0/0"]
     }
   }, var.security_group_rules)
-  deletion_protection          = each.value.deletion_protection
-  storage_encrypted            = true
-  monitoring_interval          = each.value.monitoring_interval
-  performance_insights_enabled = each.value.performance_insights_enabled
-  backup_retention_period      = each.value.backup_retention_period
-  apply_immediately            = true
-  skip_final_snapshot          = each.value.skip_final_snapshot
-  instances                    = { for i in range(1, each.value.instances_count + 1) : i => try(each.value.instances[i], {}) }
-  copy_tags_to_snapshot        = true
-  tags                         = local.tags
+  deletion_protection = each.value.deletion_protection
+  storage_encrypted   = true
+  monitoring_interval = each.value.monitoring_interval
+  # performance_insights_enabled = each.value.performance_insights_enabled
+  # performance_insights_retention_period = each.value.performance_insights_enabled ? 7 : null
+  cluster_performance_insights_enabled          = each.value.performance_insights_enabled
+  cluster_performance_insights_retention_period = each.value.performance_insights_enabled ? 7 : null
+  create_cloudwatch_log_group                   = length(each.value.enabled_cloudwatch_logs_exports) > 0
+  enabled_cloudwatch_logs_exports               = each.value.enabled_cloudwatch_logs_exports
+  backup_retention_period                       = each.value.backup_retention_period
+  apply_immediately                             = true
+  skip_final_snapshot                           = each.value.skip_final_snapshot
+  instances                                     = { for i in range(1, each.value.instances_count + 1) : i => try(each.value.instances[i], {}) }
+  copy_tags_to_snapshot                         = true
+  tags                                          = local.tags
 }
 
 data "aws_caller_identity" "current" {}

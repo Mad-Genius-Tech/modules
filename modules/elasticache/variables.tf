@@ -18,6 +18,7 @@ variable "redis" {
   type = map(object({
     create                     = optional(bool)
     node_type                  = optional(string)
+    engine                     = optional(string)
     engine_version             = optional(string)
     transit_encryption_enabled = optional(bool)
     auth_token                 = optional(string)
@@ -34,7 +35,7 @@ variable "redis" {
       name  = string
       value = string
     })))
-    enable_cloudwatch_alarm      = optional(bool)
+    enable_cloudwatch_alarm = optional(bool)
     alarms = optional(map(object({
       metric_name             = string
       comparison_operator     = optional(string)

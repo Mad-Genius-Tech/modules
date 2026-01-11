@@ -19,6 +19,11 @@ variable "subnets_cidr_blocks" {
   type = list(string)
 }
 
+variable "enable_private_dns" {
+  type    = bool
+  default = false
+}
+
 variable "logs_retention_in_days" {
   type    = number
   default = 1

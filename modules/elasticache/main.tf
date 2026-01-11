@@ -2,7 +2,8 @@
 locals {
   default_settings = {
     node_type                  = "cache.t4g.micro"
-    engine_version             = "6.2"
+    engine                     = "valkey"
+    engine_version             = "8.0"
     transit_encryption_enabled = false
     at_rest_encryption_enabled = true
     auth_token                 = null
@@ -39,6 +40,7 @@ locals {
   redis_map = {
     for k, v in var.redis : k => {
       "identifier"                 = "${module.context.id}-${k}"
+      "engine"                     = try(coalesce(lookup(v, "engine", null), local.merged_default_settings.engine), local.merged_default_settings.engine)
       "engine_version"             = try(coalesce(lookup(v, "engine_version", null), local.merged_default_settings.engine_version), local.merged_default_settings.engine_version)
       "node_type"                  = try(coalesce(lookup(v, "node_type", null), local.merged_default_settings.node_type), local.merged_default_settings.node_type)
       "transit_encryption_enabled" = try(coalesce(lookup(v, "transit_encryption_enabled", null), local.merged_default_settings.transit_encryption_enabled), local.merged_default_settings.transit_encryption_enabled)
@@ -81,10 +83,27 @@ resource "aws_elasticache_subnet_group" "subnet_group" {
 }
 
 resource "aws_elasticache_parameter_group" "parameter_group" {
-  for_each    = local.redis_map
+  for_each    = { for k, v in local.redis_map : k => v if v.engine == "redis" }
   name        = each.value.identifier
   description = "ElastiCache parameter group for ${each.value.identifier}"
-  family      = tonumber(substr(each.value.engine_version, 0, 1)) < 6 ? "redis${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}" : (tonumber(substr(each.value.engine_version, 0, 1)) == 6 ? "redis${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}.x" : "redis${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}")
+  family      = tonumber(substr(each.value.engine_version, 0, 1)) < 6 ? "${each.value.engine}${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}" : (tonumber(substr(each.value.engine_version, 0, 1)) == 6 ? "${each.value.engine}${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}.x" : "${each.value.engine}${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}")
+  dynamic "parameter" {
+    for_each = each.value.parameters
+    content {
+      name  = parameter.value.name
+      value = parameter.value.value
+    }
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_elasticache_parameter_group" "valkey_parameter_group" {
+  for_each    = { for k, v in local.redis_map : k => v if v.engine == "valkey" }
+  name        = "${each.value.identifier}-${each.value.engine}${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}"
+  description = "ElastiCache parameter group for ${each.value.identifier}"
+  family      = "${each.value.engine}${replace(each.value.engine_version, "/\\.[\\d]+$/", "")}"
   dynamic "parameter" {
     for_each = each.value.parameters
     content {
@@ -101,12 +120,12 @@ resource "aws_elasticache_replication_group" "redis" {
   for_each                   = local.redis_map
   replication_group_id       = each.value.identifier
   description                = "ElastiCache replication group for ${each.value.identifier}"
-  engine                     = "redis"
+  engine                     = each.value.engine
   port                       = 6379
   apply_immediately          = true
   node_type                  = each.value.node_type
   engine_version             = each.value.engine_version
-  parameter_group_name       = aws_elasticache_parameter_group.parameter_group[each.key].id
+  parameter_group_name       = each.value.engine == "redis" ? aws_elasticache_parameter_group.parameter_group[each.key].id : aws_elasticache_parameter_group.valkey_parameter_group[each.key].id
   subnet_group_name          = aws_elasticache_subnet_group.subnet_group[each.key].id
   transit_encryption_enabled = each.value.transit_encryption_enabled
   auth_token                 = each.value.auth_token

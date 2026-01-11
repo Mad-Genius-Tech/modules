@@ -3,6 +3,25 @@ data "aws_lambda_function" "existing_lambda" {
   function_name = "${local.name}-server"
 }
 
+
+data "aws_secretsmanager_secret" "secret" {
+  for_each = var.secret_vars
+  name     = each.value.secret_path
+}
+
+data "aws_secretsmanager_secret_version" "secret" {
+  for_each  = var.secret_vars
+  secret_id = data.aws_secretsmanager_secret.secret[each.key].id
+}
+
+locals {
+  secret_vars_env = { for k, v in var.secret_vars : k =>
+    jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.secret[k].secret_string))[v.property]
+  }
+}
+
+
+
 module "server" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 6.0.1"
@@ -20,7 +39,7 @@ module "server" {
     LAMBDA_CONFIG_PROJECT_NAME = "${module.context.id}-backend"
     LAMBDA_CONFIG_AWS_REGION   = data.aws_region.current.name
     HOME                       = "/tmp"
-  }, var.environment_variables)
+  }, var.environment_variables, local.secret_vars_env)
   package_type             = "Image"
   image_uri                = var.image_uri == "" ? data.aws_lambda_function.existing_lambda[0].image_uri : var.image_uri
   attach_policy_statements = length(var.policy_statements) > 0 ? true : false

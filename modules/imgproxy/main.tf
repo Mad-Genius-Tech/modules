@@ -16,7 +16,7 @@ locals {
     "policies"                          = ["arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole"]
     "policy_statements"                 = {}
     "create_lambda_function_url"        = true
-    "keep_warm"                         = true
+    "keep_warm"                         = var.keep_warm != null ? var.keep_warm : true
     "keep_warm_expression"              = "rate(5 minutes)"
     "secret_vars"                       = {}
   }
@@ -24,13 +24,12 @@ locals {
   env_default_settings = {
     prod = merge(local.default_settings,
       {
-        "provisioned_concurrent_executions" = 2
+        # "provisioned_concurrent_executions" = 2
       }
     )
   }
 
   merged_default_settings = can(local.env_default_settings[var.stage_name]) ? lookup(local.env_default_settings, var.stage_name, local.default_settings) : local.default_settings
-
 }
 
 data "aws_caller_identity" "current" {}

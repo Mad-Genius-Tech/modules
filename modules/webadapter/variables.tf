@@ -8,6 +8,31 @@ variable "image_uri" {
   default = ""
 }
 
+variable "timeout" {
+  type    = number
+  default = null
+}
+
+variable "keep_warm" {
+  type    = bool
+  default = true
+}
+
+variable "keep_warm_expression" {
+  type    = string
+  default = "rate(5 minutes)"
+}
+
+variable "memory_size" {
+  type    = number
+  default = 1024
+}
+
+variable "ephemeral_storage_size" {
+  type    = number
+  default = 1024
+}
+
 variable "environment_variables" {
   type    = map(string)
   default = {}
