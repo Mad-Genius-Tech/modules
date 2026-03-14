@@ -51,6 +51,9 @@ locals {
     root_volume_type    = "gp2"
     root_volume_size    = 8
     ami                 = null
+    metadata_options = {
+      http_put_response_hop_limit = 1
+    }
   }
 
   env_default_settings = {
@@ -103,6 +106,7 @@ locals {
       "policy"                           = coalesce(lookup(v, "policy", null), local.merged_default_settings.policy)
       "tags"                             = merge(coalesce(lookup(v, "tags", null), local.merged_default_settings.tags), local.merged_default_settings.tags)
       "enable_cloudwatch_alarm"          = coalesce(lookup(v, "enable_cloudwatch_alarm", null), local.merged_default_settings.enable_cloudwatch_alarm)
+      "metadata_options"                 = coalesce(lookup(v, "metadata_options", null), local.merged_default_settings.metadata_options)
       "alarms" = {
         for k1, v1 in coalesce(lookup(v, "alarms", null), {}) : k1 => {
           "enabled"                 = v1.enabled
@@ -154,7 +158,7 @@ module "ec2" {
   iam_role_description        = "IAM role for EC2 ${each.value.identifier}"
   metadata_options = {
     "http_endpoint"               = "enabled"
-    "http_put_response_hop_limit" = 1
+    "http_put_response_hop_limit" = each.value.metadata_options.http_put_response_hop_limit
     "http_tokens"                 = "optional"
     "instance_metadata_tags"      = "enabled"
   }

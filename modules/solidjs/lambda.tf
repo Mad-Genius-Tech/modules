@@ -25,6 +25,7 @@ locals {
 module "server" {
   source                            = "terraform-aws-modules/lambda/aws"
   version                           = "~> 6.0.1"
+  create                            = var.enabled
   function_name                     = "${local.name}-server"
   description                       = "SolidJS Server Function"
   runtime                           = "nodejs18.x"
@@ -51,20 +52,23 @@ module "server" {
 }
 
 resource "aws_cloudwatch_event_rule" "cron" {
+  count               = var.schedule_expression != "" && var.enabled ? 1 : 0
   name                = "${local.name}-cron"
   schedule_expression = var.schedule_expression
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {
+  count     = var.schedule_expression != "" && var.enabled ? 1 : 0
   target_id = "lambda"
   arn       = module.server.lambda_function_arn
-  rule      = aws_cloudwatch_event_rule.cron.name
+  rule      = aws_cloudwatch_event_rule.cron[0].name
 }
 
 resource "aws_lambda_permission" "eventbridge_invoke" {
+  count         = var.schedule_expression != "" && var.enabled ? 1 : 0
   statement_id  = "AllowExecutionFromEventbridge"
   action        = "lambda:InvokeFunction"
   function_name = module.server.lambda_function_arn
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.cron.arn
+  source_arn    = aws_cloudwatch_event_rule.cron[0].arn
 }

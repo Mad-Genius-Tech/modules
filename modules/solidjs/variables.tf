@@ -1,3 +1,8 @@
+variable "enabled" {
+  type    = bool
+  default = true
+}
+
 variable "image_uri" {
   type    = string
   default = ""

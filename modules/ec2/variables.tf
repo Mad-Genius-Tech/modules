@@ -34,6 +34,9 @@ variable "ec2" {
     alb_ingress_cidrs_ipv4           = optional(list(string))
     create_iam_instance_profile      = optional(bool)
     iam_role_policies                = optional(map(string))
+    metadata_options = optional(object({
+      http_put_response_hop_limit = optional(number)
+    }))
     policy = optional(map(object({
       resources_arn = list(string)
       actions       = list(string)

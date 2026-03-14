@@ -6,6 +6,7 @@ data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
 resource "aws_cloudfront_origin_access_control" "s3_origin_access_control" {
+  count                             = var.enabled ? 1 : 0
   name                              = "${local.name}-s3"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -30,14 +31,14 @@ provider "aws" {
 }
 
 data "aws_acm_certificate" "wildcard" {
-  count    = var.wildcard_domain ? 1 : 0
+  count    = var.enabled && var.wildcard_domain ? 1 : 0
   domain   = join(".", slice(split(".", var.domain_names[0]), 1, length(split(".", var.domain_names[0]))))
   statuses = ["ISSUED"]
   provider = aws.us-east-1
 }
 
 data "aws_acm_certificate" "non_wildcard" {
-  count    = var.wildcard_domain ? 0 : 1
+  count    = var.enabled ? (var.wildcard_domain ? 0 : 1) : 0
   domain   = var.domain_names[0]
   statuses = ["ISSUED"]
   provider = aws.us-east-1
@@ -60,7 +61,8 @@ locals {
 }
 
 resource "aws_cloudfront_distribution" "website_distribution" {
-  enabled         = true
+  count           = var.enabled ? 1 : 0
+  enabled         = var.enabled
   comment         = "CloudFront for ${local.name}"
   is_ipv6_enabled = true
   aliases         = var.domain_names
@@ -68,7 +70,7 @@ resource "aws_cloudfront_distribution" "website_distribution" {
   http_version    = "http2"
 
   viewer_certificate {
-    acm_certificate_arn      = var.wildcard_domain ? data.aws_acm_certificate.wildcard[0].arn : data.aws_acm_certificate.non_wildcard[0].arn
+    acm_certificate_arn      = var.wildcard_domain && var.enabled ? data.aws_acm_certificate.wildcard[0].arn : data.aws_acm_certificate.non_wildcard[0].arn
     minimum_protocol_version = "TLSv1.2_2021"
     ssl_support_method       = "sni-only"
   }
@@ -81,7 +83,7 @@ resource "aws_cloudfront_distribution" "website_distribution" {
 
   origin {
     domain_name              = module.s3_bucket.s3_bucket_bucket_regional_domain_name
-    origin_access_control_id = aws_cloudfront_origin_access_control.s3_origin_access_control.id
+    origin_access_control_id = aws_cloudfront_origin_access_control.s3_origin_access_control[0].id
     origin_id                = local.s3_origin_id
   }
 

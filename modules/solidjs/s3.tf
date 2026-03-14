@@ -2,6 +2,7 @@
 module "s3_bucket" {
   source        = "terraform-aws-modules/s3-bucket/aws"
   version       = "~> 3.15.0"
+  create_bucket = var.enabled
   bucket        = "${local.name}-cdn"
   force_destroy = false
   server_side_encryption_configuration = {
@@ -18,6 +19,7 @@ module "s3_bucket" {
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "assets" {
+  count  = var.enabled ? 1 : 0
   bucket = module.s3_bucket.s3_bucket_id
   rule {
     id     = "abort-failed-uploads"
@@ -41,6 +43,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "assets" {
 }
 
 resource "aws_s3_bucket_policy" "bucket_policy" {
+  count  = var.enabled ? 1 : 0
   bucket = module.s3_bucket.s3_bucket_id
   policy = <<EOF
   {
@@ -57,7 +60,7 @@ resource "aws_s3_bucket_policy" "bucket_policy" {
             "Resource": "${module.s3_bucket.s3_bucket_arn}/*",
             "Condition": {
                 "StringEquals": {
-                  "AWS:SourceArn": "${aws_cloudfront_distribution.website_distribution.arn}"
+                  "AWS:SourceArn": "${aws_cloudfront_distribution.website_distribution[0].arn}"
                 }
             }
         }
