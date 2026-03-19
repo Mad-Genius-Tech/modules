@@ -35,6 +35,8 @@ locals {
     health_check_command                   = []
     health_check_start_period              = null
     health_check_grace_period_seconds      = null
+    command                                = null
+    entry_point                            = null
     subnet_ids                             = null
     healthy_threshold                      = 5
     health_check_matcher                   = "200"
@@ -136,6 +138,8 @@ locals {
       "container_definitions"                  = merge(coalesce(lookup(v, "container_definitions", {}), {}), local.merged_default_settings.container_definitions)
       "health_check_start_period"              = try(coalesce(lookup(v, "health_check_start_period", null), local.merged_default_settings.health_check_start_period), local.merged_default_settings.health_check_start_period)
       "health_check_grace_period_seconds"      = try(coalesce(lookup(v, "health_check_grace_period_seconds", null), local.merged_default_settings.health_check_grace_period_seconds), local.merged_default_settings.health_check_grace_period_seconds)
+      "command"                                = try(coalesce(lookup(v, "command", null), local.merged_default_settings.command), local.merged_default_settings.command)
+      "entry_point"                            = try(coalesce(lookup(v, "entry_point", null), local.merged_default_settings.entry_point), local.merged_default_settings.entry_point)
       "health_check_matcher"                   = try(coalesce(lookup(v, "health_check_matcher", null), local.merged_default_settings.health_check_matcher), local.merged_default_settings.health_check_matcher)
       "health_check_interval"                  = try(coalesce(lookup(v, "health_check_interval", null), local.merged_default_settings.health_check_interval), local.merged_default_settings.health_check_interval)
       "health_check_unhealthy_threshold"       = try(coalesce(lookup(v, "health_check_unhealthy_threshold", null), local.merged_default_settings.health_check_unhealthy_threshold), local.merged_default_settings.health_check_unhealthy_threshold)
@@ -230,7 +234,7 @@ module "ecs_service" {
   health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
   volume                            = each.value.volume
   container_definitions = {
-    (each.key) = {
+    (each.key) = merge({
       essential             = true
       cpu                   = max(ceil(each.value.container_cpu / 256) * 256, 256)
       memory                = max(ceil(each.value.container_memory / 512) * 512, 512)
@@ -280,32 +284,35 @@ module "ecs_service" {
       #   containerName = "fluent-bit"
       #   condition     = "START"
       # }]
-    }
-    # fluent-bit = {
-    #   essential          = true
-    #   image              = "906394416424.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/aws-for-fluent-bit:stable"
-    #   cpu                = each.value.fluentbit_cpu
-    #   memory             = each.value.fluentbit_memory
-    #   memory_reservation = 128
-    #   readonly_root_filesystem = false
-    #   user               = "0"
-    #   firelens_configuration = {
-    #     type = "fluentbit"
-    #     options = {
-    #       "enable-ecs-log-metadata" = "true"
-    #     }
-    #   }
-    # log_configuration = {
-    #   logDriver = "awslogs"
-    #   options = {
-    #     "awslogs-group"         = "/aws/ecs/${each.value.identifier}/fluent-bit"
-    #     "awslogs-region"        = data.aws_region.current.name
-    #     "awslogs-create-group"  = "true"
-    #     "awslogs-stream-prefix" = "ecs"
-    #   }
-    # }
-    # }
+      },
+      length(coalesce(each.value.command, [])) > 0 ? { command = each.value.command } : {},
+      length(coalesce(each.value.entry_point, [])) > 0 ? { entryPoint = each.value.entry_point } : {}
+    )
   }
+  # fluent-bit = {
+  #   essential          = true
+  #   image              = "906394416424.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/aws-for-fluent-bit:stable"
+  #   cpu                = each.value.fluentbit_cpu
+  #   memory             = each.value.fluentbit_memory
+  #   memory_reservation = 128
+  #   readonly_root_filesystem = false
+  #   user               = "0"
+  #   firelens_configuration = {
+  #     type = "fluentbit"
+  #     options = {
+  #       "enable-ecs-log-metadata" = "true"
+  #     }
+  #   }
+  # log_configuration = {
+  #   logDriver = "awslogs"
+  #   options = {
+  #     "awslogs-group"         = "/aws/ecs/${each.value.identifier}/fluent-bit"
+  #     "awslogs-region"        = data.aws_region.current.name
+  #     "awslogs-create-group"  = "true"
+  #     "awslogs-stream-prefix" = "ecs"
+  #   }
+  # }
+  # }
 
   load_balancer = each.value.create_alb ? (each.value.external_alb && var.create_internal_alb ?
     {

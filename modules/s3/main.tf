@@ -1,10 +1,14 @@
 locals {
   default_settings = {
     acl                       = null
-    attach_policy             = false
-    attach_public_read_policy = false
-    policy                    = null
-    attach_public_policy      = false
+    attach_policy                         = false
+    attach_public_read_policy             = false
+    policy                                = null
+    attach_public_policy                  = false
+    attach_deny_insecure_transport_policy = false
+    attach_require_latest_tls_policy      = false
+    attach_elb_log_delivery_policy        = false
+    attach_lb_log_delivery_policy         = false
     acceleration_status       = null
     versioning = {
       status = "Enabled"
@@ -113,6 +117,10 @@ locals {
       "attach_policy"                        = try(coalesce(lookup(v, "attach_policy", null), lookup(v, "attach_public_read_policy", local.default_settings.attach_public_read_policy)), false) ? true : coalesce(lookup(v, "attach_policy", null), local.default_settings.attach_policy)
       "attach_public_read_policy"            = coalesce(lookup(v, "attach_public_read_policy", null), local.default_settings.attach_public_read_policy)
       "attach_public_policy"                 = coalesce(lookup(v, "attach_public_policy", null), local.default_settings.attach_public_policy)
+      "attach_deny_insecure_transport_policy" = coalesce(lookup(v, "attach_deny_insecure_transport_policy", null), local.default_settings.attach_deny_insecure_transport_policy)
+      "attach_require_latest_tls_policy"      = coalesce(lookup(v, "attach_require_latest_tls_policy", null), local.default_settings.attach_require_latest_tls_policy)
+      "attach_elb_log_delivery_policy"        = coalesce(lookup(v, "attach_elb_log_delivery_policy", null), local.default_settings.attach_elb_log_delivery_policy)
+      "attach_lb_log_delivery_policy"         = coalesce(lookup(v, "attach_lb_log_delivery_policy", null), local.default_settings.attach_lb_log_delivery_policy)
       "policy"                               = try(coalesce(lookup(v, "policy", null), local.merged_default_settings.policy), local.merged_default_settings.policy)
       "lifecycle_rule"                       = try(coalesce(lookup(v, "lifecycle_rule", null), local.default_settings.lifecycle_rule), local.default_settings.lifecycle_rule)
       "versioning"                           = merge(coalesce(lookup(v, "versioning", null), {}), local.default_settings.versioning)
@@ -199,9 +207,13 @@ module "s3_bucket" {
   bucket                               = each.key
   acl                                  = each.value.acl
   acceleration_status                  = each.value.acceleration_status
-  attach_policy                        = each.value.attach_policy
-  policy                               = each.value.attach_public_read_policy ? data.aws_iam_policy_document.public_read[each.key].json : each.value.policy
-  attach_public_policy                 = each.value.attach_public_policy
+  attach_policy                         = each.value.attach_policy
+  policy                                = each.value.attach_public_read_policy ? data.aws_iam_policy_document.public_read[each.key].json : each.value.policy
+  attach_public_policy                  = each.value.attach_public_policy
+  attach_deny_insecure_transport_policy = each.value.attach_deny_insecure_transport_policy
+  attach_require_latest_tls_policy      = each.value.attach_require_latest_tls_policy
+  attach_elb_log_delivery_policy        = each.value.attach_elb_log_delivery_policy
+  attach_lb_log_delivery_policy         = each.value.attach_lb_log_delivery_policy
   lifecycle_rule                       = each.value.lifecycle_rules
   versioning                           = each.value.versioning
   server_side_encryption_configuration = each.value.server_side_encryption_configuration

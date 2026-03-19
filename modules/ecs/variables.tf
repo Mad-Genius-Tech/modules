@@ -74,6 +74,8 @@ variable "ecs_services" {
     task_exec_secret_arns                  = optional(list(string))
     health_check_command                   = optional(list(string))
     health_check_start_period              = optional(number)
+    command                                = optional(list(string))
+    entry_point                            = optional(list(string))
     health_check_grace_period_seconds      = optional(number)
     multiple_containers                    = optional(bool)
     subnet_ids                             = optional(list(string))
