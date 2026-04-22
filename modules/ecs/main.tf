@@ -47,6 +47,22 @@ locals {
     volume                                 = {}
     deployment_minimum_healthy_percent     = 66
     deployment_maximum_percent             = 200
+    type                                   = "service"
+    scheduled = {
+      enabled                      = false
+      schedule_expression          = null
+      schedule_expression_timezone = "UTC"
+      subnet_ids                   = null
+      security_group_ids           = null
+      assign_public_ip             = false
+      task_count                   = 1
+      platform_version             = "LATEST"
+      maximum_retry_attempts       = 0
+      maximum_event_age_in_seconds = 300
+      command                      = null
+      cpu                          = null
+      memory                       = null
+    }
 
 
     environment = [
@@ -101,6 +117,7 @@ locals {
     for k, v in var.ecs_services : k => {
       "identifier"               = "${module.context.id}-${k}"
       "create"                   = coalesce(lookup(v, "create", null), true)
+      "type"                     = lower(try(coalesce(lookup(v, "type", null), local.merged_default_settings.type), local.merged_default_settings.type))
       "enable_service_discovery" = try(coalesce(lookup(v, "enable_service_discovery", null), local.merged_default_settings.enable_service_discovery), local.merged_default_settings.enable_service_discovery)
       "desired_count"            = try(coalesce(lookup(v, "desired_count", null), local.merged_default_settings.desired_count), local.merged_default_settings.desired_count)
       "fluentbit_cpu"            = try(coalesce(lookup(v, "fluentbit_cpu", null), local.merged_default_settings.fluentbit_cpu), local.merged_default_settings.fluentbit_cpu)
@@ -148,6 +165,7 @@ locals {
       "volume"                                 = try(coalesce(lookup(v, "volume", null), local.merged_default_settings.volume), local.merged_default_settings.volume)
       "deployment_maximum_percent"             = try(coalesce(lookup(v, "deployment_maximum_percent", null), local.merged_default_settings.deployment_maximum_percent), local.merged_default_settings.deployment_maximum_percent)
       "deployment_minimum_healthy_percent"     = try(coalesce(lookup(v, "deployment_minimum_healthy_percent", null), local.merged_default_settings.deployment_minimum_healthy_percent), local.merged_default_settings.deployment_minimum_healthy_percent)
+      "scheduled"                              = merge(local.merged_default_settings.scheduled, coalesce(try(v.scheduled, null), local.merged_default_settings.scheduled))
     }
   }
 }
@@ -214,6 +232,7 @@ locals {
 module "ecs_service" {
   source                             = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v6.0.5"
   for_each                           = { for k, v in local.ecs_map : k => v if v.create && !v.multiple_containers }
+  create_service                     = each.value.type == "service"
   name                               = each.value.identifier
   desired_count                      = each.value.desired_count
   autoscaling_min_capacity           = each.value.desired_count
@@ -403,7 +422,7 @@ module "ecs_service" {
 
 module "ecs_service_multiples" {
   source                   = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v6.0.5"
-  for_each                 = { for k, v in local.ecs_map : k => v if v.create && v.multiple_containers }
+  for_each                 = { for k, v in local.ecs_map : k => v if v.create && v.multiple_containers && v.type == "service" }
   name                     = each.value.identifier
   desired_count            = each.value.desired_count
   autoscaling_min_capacity = each.value.enable_autoscaling ? each.value.desired_count : 1
@@ -508,4 +527,131 @@ module "ecs_service_multiples" {
   } : null
 
   tags = local.tags
+}
+
+locals {
+  scheduled_task_map = {
+    for k, v in local.ecs_map : k => v
+    if v.create && v.type == "scheduled_task" && !v.multiple_containers
+  }
+
+  scheduler_passrole_arns = distinct(compact(flatten([
+    for k, v in local.scheduled_task_map : [
+      module.ecs_service[k].task_exec_iam_role_arn,
+      module.ecs_service[k].tasks_iam_role_arn
+    ]
+  ])))
+
+  scheduled_task_inputs = {
+    for k, v in local.scheduled_task_map : k => (
+      v.scheduled.command != null || v.scheduled.cpu != null || v.scheduled.memory != null ?
+      jsonencode({
+        containerOverrides = [
+          merge(
+            { name = k },
+            length(coalesce(v.scheduled.command, [])) > 0 ? { command = v.scheduled.command } : {},
+            v.scheduled.cpu != null ? { cpu = v.scheduled.cpu } : {},
+            v.scheduled.memory != null ? { memory = v.scheduled.memory } : {}
+          )
+        ]
+      }) : null
+    )
+  }
+}
+
+data "aws_iam_policy_document" "scheduler_assume_role" {
+  count = length(local.scheduled_task_map) > 0 ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["scheduler.amazonaws.com"]
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+data "aws_iam_policy_document" "scheduler_run_task" {
+  count = length(local.scheduled_task_map) > 0 ? 1 : 0
+
+  statement {
+    sid    = "AllowRunTask"
+    effect = "Allow"
+    actions = [
+      "ecs:RunTask"
+    ]
+    resources = [for k, v in local.scheduled_task_map : module.ecs_service[k].task_definition_arn]
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [module.ecs_cluster.arn]
+    }
+  }
+
+  statement {
+    sid    = "AllowPassTaskRoles"
+    effect = "Allow"
+    actions = [
+      "iam:PassRole"
+    ]
+    resources = length(local.scheduler_passrole_arns) > 0 ? local.scheduler_passrole_arns : ["*"]
+  }
+}
+
+resource "aws_iam_role" "scheduler" {
+  count = length(local.scheduled_task_map) > 0 ? 1 : 0
+
+  name               = "${module.context.id}-ecs-scheduler-role"
+  assume_role_policy = data.aws_iam_policy_document.scheduler_assume_role[0].json
+  tags               = local.tags
+}
+
+resource "aws_iam_role_policy" "scheduler_run_task" {
+  count = length(local.scheduled_task_map) > 0 ? 1 : 0
+
+  name   = "${module.context.id}-ecs-scheduler-run-task"
+  role   = aws_iam_role.scheduler[0].id
+  policy = data.aws_iam_policy_document.scheduler_run_task[0].json
+}
+
+resource "aws_scheduler_schedule" "ecs_task" {
+  for_each = local.scheduled_task_map
+
+  name                         = "${each.value.identifier}-schedule"
+  schedule_expression          = each.value.scheduled.schedule_expression
+  schedule_expression_timezone = each.value.scheduled.schedule_expression_timezone
+  state                        = each.value.scheduled.enabled ? "ENABLED" : "DISABLED"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = module.ecs_cluster.arn
+    role_arn = aws_iam_role.scheduler[0].arn
+    input    = local.scheduled_task_inputs[each.key]
+
+    ecs_parameters {
+      task_definition_arn = module.ecs_service[each.key].task_definition_arn
+      launch_type         = "FARGATE"
+      platform_version    = each.value.scheduled.platform_version
+      task_count          = each.value.scheduled.task_count
+
+      network_configuration {
+        subnets          = coalesce(each.value.scheduled.subnet_ids, each.value.subnet_ids, var.private_subnets)
+        security_groups  = coalesce(each.value.scheduled.security_group_ids, compact([module.ecs_service[each.key].security_group_id]))
+        assign_public_ip = each.value.scheduled.assign_public_ip
+      }
+    }
+
+    retry_policy {
+      maximum_retry_attempts       = each.value.scheduled.maximum_retry_attempts
+      maximum_event_age_in_seconds = each.value.scheduled.maximum_event_age_in_seconds
+    }
+  }
+
+  depends_on = [
+    module.ecs_service
+  ]
 }

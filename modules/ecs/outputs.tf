@@ -41,6 +41,18 @@ output "ecs_services" {
       task_exec_iam_role_arn  = v.task_exec_iam_role_arn
       task_set_id             = v.task_set_id
       # container_definitions = v.container_definitions
+    } if local.ecs_map[k].type == "service"
+  }
+}
+
+output "ecs_scheduled_tasks" {
+  value = {
+    for k, v in aws_scheduler_schedule.ecs_task : k => {
+      schedule_arn          = v.arn
+      schedule_name         = v.name
+      task_definition_arn   = module.ecs_service[k].task_definition_arn
+      task_exec_iam_role    = module.ecs_service[k].task_exec_iam_role_arn
+      task_runtime_iam_role = module.ecs_service[k].tasks_iam_role_arn
     }
   }
 }

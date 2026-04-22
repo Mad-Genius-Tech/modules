@@ -28,7 +28,7 @@ No requirements.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_kms"></a> [kms](#input\_kms) | n/a | <pre>map(object({<br>    key_administrators = optional(list(string))<br>    key_users          = optional(list(string))<br>  }))</pre> | n/a | yes |
+| <a name="input_kms"></a> [kms](#input\_kms) | n/a | <pre>map(object({<br>    create                          = optional(bool)<br>    key_usage                       = optional(string)<br>    customer_master_key_spec        = optional(string)<br>    enable_key_rotation             = optional(bool)<br>    key_administrators              = optional(list(string))<br>    key_users                       = optional(list(string))<br>    key_asymmetric_sign_verify_users = optional(list(string))<br>  }))</pre> | n/a | yes |
 | <a name="input_org_name"></a> [org\_name](#input\_org\_name) | n/a | `string` | n/a | yes |
 | <a name="input_service_name"></a> [service\_name](#input\_service\_name) | n/a | `string` | n/a | yes |
 | <a name="input_stage_name"></a> [stage\_name](#input\_stage\_name) | n/a | `string` | n/a | yes |

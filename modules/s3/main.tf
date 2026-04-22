@@ -108,6 +108,50 @@ locals {
 
   merged_default_settings = can(local.env_default_settings[var.stage_name]) ? lookup(local.env_default_settings, var.stage_name, local.default_settings) : local.default_settings
 
+  lifecycle_rule_defaults = [
+    for rule in jsondecode(jsonencode(local.merged_default_settings.lifecycle_rule)) : {
+      for rule_key, rule_value in rule : rule_key => rule_value if rule_value != null
+    }
+  ]
+
+  lifecycle_rule_defaults_by_id = {
+    for rule in local.lifecycle_rule_defaults : rule.id => rule if try(rule.id, null) != null
+  }
+
+  lifecycle_rule_custom_by_bucket = {
+    for k, v in var.s3_buckets : k => [
+      for rule in jsondecode(jsonencode(coalesce(try(v.lifecycle_rule, null), []))) : {
+        for rule_key, rule_value in rule : rule_key => rule_value if rule_value != null
+      }
+    ]
+  }
+
+  lifecycle_rule_by_bucket = {
+    for k, custom_rules in local.lifecycle_rule_custom_by_bucket : k => concat(
+      [
+        for default_rule in local.lifecycle_rule_defaults :
+        try(
+          lookup(
+            merge(local.lifecycle_rule_defaults_by_id, {
+              for rule in custom_rules : rule.id => rule if try(rule.id, null) != null
+            }),
+            default_rule.id,
+            default_rule
+          ),
+          default_rule
+        )
+      ],
+      [
+        for custom_rule in custom_rules : custom_rule if try(custom_rule.id, null) == null
+      ],
+      [
+        for custom_id, custom_rule in {
+          for rule in custom_rules : rule.id => rule if try(rule.id, null) != null
+        } : custom_rule if !contains(keys(local.lifecycle_rule_defaults_by_id), custom_id)
+      ]
+    )
+  }
+
   s3_buckets_map = {
     for k, v in var.s3_buckets : k => {
       "identifier"                           = "${module.context.id}-${k}"
@@ -122,7 +166,7 @@ locals {
       "attach_elb_log_delivery_policy"        = coalesce(lookup(v, "attach_elb_log_delivery_policy", null), local.default_settings.attach_elb_log_delivery_policy)
       "attach_lb_log_delivery_policy"         = coalesce(lookup(v, "attach_lb_log_delivery_policy", null), local.default_settings.attach_lb_log_delivery_policy)
       "policy"                               = try(coalesce(lookup(v, "policy", null), local.merged_default_settings.policy), local.merged_default_settings.policy)
-      "lifecycle_rule"                       = try(coalesce(lookup(v, "lifecycle_rule", null), local.default_settings.lifecycle_rule), local.default_settings.lifecycle_rule)
+      "lifecycle_rule"                       = local.lifecycle_rule_by_bucket[k]
       "versioning"                           = merge(coalesce(lookup(v, "versioning", null), {}), local.default_settings.versioning)
       "server_side_encryption_configuration" = merge(coalesce(lookup(v, "server_side_encryption_configuration", null), {}), local.default_settings.server_side_encryption_configuration)
       "block_public_acls"                    = coalesce(lookup(v, "block_public_acls", null), local.default_settings.block_public_acls)
@@ -136,7 +180,7 @@ locals {
       "lambda_function_name"                 = try(coalesce(lookup(v, "lambda_function_name", null), local.default_settings.lambda_function_name), local.default_settings.lambda_function_name)
       "events_filter"                        = try(coalesce(lookup(v, "events_filter", null), local.default_settings.events_filter), local.default_settings.events_filter)
       "lifecycle_rules" = concat(
-        local.merged_default_settings.lifecycle_rule,
+        local.lifecycle_rule_by_bucket[k],
         try(v.intelligent_tiering.enabled, false) ? local.merged_default_settings.intelligent_tiering : []
       )
     } if coalesce(lookup(v, "create", null), true)

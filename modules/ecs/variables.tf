@@ -40,6 +40,7 @@ variable "container_insights" {
 
 variable "ecs_services" {
   type = map(object({
+    type                           = optional(string, "service")
     container_image                = optional(string)
     require_repository_credentials = optional(bool)
     repository_credentials = optional(object({
@@ -170,7 +171,46 @@ variable "ecs_services" {
         values   = list(string)
       })), [])
     })))
+    scheduled = optional(object({
+      enabled                      = optional(bool, false)
+      schedule_expression          = optional(string)
+      schedule_expression_timezone = optional(string, "UTC")
+      subnet_ids                   = optional(list(string))
+      security_group_ids           = optional(list(string))
+      assign_public_ip             = optional(bool, false)
+      task_count                   = optional(number, 1)
+      platform_version             = optional(string, "LATEST")
+      maximum_retry_attempts       = optional(number, 0)
+      maximum_event_age_in_seconds = optional(number, 300)
+      command                      = optional(list(string))
+      cpu                          = optional(number)
+      memory                       = optional(number)
+    }))
   }))
+
+  validation {
+    condition = alltrue([
+      for v in values(var.ecs_services) :
+      contains(["service", "scheduled_task"], lower(v.type))
+    ])
+    error_message = "ecs_services.type must be either \"service\" or \"scheduled_task\"."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.ecs_services) :
+      lower(v.type) != "scheduled_task" || try(length(v.scheduled.schedule_expression) > 0, false)
+    ])
+    error_message = "ecs_services scheduled_task entries must set scheduled.schedule_expression."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.ecs_services) :
+      !(lower(v.type) == "scheduled_task" && coalesce(try(v.multiple_containers, null), false))
+    ])
+    error_message = "ecs_services scheduled_task entries do not support multiple_containers."
+  }
 }
 
 variable "sns_topic_cloudwatch_alarm_arn" {
