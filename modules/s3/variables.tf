@@ -1,8 +1,8 @@
 variable "s3_buckets" {
   description = "A map of s3 buckets to create"
   type = map(object({
-    create                    = optional(bool)
-    acl                       = optional(string)
+    create                                = optional(bool)
+    acl                                   = optional(string)
     attach_policy                         = optional(bool)
     policy                                = optional(string)
     attach_public_policy                  = optional(bool)

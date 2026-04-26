@@ -1,6 +1,6 @@
 locals {
   default_settings = {
-    acl                       = null
+    acl                                   = null
     attach_policy                         = false
     attach_public_read_policy             = false
     policy                                = null
@@ -9,7 +9,7 @@ locals {
     attach_require_latest_tls_policy      = false
     attach_elb_log_delivery_policy        = false
     attach_lb_log_delivery_policy         = false
-    acceleration_status       = null
+    acceleration_status                   = null
     versioning = {
       status = "Enabled"
     }
@@ -154,31 +154,31 @@ locals {
 
   s3_buckets_map = {
     for k, v in var.s3_buckets : k => {
-      "identifier"                           = "${module.context.id}-${k}"
-      "create"                               = coalesce(lookup(v, "create", null), true)
-      "acl"                                  = try(coalesce(lookup(v, "acl", null), local.merged_default_settings.acl), local.merged_default_settings.acl)
-      "acceleration_status"                  = try(coalesce(lookup(v, "acceleration_status", null), local.merged_default_settings.acceleration_status), local.merged_default_settings.acceleration_status)
-      "attach_policy"                        = try(coalesce(lookup(v, "attach_policy", null), lookup(v, "attach_public_read_policy", local.default_settings.attach_public_read_policy)), false) ? true : coalesce(lookup(v, "attach_policy", null), local.default_settings.attach_policy)
-      "attach_public_read_policy"            = coalesce(lookup(v, "attach_public_read_policy", null), local.default_settings.attach_public_read_policy)
-      "attach_public_policy"                 = coalesce(lookup(v, "attach_public_policy", null), local.default_settings.attach_public_policy)
+      "identifier"                            = "${module.context.id}-${k}"
+      "create"                                = coalesce(lookup(v, "create", null), true)
+      "acl"                                   = try(coalesce(lookup(v, "acl", null), local.merged_default_settings.acl), local.merged_default_settings.acl)
+      "acceleration_status"                   = try(coalesce(lookup(v, "acceleration_status", null), local.merged_default_settings.acceleration_status), local.merged_default_settings.acceleration_status)
+      "attach_policy"                         = try(coalesce(lookup(v, "attach_policy", null), lookup(v, "attach_public_read_policy", local.default_settings.attach_public_read_policy)), false) ? true : coalesce(lookup(v, "attach_policy", null), local.default_settings.attach_policy)
+      "attach_public_read_policy"             = coalesce(lookup(v, "attach_public_read_policy", null), local.default_settings.attach_public_read_policy)
+      "attach_public_policy"                  = coalesce(lookup(v, "attach_public_policy", null), local.default_settings.attach_public_policy)
       "attach_deny_insecure_transport_policy" = coalesce(lookup(v, "attach_deny_insecure_transport_policy", null), local.default_settings.attach_deny_insecure_transport_policy)
       "attach_require_latest_tls_policy"      = coalesce(lookup(v, "attach_require_latest_tls_policy", null), local.default_settings.attach_require_latest_tls_policy)
       "attach_elb_log_delivery_policy"        = coalesce(lookup(v, "attach_elb_log_delivery_policy", null), local.default_settings.attach_elb_log_delivery_policy)
       "attach_lb_log_delivery_policy"         = coalesce(lookup(v, "attach_lb_log_delivery_policy", null), local.default_settings.attach_lb_log_delivery_policy)
-      "policy"                               = try(coalesce(lookup(v, "policy", null), local.merged_default_settings.policy), local.merged_default_settings.policy)
-      "lifecycle_rule"                       = local.lifecycle_rule_by_bucket[k]
-      "versioning"                           = merge(coalesce(lookup(v, "versioning", null), {}), local.default_settings.versioning)
-      "server_side_encryption_configuration" = merge(coalesce(lookup(v, "server_side_encryption_configuration", null), {}), local.default_settings.server_side_encryption_configuration)
-      "block_public_acls"                    = coalesce(lookup(v, "block_public_acls", null), local.default_settings.block_public_acls)
-      "block_public_policy"                  = coalesce(lookup(v, "block_public_policy", null), local.default_settings.block_public_policy)
-      "ignore_public_acls"                   = coalesce(lookup(v, "ignore_public_acls", null), local.default_settings.ignore_public_acls)
-      "restrict_public_buckets"              = coalesce(lookup(v, "restrict_public_buckets", null), local.default_settings.restrict_public_buckets)
-      "cors_rule"                            = concat(try(coalesce(lookup(v, "cors_rule", null), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule)
-      "website"                              = v.website != null ? { for k, v in v.website : k => v if v != null } : {}
-      "control_object_ownership"             = coalesce(lookup(v, "control_object_ownership", null), local.default_settings.control_object_ownership)
-      "object_ownership"                     = coalesce(lookup(v, "object_ownership", null), local.default_settings.object_ownership)
-      "lambda_function_name"                 = try(coalesce(lookup(v, "lambda_function_name", null), local.default_settings.lambda_function_name), local.default_settings.lambda_function_name)
-      "events_filter"                        = try(coalesce(lookup(v, "events_filter", null), local.default_settings.events_filter), local.default_settings.events_filter)
+      "policy"                                = try(coalesce(lookup(v, "policy", null), local.merged_default_settings.policy), local.merged_default_settings.policy)
+      "lifecycle_rule"                        = local.lifecycle_rule_by_bucket[k]
+      "versioning"                            = merge(coalesce(lookup(v, "versioning", null), {}), local.default_settings.versioning)
+      "server_side_encryption_configuration"  = merge(coalesce(lookup(v, "server_side_encryption_configuration", null), {}), local.default_settings.server_side_encryption_configuration)
+      "block_public_acls"                     = coalesce(lookup(v, "block_public_acls", null), local.default_settings.block_public_acls)
+      "block_public_policy"                   = coalesce(lookup(v, "block_public_policy", null), local.default_settings.block_public_policy)
+      "ignore_public_acls"                    = coalesce(lookup(v, "ignore_public_acls", null), local.default_settings.ignore_public_acls)
+      "restrict_public_buckets"               = coalesce(lookup(v, "restrict_public_buckets", null), local.default_settings.restrict_public_buckets)
+      "cors_rule"                             = concat(try(coalesce(lookup(v, "cors_rule", null), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule), local.merged_default_settings.cors_rule)
+      "website"                               = v.website != null ? { for k, v in v.website : k => v if v != null } : {}
+      "control_object_ownership"              = coalesce(lookup(v, "control_object_ownership", null), local.default_settings.control_object_ownership)
+      "object_ownership"                      = coalesce(lookup(v, "object_ownership", null), local.default_settings.object_ownership)
+      "lambda_function_name"                  = try(coalesce(lookup(v, "lambda_function_name", null), local.default_settings.lambda_function_name), local.default_settings.lambda_function_name)
+      "events_filter"                         = try(coalesce(lookup(v, "events_filter", null), local.default_settings.events_filter), local.default_settings.events_filter)
       "lifecycle_rules" = concat(
         local.lifecycle_rule_by_bucket[k],
         try(v.intelligent_tiering.enabled, false) ? local.merged_default_settings.intelligent_tiering : []
@@ -244,13 +244,13 @@ resource "aws_lambda_permission" "lambda_permission" {
 }
 
 module "s3_bucket" {
-  for_each                             = local.s3_buckets_map
-  source                               = "terraform-aws-modules/s3-bucket/aws"
-  version                              = "~> 3.15.1"
-  create_bucket                        = each.value.create
-  bucket                               = each.key
-  acl                                  = each.value.acl
-  acceleration_status                  = each.value.acceleration_status
+  for_each                              = local.s3_buckets_map
+  source                                = "terraform-aws-modules/s3-bucket/aws"
+  version                               = "~> 3.15.1"
+  create_bucket                         = each.value.create
+  bucket                                = each.key
+  acl                                   = each.value.acl
+  acceleration_status                   = each.value.acceleration_status
   attach_policy                         = each.value.attach_policy
   policy                                = each.value.attach_public_read_policy ? data.aws_iam_policy_document.public_read[each.key].json : each.value.policy
   attach_public_policy                  = each.value.attach_public_policy
@@ -258,18 +258,18 @@ module "s3_bucket" {
   attach_require_latest_tls_policy      = each.value.attach_require_latest_tls_policy
   attach_elb_log_delivery_policy        = each.value.attach_elb_log_delivery_policy
   attach_lb_log_delivery_policy         = each.value.attach_lb_log_delivery_policy
-  lifecycle_rule                       = each.value.lifecycle_rules
-  versioning                           = each.value.versioning
-  server_side_encryption_configuration = each.value.server_side_encryption_configuration
-  block_public_acls                    = each.value.block_public_acls
-  block_public_policy                  = each.value.block_public_policy
-  ignore_public_acls                   = each.value.ignore_public_acls
-  restrict_public_buckets              = each.value.restrict_public_buckets
-  cors_rule                            = each.value.cors_rule
-  website                              = each.value.website
-  control_object_ownership             = each.value.control_object_ownership
-  object_ownership                     = each.value.object_ownership
-  tags                                 = local.tags
+  lifecycle_rule                        = each.value.lifecycle_rules
+  versioning                            = each.value.versioning
+  server_side_encryption_configuration  = each.value.server_side_encryption_configuration
+  block_public_acls                     = each.value.block_public_acls
+  block_public_policy                   = each.value.block_public_policy
+  ignore_public_acls                    = each.value.ignore_public_acls
+  restrict_public_buckets               = each.value.restrict_public_buckets
+  cors_rule                             = each.value.cors_rule
+  website                               = each.value.website
+  control_object_ownership              = each.value.control_object_ownership
+  object_ownership                      = each.value.object_ownership
+  tags                                  = local.tags
 }
 
 data "aws_iam_policy_document" "public_read" {

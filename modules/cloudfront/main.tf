@@ -312,16 +312,16 @@ data "aws_iam_policy_document" "bucket_policy" {
       "s3:PutObject",
       ] : [
       "s3:GetObject",
-    ], each.value.allow_list_bucket_access ? [
+      ], each.value.allow_list_bucket_access ? [
       "s3:ListBucket",
     ] : [])
 
     resources = concat([
       "${data.aws_s3_bucket.s3_bucket[each.key].arn}/*",
-    ], 
+      ],
       each.value.allow_list_bucket_access ? [
         "${data.aws_s3_bucket.s3_bucket[each.key].arn}",
-      ] : [])
+    ] : [])
 
     condition {
       test     = "StringEquals"
