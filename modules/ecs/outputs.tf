@@ -52,9 +52,9 @@ output "ecs_scheduled_tasks" {
       schedule_name         = v.name
       schedule_expression   = v.schedule_expression
       event_target_id       = aws_cloudwatch_event_target.ecs_scheduled_task[k].target_id
-      task_definition_arn   = module.ecs_service[k].task_definition_arn
-      task_exec_iam_role    = module.ecs_service[k].task_exec_iam_role_arn
-      task_runtime_iam_role = module.ecs_service[k].tasks_iam_role_arn
+      task_definition_arn   = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_definition_arn
+      task_exec_iam_role    = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_arn
+      task_runtime_iam_role = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_arn
     }
   }
 }

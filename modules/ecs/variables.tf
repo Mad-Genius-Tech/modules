@@ -185,6 +185,10 @@ variable "ecs_services" {
       command                      = optional(list(string))
       cpu                          = optional(number)
       memory                       = optional(number)
+      # Source: exact `ecs_services` map key, or that service full `identifier` string (context-prefixed name in main.tf)
+      reuse_task_definition_key = optional(string)
+      # When the source is multiple_containers, which container in the task def to override (defaults: container_name, then first container_definitions key)
+      reuse_container_name = optional(string)
     }))
   }))
 

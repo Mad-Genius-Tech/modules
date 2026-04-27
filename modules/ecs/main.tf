@@ -62,6 +62,8 @@ locals {
       command                      = null
       cpu                          = null
       memory                       = null
+      reuse_task_definition_key    = null
+      reuse_container_name         = null
     }
 
 
@@ -194,7 +196,7 @@ module "ecs_cluster" {
 }
 
 data "external" "current_image" {
-  for_each = { for k, v in local.ecs_map : k => v if v.create && v.container_image == null }
+  for_each = { for k, v in local.ecs_map : k => v if v.create && v.container_image == null && !(v.type == "scheduled_task" && try(v.scheduled.reuse_task_definition_key, null) != null) }
   program  = ["bash", "${path.module}/scripts/ecs_task.sh", each.value.identifier, data.aws_region.current.name]
 }
 
@@ -231,7 +233,7 @@ locals {
 
 module "ecs_service" {
   source                             = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v6.0.5"
-  for_each                           = { for k, v in local.ecs_map : k => v if v.create && !v.multiple_containers }
+  for_each                           = { for k, v in local.ecs_map : k => v if v.create && !v.multiple_containers && !(v.type == "scheduled_task" && try(v.scheduled.reuse_task_definition_key, null) != null) }
   create_service                     = each.value.type == "service"
   name                               = each.value.identifier
   desired_count                      = each.value.desired_count
