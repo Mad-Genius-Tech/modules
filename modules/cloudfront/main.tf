@@ -26,6 +26,7 @@ locals {
     custom_error_response                  = [{}]
     viewer_request_function_code           = ""
     origin_domain_name                     = ""
+    vpc_origin                             = null
     default_root_object                    = null
     allow_list_bucket_access               = false
     custom_origin_config = {
@@ -76,6 +77,7 @@ locals {
       "default_response_headers_policy"        = try(coalesce(lookup(v, "default_response_headers_policy", null), local.merged_default_settings.default_response_headers_policy), local.merged_default_settings.default_response_headers_policy)
       "viewer_protocol_policy"                 = try(coalesce(lookup(v, "viewer_protocol_policy", null), local.merged_default_settings.viewer_protocol_policy), local.merged_default_settings.viewer_protocol_policy)
       "origin_domain_name"                     = try(coalesce(lookup(v, "origin_domain_name", null), local.merged_default_settings.origin_domain_name), local.merged_default_settings.origin_domain_name)
+      "vpc_origin"                             = try(coalesce(lookup(v, "vpc_origin", null), local.merged_default_settings.vpc_origin), local.merged_default_settings.vpc_origin)
       "viewer_request_function_code"           = try(coalesce(lookup(v, "viewer_request_function_code", null), local.merged_default_settings.viewer_request_function_code), local.merged_default_settings.viewer_request_function_code)
       "custom_origin_config"                   = { for k, v in merge(local.merged_default_settings.custom_origin_config, coalesce(lookup(v, "custom_origin_config", null), local.merged_default_settings.custom_origin_config)) : k => v != null ? v : local.merged_default_settings.custom_origin_config[k] }
       "origin_connection_timeout"              = try(coalesce(lookup(v, "origin_connection_timeout", null), local.merged_default_settings.origin_connection_timeout), local.merged_default_settings.origin_connection_timeout)
@@ -130,7 +132,7 @@ module "s3_bucket" {
 
 module "cloudfront" {
   source                        = "terraform-aws-modules/cloudfront/aws"
-  version                       = "~> 3.4.1"
+  version                       = "~> 5.0"
   for_each                      = local.cloudfront_map
   aliases                       = each.value.aliases
   comment                       = each.value.s3_bucket != "" && each.value.origin_domain_name == "" ? "CloudFront for S3 bucket ${each.value.s3_bucket}" : (each.value.s3_bucket != "" && each.value.origin_domain_name != "" ? "CloudFront for domain ${each.value.domain_name}" : "CloudFront for domain ${each.value.origin_domain_name}")
@@ -142,12 +144,26 @@ module "cloudfront" {
     "${each.value.s3_bucket}" = each.value.s3_bucket
   }
   create_origin_access_control = each.value.s3_bucket != "" ? true : false
+  create_vpc_origin            = each.value.vpc_origin != null ? true : false
   origin_access_control = each.value.s3_bucket != "" ? {
     "${each.value.s3_bucket}" = {
       description      = "CloudFront access to S3 ${each.value.s3_bucket}"
       origin_type      = "s3"
       signing_behavior = "always"
       signing_protocol = "sigv4"
+    }
+  } : {}
+  vpc_origin = each.value.vpc_origin != null ? {
+    "${coalesce(each.value.vpc_origin.name, "default")}" = {
+      arn                    = each.value.vpc_origin.arn
+      name                   = coalesce(each.value.vpc_origin.name, "${replace(each.value.identifier, ".", "-")}-vpc-origin")
+      http_port              = try(coalesce(each.value.vpc_origin.http_port, null), 80)
+      https_port             = try(coalesce(each.value.vpc_origin.https_port, null), 443)
+      origin_protocol_policy = try(coalesce(each.value.vpc_origin.origin_protocol_policy, null), "https-only")
+      origin_ssl_protocols = {
+        items    = try(coalesce(each.value.vpc_origin.origin_ssl_protocols, null), ["TLSv1.2"])
+        quantity = length(try(coalesce(each.value.vpc_origin.origin_ssl_protocols, null), ["TLSv1.2"]))
+      }
     }
   } : {}
 
@@ -164,13 +180,18 @@ module "cloudfront" {
       }
     } : {},
     each.value.origin_domain_name != "" ? {
-      "${each.value.origin_domain_name}" = {
+      "${each.value.origin_domain_name}" = merge({
         domain_name = each.value.origin_domain_name
+        }, each.value.vpc_origin == null ? {
         custom_origin_config = strcontains(each.value.origin_domain_name, "s3-website") ? merge(each.value.custom_origin_config, {
           origin_protocol_policy = "http-only",
           origin_read_timeout    = 30
         }) : each.value.custom_origin_config
-      }
+        } : {}, each.value.vpc_origin != null ? {
+        vpc_origin_config = {
+          vpc_origin = coalesce(each.value.vpc_origin.name, "default")
+        }
+      } : {})
     } : {},
   )
   # ordered_cache_behavior = [

@@ -61,6 +61,7 @@ variable "ecs_services" {
     enable_autoscaling                     = optional(bool)
     create_alb                             = optional(bool)
     external_alb                           = optional(bool)
+    dedicated_internal_alb                 = optional(bool)
     create_nlb                             = optional(bool)
     create_eip                             = optional(bool)
     multiple_ports                         = optional(bool)

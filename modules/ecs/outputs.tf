@@ -12,6 +12,14 @@ output "alb_internal_dns_name" {
   value = module.alb_internal.dns_name
 }
 
+output "alb_internal_dedicated_dns_name" {
+  value = {
+    for k, v in module.alb_internal_dedicated : k => {
+      dns_name = v.dns_name
+    }
+  }
+}
+
 output "nlb_dns_name" {
   value = {
     for k, v in module.nlb : k => {

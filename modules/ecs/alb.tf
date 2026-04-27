@@ -19,7 +19,7 @@ module "alb_internal" {
       ip_protocol = "tcp"
       description = "${v.identifier} http traffic"
       cidr_ipv4   = var.vpc_cidr
-    } if v.create_alb
+    } if v.create_alb && !(v.dedicated_internal_alb && !v.external_alb)
   }
   security_group_egress_rules = {
     all = {
@@ -34,7 +34,7 @@ module "alb_internal" {
       forward = {
         target_group_key = v.identifier
       }
-    } if v.create_alb
+    } if v.create_alb && !(v.dedicated_internal_alb && !v.external_alb)
   }
   target_groups = {
     for v in values(local.ecs_map) : v.identifier => {
@@ -55,7 +55,70 @@ module "alb_internal" {
         port                = "traffic-port"
         timeout             = 5
       }
-    } if v.create_alb
+    } if v.create_alb && !(v.dedicated_internal_alb && !v.external_alb)
+  }
+  tags = local.tags
+}
+
+module "alb_internal_dedicated" {
+  source                     = "terraform-aws-modules/alb/aws"
+  version                    = "~> 9.1.0"
+  for_each                   = { for k, v in local.ecs_map : k => v if v.create_alb && !v.external_alb && v.dedicated_internal_alb }
+  create                     = true
+  name                       = each.value.identifier
+  load_balancer_type         = "application"
+  internal                   = true
+  vpc_id                     = var.vpc_id
+  subnets                    = var.private_subnets
+  enable_deletion_protection = false
+  access_logs = {
+    bucket = module.log_bucket.s3_bucket_id
+    prefix = "${each.value.identifier}-internal"
+  }
+  security_group_ingress_rules = {
+    service = {
+      from_port   = each.value.container_port
+      to_port     = each.value.container_port
+      ip_protocol = "tcp"
+      description = "${each.value.identifier} http traffic"
+      cidr_ipv4   = var.vpc_cidr
+    }
+  }
+  security_group_egress_rules = {
+    all = {
+      ip_protocol = "-1"
+      cidr_ipv4   = var.vpc_cidr
+    }
+  }
+  listeners = {
+    service = {
+      port     = each.value.container_port
+      protocol = "HTTP"
+      forward = {
+        target_group_key = each.value.identifier
+      }
+    }
+  }
+  target_groups = {
+    (each.value.identifier) = {
+      name_prefix          = "${var.stage_name}i-"
+      protocol             = "HTTP"
+      port                 = each.value.container_port
+      target_type          = "ip"
+      deregistration_delay = 150
+      create_attachment    = false
+      health_check = {
+        enabled             = true
+        path                = each.value.health_check_path
+        healthy_threshold   = each.value.healthy_threshold
+        unhealthy_threshold = each.value.health_check_unhealthy_threshold
+        interval            = each.value.health_check_interval
+        protocol            = "HTTP"
+        matcher             = each.value.health_check_matcher
+        port                = "traffic-port"
+        timeout             = 5
+      }
+    }
   }
   tags = local.tags
 }

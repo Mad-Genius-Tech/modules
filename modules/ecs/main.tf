@@ -24,6 +24,7 @@ locals {
     enable_autoscaling                     = false
     create_alb                             = false
     external_alb                           = false
+    dedicated_internal_alb                 = false
     create_nlb                             = false
     create_eip                             = false
     multiple_ports                         = false
@@ -135,6 +136,7 @@ locals {
       "enable_autoscaling"                     = try(coalesce(lookup(v, "enable_autoscaling", null), local.merged_default_settings.enable_autoscaling), local.merged_default_settings.enable_autoscaling)
       "create_alb"                             = try(coalesce(lookup(v, "create_alb", null), local.merged_default_settings.create_alb), local.merged_default_settings.create_alb)
       "external_alb"                           = try(coalesce(lookup(v, "external_alb", null), local.merged_default_settings.external_alb), local.merged_default_settings.external_alb)
+      "dedicated_internal_alb"                 = try(coalesce(lookup(v, "dedicated_internal_alb", null), local.merged_default_settings.dedicated_internal_alb), local.merged_default_settings.dedicated_internal_alb)
       "create_nlb"                             = try(coalesce(lookup(v, "create_nlb", null), local.merged_default_settings.create_nlb), local.merged_default_settings.create_nlb)
       "create_eip"                             = try(coalesce(lookup(v, "create_eip", null), local.merged_default_settings.create_eip), local.merged_default_settings.create_eip)
       "multiple_ports"                         = try(coalesce(lookup(v, "multiple_ports", null), local.merged_default_settings.multiple_ports), local.merged_default_settings.multiple_ports)
@@ -335,30 +337,37 @@ module "ecs_service" {
   # }
   # }
 
-  load_balancer = each.value.create_alb ? (each.value.external_alb && var.create_internal_alb ?
+  load_balancer = each.value.create_alb ? (!each.value.external_alb && each.value.dedicated_internal_alb ?
     {
-      external_alb = {
-        target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
-        container_name   = each.key
-        container_port   = each.value.container_port
-      }
       internal_alb = {
-        target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+        target_group_arn = module.alb_internal_dedicated[each.key].target_groups[each.value.identifier].arn
         container_name   = each.key
         container_port   = each.value.container_port
       }
-      } : (each.value.external_alb ? {
+      } : (each.value.external_alb && var.create_internal_alb ?
+      {
         external_alb = {
           target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
           container_name   = each.key
           container_port   = each.value.container_port
-        } } : {
+        }
         internal_alb = {
           target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
           container_name   = each.key
           container_port   = each.value.container_port
         }
-      })) : (each.value.create_nlb ? (each.value.multiple_ports ?
+        } : (each.value.external_alb ? {
+          external_alb = {
+            target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
+            container_name   = each.key
+            container_port   = each.value.container_port
+          } } : {
+          internal_alb = {
+            target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+            container_name   = each.key
+            container_port   = each.value.container_port
+          }
+      }))) : (each.value.create_nlb ? (each.value.multiple_ports ?
       {
         service_80 = {
           target_group_arn = module.nlb[each.key].target_groups["${each.value.identifier}-80"].arn
@@ -448,25 +457,32 @@ module "ecs_service_multiples" {
       }
     })
   }
-  load_balancer = each.value.create_alb ? (each.value.external_alb ?
+  load_balancer = each.value.create_alb ? (!each.value.external_alb && each.value.dedicated_internal_alb ?
     {
-      external_alb = {
-        target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
-        container_name   = lookup(each.value, "container_name", each.key)
-        container_port   = each.value.container_port
-      }
       internal_alb = {
-        target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+        target_group_arn = module.alb_internal_dedicated[each.key].target_groups[each.value.identifier].arn
         container_name   = lookup(each.value, "container_name", each.key)
         container_port   = each.value.container_port
       }
-      } : {
-      internal_alb = {
-        target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
-        container_name   = lookup(each.value, "container_name", each.key)
-        container_port   = each.value.container_port
-      }
-      }) : (each.value.create_nlb ? (each.value.multiple_ports ?
+      } : (each.value.external_alb ?
+      {
+        external_alb = {
+          target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
+          container_name   = lookup(each.value, "container_name", each.key)
+          container_port   = each.value.container_port
+        }
+        internal_alb = {
+          target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+          container_name   = lookup(each.value, "container_name", each.key)
+          container_port   = each.value.container_port
+        }
+        } : {
+        internal_alb = {
+          target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+          container_name   = lookup(each.value, "container_name", each.key)
+          container_port   = each.value.container_port
+        }
+      })) : (each.value.create_nlb ? (each.value.multiple_ports ?
       {
         service_80 = {
           target_group_arn = module.nlb[each.key].target_groups["${each.value.identifier}-80"].arn

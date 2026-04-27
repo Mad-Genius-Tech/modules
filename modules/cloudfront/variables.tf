@@ -51,6 +51,14 @@ variable "cloudfront" {
     })), [])
     origin_domain_name        = optional(string)
     origin_connection_timeout = optional(number)
+    vpc_origin = optional(object({
+      arn                    = string
+      name                   = optional(string)
+      http_port              = optional(number)
+      https_port             = optional(number)
+      origin_protocol_policy = optional(string)
+      origin_ssl_protocols   = optional(list(string))
+    }))
     custom_origin_config = optional(object({
       http_port              = optional(number)
       https_port             = optional(number)
