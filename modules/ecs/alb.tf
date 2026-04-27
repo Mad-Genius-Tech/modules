@@ -75,30 +75,77 @@ module "alb_internal_dedicated" {
     bucket = module.log_bucket.s3_bucket_id
     prefix = "${each.value.identifier}-internal"
   }
-  security_group_ingress_rules = {
-    service = {
-      from_port   = each.value.container_port
-      to_port     = each.value.container_port
-      ip_protocol = "tcp"
-      description = "${each.value.identifier} http traffic"
-      cidr_ipv4   = var.vpc_cidr
+  security_group_ingress_rules = merge(
+    {
+      for k, v in {
+        all_http = {
+          from_port   = 80
+          to_port     = 80
+          ip_protocol = "tcp"
+          description = "${each.value.identifier} http traffic"
+          cidr_ipv4   = var.vpc_cidr
+        }
+        all_https = {
+          from_port   = 443
+          to_port     = 443
+          ip_protocol = "tcp"
+          description = "${each.value.identifier} https traffic"
+          cidr_ipv4   = var.vpc_cidr
+        }
+      } : k => v if each.value.domain_name != ""
+    },
+    {
+      for k, v in {
+        service = {
+          from_port   = each.value.container_port
+          to_port     = each.value.container_port
+          ip_protocol = "tcp"
+          description = "${each.value.identifier} http traffic"
+          cidr_ipv4   = var.vpc_cidr
+        }
+      } : k => v if each.value.domain_name == ""
     }
-  }
+  )
   security_group_egress_rules = {
     all = {
       ip_protocol = "-1"
       cidr_ipv4   = var.vpc_cidr
     }
   }
-  listeners = {
-    service = {
-      port     = each.value.container_port
-      protocol = "HTTP"
-      forward = {
-        target_group_key = each.value.identifier
-      }
+  listeners = merge(
+    {
+      for k, v in {
+        http = {
+          port     = 80
+          protocol = "HTTP"
+          redirect = {
+            port        = "443"
+            protocol    = "HTTPS"
+            status_code = "HTTP_301"
+          }
+        }
+        https = {
+          port            = 443
+          protocol        = "HTTPS"
+          certificate_arn = each.value.wildcard_domain ? data.aws_acm_certificate.wildcard[each.key].arn : data.aws_acm_certificate.non_wildcard[each.key].arn
+          forward = {
+            target_group_key = each.value.identifier
+          }
+        }
+      } : k => v if each.value.domain_name != ""
+    },
+    {
+      for k, v in {
+        service = {
+          port     = each.value.container_port
+          protocol = "HTTP"
+          forward = {
+            target_group_key = each.value.identifier
+          }
+        }
+      } : k => v if each.value.domain_name == ""
     }
-  }
+  )
   target_groups = {
     (each.value.identifier) = {
       name_prefix          = "${var.stage_name}i-"
