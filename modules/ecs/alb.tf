@@ -1,3 +1,21 @@
+locals {
+  # AWS creates this managed SG in the VPC for CloudFront VPC origins; dedicated internal ALBs need ingress from it on 443.
+  ecs_dedicated_internal_alb_enabled = length([
+    for k, v in local.ecs_map : k if v.create_alb && !v.external_alb && v.dedicated_internal_alb
+  ]) > 0
+}
+
+data "aws_security_group" "cloudfront_vpc_origins" {
+  count = local.ecs_dedicated_internal_alb_enabled ? 1 : 0
+
+  vpc_id = var.vpc_id
+
+  filter {
+    name   = "group-name"
+    values = ["CloudFront-VPCOrigins-Service-SG"]
+  }
+}
+
 module "alb_internal" {
   source                     = "terraform-aws-modules/alb/aws"
   version                    = "~> 9.1.0"
@@ -104,6 +122,15 @@ module "alb_internal_dedicated" {
           cidr_ipv4   = var.vpc_cidr
         }
       } : k => v if each.value.domain_name == ""
+    },
+    {
+      cloudfront_vpc_origins_https = {
+        from_port                    = 443
+        to_port                      = 443
+        ip_protocol                  = "tcp"
+        description                  = "${each.value.identifier} HTTPS from CloudFront VPC origins (CloudFront-VPCOrigins-Service-SG)"
+        referenced_security_group_id = data.aws_security_group.cloudfront_vpc_origins[0].id
+      }
     }
   )
   security_group_egress_rules = {
