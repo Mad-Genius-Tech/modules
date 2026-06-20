@@ -1,6 +1,6 @@
 locals {
   default_runtime_environment = merge({
-    BEDROCK_MODEL_ID         = join("", aws_bedrock_inference_profile.inference_profile[*].id)
+    BEDROCK_INFERENCE_PROFILE_ARN = join("", aws_bedrock_inference_profile.inference_profile[*].arn)
     AGENT_SESSIONS_BUCKET    = var.session_s3_bucket
     AGENT_ATTACHMENTS_BUCKET = var.attachment_s3_bucket
 
