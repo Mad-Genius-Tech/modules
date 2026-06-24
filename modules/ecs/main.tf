@@ -8,6 +8,9 @@ data "aws_caller_identity" "current" {}
 locals {
   cluster_name = module.context.id
 
+  # Detect shell-style health check strings (pipes, operators, whitespace) vs bare binaries.
+  health_check_shell_pattern = "[|&;<>$`]|\\|\\||&&|\\s"
+
   default_settings = {
     container_insights                     = "disabled"
     enable_service_discovery               = false
@@ -116,7 +119,7 @@ locals {
 
   merged_default_settings = can(local.env_default_settings[var.stage_name]) ? lookup(local.env_default_settings, var.stage_name, local.default_settings) : local.default_settings
 
-  ecs_map = {
+  ecs_map_base = {
     for k, v in var.ecs_services : k => {
       "identifier"               = "${module.context.id}-${k}"
       "create"                   = coalesce(lookup(v, "create", null), true)
@@ -171,6 +174,26 @@ locals {
       "deployment_minimum_healthy_percent"     = try(coalesce(lookup(v, "deployment_minimum_healthy_percent", null), local.merged_default_settings.deployment_minimum_healthy_percent), local.merged_default_settings.deployment_minimum_healthy_percent)
       "scheduled"                              = merge(local.merged_default_settings.scheduled, coalesce(try(v.scheduled, null), local.merged_default_settings.scheduled))
     }
+  }
+
+  ecs_map = {
+    for k, v in local.ecs_map_base : k => merge(v, {
+      health_check_command_resolved = (
+        length(v.health_check_command) == 0 ? [
+          "CMD-SHELL",
+          "curl -f http://localhost:${v.health_check_port == null ? v.container_port : v.health_check_port}${v.health_check_path} || exit 1",
+          ] : contains(["CMD", "CMD-SHELL"], v.health_check_command[0]) ? v.health_check_command : length(v.health_check_command) > 1 ? concat(
+          ["CMD"],
+          v.health_check_command,
+          ) : can(regex(local.health_check_shell_pattern, v.health_check_command[0])) ? [
+          "CMD-SHELL",
+          v.health_check_command[0],
+          ] : [
+          "CMD",
+          v.health_check_command[0],
+        ]
+      )
+    })
   }
 }
 
@@ -265,7 +288,7 @@ module "ecs_service" {
       image                 = each.value.container_image == null ? data.external.current_image[each.key].result["IMAGE_NAME"] : each.value.container_image
       repositoryCredentials = each.value.container_image != null && strcontains(coalesce(each.value.container_image, "null_value"), "ecr.${data.aws_region.current.name}.amazonaws.com") ? null : (each.value.require_repository_credentials ? each.value.repository_credentials : null)
       healthCheck = {
-        "command"     = length(each.value.health_check_command) > 0 ? each.value.health_check_command : ["CMD-SHELL", "curl -f http://localhost:${each.value.health_check_port == null ? each.value.container_port : each.value.health_check_port}${each.value.health_check_path} || exit 1"]
+        "command"     = each.value.health_check_command_resolved
         "interval"    = 15
         "timeout"     = 5
         "retries"     = 3
