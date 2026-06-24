@@ -6,6 +6,9 @@ output "cloudfront_info" {
       cloudfront_distribution_domain_name        = v.cloudfront_distribution_domain_name
       cloudfront_origin_access_identities        = v.cloudfront_origin_access_identities
       cloudfront_origin_access_identity_iam_arns = v.cloudfront_origin_access_identity_iam_arns
+      aliases                                    = local.cloudfront_map[k].aliases
+      certificate_domain_name                    = local.cloudfront_map[k].certificate_domain_name
+      acm_certificate_arn                        = local.cloudfront_acm_certificate_arn[k]
     }
   }
 }

@@ -11,6 +11,7 @@ variable "cloudfront" {
     use_acm_cert                           = optional(bool)
     wildcard_domain                        = optional(bool)
     domain_name                            = optional(string)
+    domain_names                           = optional(list(string), [])
     default_allowed_http_methods           = optional(list(string))
     default_cache_behavior_allowed_methods = optional(list(string))
     origin_request_policy                  = optional(string)

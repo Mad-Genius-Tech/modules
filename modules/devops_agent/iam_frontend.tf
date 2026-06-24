@@ -23,7 +23,17 @@ resource "aws_iam_policy" "frontend" {
           "bedrock-agentcore:InvokeAgentRuntime",
         ]
         Resource = [
-          join("", aws_bedrockagentcore_agent_runtime.agentcore[*].agent_runtime_arn)
+          "arn:aws:bedrock-agentcore:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:runtime/${replace(module.context.id, "-", "_")}-*",
+        ]
+      },
+      {
+        Sid    = "ListAgentRuntimes"
+        Effect = "Allow"
+        Action = [
+          "bedrock-agentcore:ListAgentRuntimes",
+        ]
+        Resource = [
+          "arn:aws:bedrock-agentcore:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*",
         ]
       },
       {
