@@ -167,7 +167,7 @@ resource "aws_iam_policy" "ecs_policy" {
           "ecs:DescribeServices",
         ]
         Resource = [
-          "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/${var.ecs_cluster_name}/*"
+          "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:service/${var.ecs_cluster_name}/*"
         ]
       }
     ]
