@@ -28,7 +28,7 @@ module "context" {
   stage            = var.stage_name
   name             = var.service_name
   delimiter        = "-"
-  label_order      = ["namespace", "environment", "stage", "name"]
+  label_order      = var.flat_name ? ["namespace", "name"] : ["namespace", "environment", "stage", "name"]
 
   tags = merge(var.tags, {
     team      = var.team_name

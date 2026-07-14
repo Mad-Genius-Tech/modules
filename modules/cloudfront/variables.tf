@@ -52,6 +52,10 @@ variable "cloudfront" {
     })), [])
     origin_domain_name        = optional(string)
     origin_connection_timeout = optional(number)
+    # Set to the Lambda function name when origin_domain_name is that
+    # function's URL: creates a lambda-type OAC (sigv4-signed, AWS_IAM URLs)
+    # and the invoke permission scoped to this distribution.
+    lambda_url_origin_function_name = optional(string)
     vpc_origin = optional(object({
       arn                    = string
       name                   = optional(string)

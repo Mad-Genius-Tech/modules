@@ -58,6 +58,7 @@ module "webadapter" {
   maximum_retry_attempts            = local.merged_default_settings.maximum_retry_attempts
   maximum_event_age_in_seconds      = local.merged_default_settings.maximum_event_age_in_seconds
   create_lambda_function_url        = local.merged_default_settings.create_lambda_function_url
+  authorization_type                = var.function_url_authorization_type
   cors                              = var.cors
   vpc_subnet_ids                    = var.vpc_id == "" ? null : var.subnet_ids
   vpc_security_group_ids            = var.vpc_id == "" ? [] : [module.lambda_sg.security_group_id]
@@ -132,7 +133,7 @@ resource "aws_lambda_function_url" "stage_function_url" {
   count              = var.create && local.merged_default_settings.create_lambda_function_url ? 1 : 0
   function_name      = module.webadapter.lambda_function_name
   qualifier          = module.stage_alias.lambda_alias_name
-  authorization_type = "NONE"
+  authorization_type = var.function_url_authorization_type
 
   cors {
     allow_credentials = true

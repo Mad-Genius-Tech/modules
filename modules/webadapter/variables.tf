@@ -76,3 +76,14 @@ variable "subnet_ids" {
   type    = list(any)
   default = []
 }
+variable "function_url_authorization_type" {
+  description = "Auth type for the Lambda function URLs (NONE or AWS_IAM). AWS_IAM + CloudFront OAC keeps the URL invocable only through CloudFront."
+  type        = string
+  default     = "NONE"
+}
+
+variable "flat_name" {
+  description = "Name resources <org>-<service> without the stage segment (flat side-surface namespace)."
+  type        = bool
+  default     = false
+}

@@ -26,6 +26,7 @@ locals {
     custom_error_response                  = [{}]
     viewer_request_function_code           = ""
     origin_domain_name                     = ""
+    lambda_url_origin_function_name        = ""
     vpc_origin                             = null
     default_root_object                    = null
     allow_list_bucket_access               = false
@@ -91,6 +92,7 @@ locals {
       "origin_domain_name"                     = try(coalesce(lookup(v, "origin_domain_name", null), local.merged_default_settings.origin_domain_name), local.merged_default_settings.origin_domain_name)
       "vpc_origin"                             = try(coalesce(lookup(v, "vpc_origin", null), local.merged_default_settings.vpc_origin), local.merged_default_settings.vpc_origin)
       "viewer_request_function_code"           = try(coalesce(lookup(v, "viewer_request_function_code", null), local.merged_default_settings.viewer_request_function_code), local.merged_default_settings.viewer_request_function_code)
+      "lambda_url_origin_function_name"        = try(coalesce(lookup(v, "lambda_url_origin_function_name", null), local.merged_default_settings.lambda_url_origin_function_name), local.merged_default_settings.lambda_url_origin_function_name)
       "custom_origin_config"                   = { for k, v in merge(local.merged_default_settings.custom_origin_config, coalesce(lookup(v, "custom_origin_config", null), local.merged_default_settings.custom_origin_config)) : k => v != null ? v : local.merged_default_settings.custom_origin_config[k] }
       "origin_connection_timeout"              = try(coalesce(lookup(v, "origin_connection_timeout", null), local.merged_default_settings.origin_connection_timeout), local.merged_default_settings.origin_connection_timeout)
       "enable_upload_to_s3_origin"             = try(coalesce(lookup(v, "enable_upload_to_s3_origin", null), local.merged_default_settings.enable_upload_to_s3_origin), local.merged_default_settings.enable_upload_to_s3_origin)
@@ -165,16 +167,26 @@ module "cloudfront" {
   origin_access_identities = {
     "${each.value.s3_bucket}" = each.value.s3_bucket
   }
-  create_origin_access_control = each.value.s3_bucket != "" ? true : false
+  create_origin_access_control = each.value.s3_bucket != "" || each.value.lambda_url_origin_function_name != "" ? true : false
   create_vpc_origin            = each.value.vpc_origin != null ? true : false
-  origin_access_control = each.value.s3_bucket != "" ? {
-    "${each.value.s3_bucket}" = {
-      description      = "CloudFront access to S3 ${each.value.s3_bucket}"
-      origin_type      = "s3"
-      signing_behavior = "always"
-      signing_protocol = "sigv4"
-    }
-  } : {}
+  origin_access_control = merge(
+    each.value.s3_bucket != "" ? {
+      "${each.value.s3_bucket}" = {
+        description      = "CloudFront access to S3 ${each.value.s3_bucket}"
+        origin_type      = "s3"
+        signing_behavior = "always"
+        signing_protocol = "sigv4"
+      }
+    } : {},
+    each.value.lambda_url_origin_function_name != "" ? {
+      "${each.value.lambda_url_origin_function_name}-lambda-url" = {
+        description      = "CloudFront access to Lambda URL of ${each.value.lambda_url_origin_function_name}"
+        origin_type      = "lambda"
+        signing_behavior = "always"
+        signing_protocol = "sigv4"
+      }
+    } : {},
+  )
   vpc_origin = each.value.vpc_origin != null ? {
     "${coalesce(each.value.vpc_origin.name, "default")}" = {
       arn                    = each.value.vpc_origin.arn
@@ -204,7 +216,9 @@ module "cloudfront" {
     each.value.origin_domain_name != "" ? {
       "${each.value.origin_domain_name}" = merge({
         domain_name = each.value.origin_domain_name
-        }, each.value.vpc_origin == null ? {
+        }, each.value.lambda_url_origin_function_name != "" ? {
+        origin_access_control = "${each.value.lambda_url_origin_function_name}-lambda-url"
+        } : {}, each.value.vpc_origin == null ? {
         custom_origin_config = strcontains(each.value.origin_domain_name, "s3-website") ? merge(each.value.custom_origin_config, {
           origin_protocol_policy = "http-only",
           origin_read_timeout    = 30
@@ -294,6 +308,18 @@ module "cloudfront" {
   }] : each.value.custom_error_response
 
   tags = local.tags
+}
+
+# Lets this distribution (and only it) invoke the AWS_IAM-auth function URL
+# it fronts; pairs with the lambda-type OAC above.
+resource "aws_lambda_permission" "cloudfront_lambda_url" {
+  for_each               = { for k, v in local.cloudfront_map : k => v if v.lambda_url_origin_function_name != "" }
+  statement_id           = "AllowCloudFrontInvokeFunctionUrl"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = each.value.lambda_url_origin_function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = module.cloudfront[each.key].cloudfront_distribution_arn
+  function_url_auth_type = "AWS_IAM"
 }
 
 data "aws_cloudfront_cache_policy" "cache_policy" {
