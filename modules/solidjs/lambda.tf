@@ -35,6 +35,7 @@ module "server" {
   create_package                    = false
   ignore_source_code_hash           = true
   create_lambda_function_url        = true
+  authorization_type                = var.function_url_authorization_type
   cors                              = var.cors
   environment_variables = merge({
     LAMBDA_CONFIG_PROJECT_NAME = "${module.context.id}-backend"
