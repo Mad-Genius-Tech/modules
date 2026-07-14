@@ -84,6 +84,11 @@ variable "ecs_services" {
     user                                   = optional(string)
     deployment_minimum_healthy_percent     = optional(number)
     deployment_maximum_percent             = optional(number)
+    capacity_provider_strategy = optional(map(object({
+      base              = optional(number)
+      capacity_provider = string
+      weight            = optional(number)
+    })))
     volume = optional(map(object({
       name      = string
       host_path = optional(string)
