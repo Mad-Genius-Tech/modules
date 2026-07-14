@@ -89,6 +89,16 @@ variable "ecs_services" {
       capacity_provider = string
       weight            = optional(number)
     })))
+    autoscaling_max_capacity = optional(number)
+    autoscaling_scheduled_actions = optional(map(object({
+      name         = optional(string)
+      min_capacity = number
+      max_capacity = number
+      schedule     = string
+      start_time   = optional(string)
+      end_time     = optional(string)
+      timezone     = optional(string)
+    })))
     volume = optional(map(object({
       name      = string
       host_path = optional(string)
