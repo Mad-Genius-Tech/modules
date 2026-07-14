@@ -61,3 +61,9 @@ variable "secret_vars" {
   }))
   default = {}
 }
+
+variable "function_url_authorization_type" {
+  description = "Auth type for the server function URL (NONE or AWS_IAM). AWS_IAM adds a lambda-type OAC + scoped invoke permission so only this distribution can call the URL."
+  type        = string
+  default     = "NONE"
+}

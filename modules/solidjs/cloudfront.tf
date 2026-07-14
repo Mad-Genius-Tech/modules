@@ -13,6 +13,25 @@ resource "aws_cloudfront_origin_access_control" "s3_origin_access_control" {
   signing_protocol                  = "sigv4"
 }
 
+resource "aws_cloudfront_origin_access_control" "lambda_origin_access_control" {
+  count                             = var.enabled && var.function_url_authorization_type == "AWS_IAM" ? 1 : 0
+  name                              = "${local.name}-server-lambda-url"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# Only this distribution may invoke the AWS_IAM server function URL.
+resource "aws_lambda_permission" "cloudfront_server_url" {
+  count                  = var.enabled && var.function_url_authorization_type == "AWS_IAM" ? 1 : 0
+  statement_id           = "AllowCloudFrontInvokeFunctionUrl"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = module.server.lambda_function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.website_distribution[0].arn
+  function_url_auth_type = "AWS_IAM"
+}
+
 data "aws_cloudfront_origin_request_policy" "all_viewer_except_host_header" {
   name = "Managed-AllViewerExceptHostHeader"
 }
@@ -88,8 +107,9 @@ resource "aws_cloudfront_distribution" "website_distribution" {
   }
 
   origin {
-    domain_name = local.server_function_domain_name
-    origin_id   = local.server_function_origin
+    domain_name              = local.server_function_domain_name
+    origin_id                = local.server_function_origin
+    origin_access_control_id = var.function_url_authorization_type == "AWS_IAM" ? aws_cloudfront_origin_access_control.lambda_origin_access_control[0].id : null
     custom_origin_config {
       http_port              = 80
       https_port             = 443
