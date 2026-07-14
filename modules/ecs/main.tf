@@ -52,6 +52,8 @@ locals {
     deployment_minimum_healthy_percent     = 66
     deployment_maximum_percent             = 200
     capacity_provider_strategy             = null
+    autoscaling_max_capacity               = null
+    autoscaling_scheduled_actions          = null
     type                                   = "service"
     scheduled = {
       enabled                      = false
@@ -174,6 +176,8 @@ locals {
       "deployment_maximum_percent"             = try(coalesce(lookup(v, "deployment_maximum_percent", null), local.merged_default_settings.deployment_maximum_percent), local.merged_default_settings.deployment_maximum_percent)
       "deployment_minimum_healthy_percent"     = try(coalesce(lookup(v, "deployment_minimum_healthy_percent", null), local.merged_default_settings.deployment_minimum_healthy_percent), local.merged_default_settings.deployment_minimum_healthy_percent)
       "capacity_provider_strategy"             = try(coalesce(lookup(v, "capacity_provider_strategy", null), local.merged_default_settings.capacity_provider_strategy), local.merged_default_settings.capacity_provider_strategy)
+      "autoscaling_max_capacity"               = try(coalesce(lookup(v, "autoscaling_max_capacity", null), local.merged_default_settings.autoscaling_max_capacity), local.merged_default_settings.autoscaling_max_capacity)
+      "autoscaling_scheduled_actions"          = try(coalesce(lookup(v, "autoscaling_scheduled_actions", null), local.merged_default_settings.autoscaling_scheduled_actions), local.merged_default_settings.autoscaling_scheduled_actions)
       "scheduled"                              = merge(local.merged_default_settings.scheduled, coalesce(try(v.scheduled, null), local.merged_default_settings.scheduled))
     }
   }
@@ -266,6 +270,8 @@ module "ecs_service" {
   desired_count                      = each.value.desired_count
   capacity_provider_strategy         = each.value.capacity_provider_strategy
   autoscaling_min_capacity           = each.value.desired_count
+  autoscaling_max_capacity           = coalesce(each.value.autoscaling_max_capacity, 10)
+  autoscaling_scheduled_actions      = each.value.autoscaling_scheduled_actions
   cluster_arn                        = module.ecs_cluster.arn
   cpu                                = max(ceil(each.value.container_cpu / 256) * 256, 256)
   memory                             = max(ceil(each.value.container_memory / 512) * 512, 512)
@@ -458,15 +464,17 @@ module "ecs_service" {
 }
 
 module "ecs_service_multiples" {
-  source                     = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v6.0.5"
-  for_each                   = { for k, v in local.ecs_map : k => v if v.create && v.multiple_containers && v.type == "service" }
-  name                       = each.value.identifier
-  desired_count              = each.value.desired_count
-  capacity_provider_strategy = each.value.capacity_provider_strategy
-  autoscaling_min_capacity   = each.value.enable_autoscaling ? each.value.desired_count : 1
-  cluster_arn                = module.ecs_cluster.arn
-  cpu                        = max(ceil(each.value.container_cpu / 256) * 256, 256)
-  memory                     = max(ceil(each.value.container_memory / 512) * 512, 512)
+  source                        = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v6.0.5"
+  for_each                      = { for k, v in local.ecs_map : k => v if v.create && v.multiple_containers && v.type == "service" }
+  name                          = each.value.identifier
+  desired_count                 = each.value.desired_count
+  capacity_provider_strategy    = each.value.capacity_provider_strategy
+  autoscaling_min_capacity      = each.value.enable_autoscaling ? each.value.desired_count : 1
+  autoscaling_max_capacity      = coalesce(each.value.autoscaling_max_capacity, 10)
+  autoscaling_scheduled_actions = each.value.autoscaling_scheduled_actions
+  cluster_arn                   = module.ecs_cluster.arn
+  cpu                           = max(ceil(each.value.container_cpu / 256) * 256, 256)
+  memory                        = max(ceil(each.value.container_memory / 512) * 512, 512)
   runtime_platform = {
     cpu_architecture        = upper(each.value.cpu_architecture)
     operating_system_family = "LINUX"
