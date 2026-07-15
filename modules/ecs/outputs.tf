@@ -10,6 +10,16 @@ output "alb_dns_name" {
 
 output "alb_internal_dns_name" {
   value = module.alb_internal.dns_name
+
+  precondition {
+    condition     = !local.internal_alb_host_routing_configured || var.create_internal_alb
+    error_message = "create_internal_alb must be true when internal ALB host routing is configured."
+  }
+
+  precondition {
+    condition     = !local.internal_alb_host_routing_configured || length(var.internal_alb_certificate_domains) > 0
+    error_message = "internal_alb_certificate_domains must contain at least one domain when internal ALB host routing is configured."
+  }
 }
 
 output "alb_internal_dedicated_dns_name" {
