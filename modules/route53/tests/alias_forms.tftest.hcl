@@ -7,8 +7,9 @@ mock_provider "aws" {
 
   mock_data "aws_lb" {
     defaults = {
-      dns_name = "internal-example.us-west-2.elb.amazonaws.com"
-      zone_id  = "Z1H1FL5HABSF5"
+      dns_name           = "internal-example.us-west-2.elb.amazonaws.com"
+      zone_id            = "Z1H1FL5HABSF5"
+      load_balancer_type = "application"
     }
   }
 }
@@ -126,6 +127,27 @@ run "reject_mixed_alias_forms" {
             alias = {
               name                           = "dualstack.example.us-west-2.elb.amazonaws.com"
               zone_id                        = "Z1H1FL5HABSF5"
+              application_load_balancer_name = "example-internal"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.zones]
+}
+
+run "reject_incompatible_alb_record_type" {
+  command = plan
+
+  variables {
+    zones = {
+      "example.com" = {
+        records = {
+          "internal.example.com" = {
+            type = "CNAME"
+            alias = {
               application_load_balancer_name = "example-internal"
             }
           }

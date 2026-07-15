@@ -26,6 +26,13 @@ locals {
 data "aws_lb" "alias" {
   for_each = local.application_load_balancer_aliases
   name     = each.value
+
+  lifecycle {
+    postcondition {
+      condition     = self.load_balancer_type == "application"
+      error_message = "application_load_balancer_name must resolve to an Application Load Balancer."
+    }
+  }
 }
 
 resource "aws_route53_record" "record" {
