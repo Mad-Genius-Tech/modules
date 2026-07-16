@@ -3,6 +3,27 @@ locals {
   ecs_dedicated_internal_alb_enabled = length([
     for k, v in local.ecs_map : k if v.create_alb && !v.external_alb && v.dedicated_internal_alb
   ]) > 0
+
+  internal_alb_host_routed_services = {
+    for k, v in local.ecs_map : k => v
+    if v.create_alb && !v.external_alb && length(v.internal_alb_hostnames) > 0
+  }
+
+  internal_alb_direct_services = {
+    for k, v in local.ecs_map : k => v
+    if v.create_alb && !(v.dedicated_internal_alb && !v.external_alb) && length(v.internal_alb_hostnames) == 0
+  }
+
+  internal_alb_target_services         = merge(local.internal_alb_direct_services, local.internal_alb_host_routed_services)
+  internal_alb_host_routing_configured = length(local.internal_alb_host_routed_services) > 0
+  internal_alb_host_routing_enabled = (
+    local.internal_alb_host_routing_configured &&
+    var.create_internal_alb &&
+    length(var.internal_alb_certificate_domains) > 0
+  )
+  internal_alb_certificate_domains = local.internal_alb_host_routing_enabled ? {
+    for index, domain in var.internal_alb_certificate_domains : tostring(index) => domain
+  } : {}
 }
 
 data "aws_security_group" "cloudfront_vpc_origins" {
@@ -14,6 +35,13 @@ data "aws_security_group" "cloudfront_vpc_origins" {
     name   = "group-name"
     values = ["CloudFront-VPCOrigins-Service-SG"]
   }
+}
+
+data "aws_acm_certificate" "internal_alb" {
+  for_each = local.internal_alb_certificate_domains
+
+  domain   = each.value
+  statuses = ["ISSUED"]
 }
 
 module "alb_internal" {
@@ -30,32 +58,93 @@ module "alb_internal" {
     bucket = module.log_bucket.s3_bucket_id
     prefix = "${module.context.id}-internal"
   }
-  security_group_ingress_rules = {
-    for v in values(local.ecs_map) : v.identifier => {
-      from_port   = v.container_port
-      to_port     = v.container_port
-      ip_protocol = "tcp"
-      description = "${v.identifier} http traffic"
-      cidr_ipv4   = var.vpc_cidr
-    } if v.create_alb && !(v.dedicated_internal_alb && !v.external_alb)
-  }
+  security_group_ingress_rules = merge(
+    {
+      for v in values(local.internal_alb_direct_services) : v.identifier => {
+        from_port   = v.container_port
+        to_port     = v.container_port
+        ip_protocol = "tcp"
+        description = "${v.identifier} http traffic"
+        cidr_ipv4   = var.vpc_cidr
+      }
+    },
+    local.internal_alb_host_routing_enabled ? {
+      host_http = {
+        from_port   = 80
+        to_port     = 80
+        ip_protocol = "tcp"
+        description = "Shared internal ALB HTTP traffic"
+        cidr_ipv4   = var.vpc_cidr
+      }
+      host_https = {
+        from_port   = 443
+        to_port     = 443
+        ip_protocol = "tcp"
+        description = "Shared internal ALB HTTPS traffic"
+        cidr_ipv4   = var.vpc_cidr
+      }
+    } : {}
+  )
   security_group_egress_rules = {
     all = {
       ip_protocol = "-1"
       cidr_ipv4   = var.vpc_cidr
     }
   }
-  listeners = {
-    for v in values(local.ecs_map) : v.identifier => {
-      port     = v.container_port
-      protocol = "HTTP"
-      forward = {
-        target_group_key = v.identifier
+  listeners = merge(
+    {
+      for v in values(local.internal_alb_direct_services) : v.identifier => {
+        port     = v.container_port
+        protocol = "HTTP"
+        forward = {
+          target_group_key = v.identifier
+        }
       }
-    } if v.create_alb && !(v.dedicated_internal_alb && !v.external_alb)
-  }
+    },
+    {
+      for listener_key, listener in {
+        host_http = {
+          port     = 80
+          protocol = "HTTP"
+          redirect = {
+            port        = "443"
+            protocol    = "HTTPS"
+            status_code = "HTTP_301"
+          }
+        }
+        host_https = {
+          port            = 443
+          protocol        = "HTTPS"
+          certificate_arn = try(data.aws_acm_certificate.internal_alb["0"].arn, null)
+          additional_certificate_arns = compact([
+            for index, domain in var.internal_alb_certificate_domains :
+            try(data.aws_acm_certificate.internal_alb[tostring(index)].arn, null) if index > 0
+          ])
+          fixed_response = {
+            content_type = "text/plain"
+            message_body = "Not Found"
+            status_code  = "404"
+          }
+          rules = {
+            for service_key, service in local.internal_alb_host_routed_services : service_key => {
+              priority = 100 + index(sort(keys(local.internal_alb_host_routed_services)), service_key)
+              actions = [{
+                type             = "forward"
+                target_group_key = service.identifier
+              }]
+              conditions = [{
+                host_header = {
+                  values = sort(service.internal_alb_hostnames)
+                }
+              }]
+            }
+          }
+        }
+      } : listener_key => listener if local.internal_alb_host_routing_enabled
+    }
+  )
   target_groups = {
-    for v in values(local.ecs_map) : v.identifier => {
+    for v in values(local.internal_alb_target_services) : v.identifier => {
       name_prefix          = "${var.stage_name}i-"
       protocol             = "HTTP"
       port                 = v.container_port
@@ -73,7 +162,7 @@ module "alb_internal" {
         port                = "traffic-port"
         timeout             = 5
       }
-    } if v.create_alb && !(v.dedicated_internal_alb && !v.external_alb)
+    }
   }
   tags = local.tags
 }

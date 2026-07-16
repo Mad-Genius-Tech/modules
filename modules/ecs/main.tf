@@ -28,6 +28,7 @@ locals {
     create_alb                             = false
     external_alb                           = false
     dedicated_internal_alb                 = false
+    internal_alb_hostnames                 = []
     create_nlb                             = false
     create_eip                             = false
     multiple_ports                         = false
@@ -143,6 +144,7 @@ locals {
       "create_alb"                             = try(coalesce(lookup(v, "create_alb", null), local.merged_default_settings.create_alb), local.merged_default_settings.create_alb)
       "external_alb"                           = try(coalesce(lookup(v, "external_alb", null), local.merged_default_settings.external_alb), local.merged_default_settings.external_alb)
       "dedicated_internal_alb"                 = try(coalesce(lookup(v, "dedicated_internal_alb", null), local.merged_default_settings.dedicated_internal_alb), local.merged_default_settings.dedicated_internal_alb)
+      "internal_alb_hostnames"                 = try(coalesce(lookup(v, "internal_alb_hostnames", null), local.merged_default_settings.internal_alb_hostnames), local.merged_default_settings.internal_alb_hostnames)
       "create_nlb"                             = try(coalesce(lookup(v, "create_nlb", null), local.merged_default_settings.create_nlb), local.merged_default_settings.create_nlb)
       "create_eip"                             = try(coalesce(lookup(v, "create_eip", null), local.merged_default_settings.create_eip), local.merged_default_settings.create_eip)
       "multiple_ports"                         = try(coalesce(lookup(v, "multiple_ports", null), local.merged_default_settings.multiple_ports), local.merged_default_settings.multiple_ports)
@@ -370,13 +372,22 @@ module "ecs_service" {
   # }
 
   load_balancer = each.value.create_alb ? (!each.value.external_alb && each.value.dedicated_internal_alb ?
-    {
-      internal_alb = {
-        target_group_arn = module.alb_internal_dedicated[each.key].target_groups[each.value.identifier].arn
-        container_name   = each.key
-        container_port   = each.value.container_port
-      }
-      } : (each.value.external_alb && var.create_internal_alb ?
+    merge(
+      {
+        internal_alb = {
+          target_group_arn = module.alb_internal_dedicated[each.key].target_groups[each.value.identifier].arn
+          container_name   = each.key
+          container_port   = each.value.container_port
+        }
+      },
+      local.internal_alb_host_routing_enabled && length(each.value.internal_alb_hostnames) > 0 ? {
+        internal_alb_shared = {
+          target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+          container_name   = each.key
+          container_port   = each.value.container_port
+        }
+      } : {}
+      ) : (each.value.external_alb && var.create_internal_alb ?
       {
         external_alb = {
           target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
@@ -493,13 +504,22 @@ module "ecs_service_multiples" {
     })
   }
   load_balancer = each.value.create_alb ? (!each.value.external_alb && each.value.dedicated_internal_alb ?
-    {
-      internal_alb = {
-        target_group_arn = module.alb_internal_dedicated[each.key].target_groups[each.value.identifier].arn
-        container_name   = lookup(each.value, "container_name", each.key)
-        container_port   = each.value.container_port
-      }
-      } : (each.value.external_alb ?
+    merge(
+      {
+        internal_alb = {
+          target_group_arn = module.alb_internal_dedicated[each.key].target_groups[each.value.identifier].arn
+          container_name   = lookup(each.value, "container_name", each.key)
+          container_port   = each.value.container_port
+        }
+      },
+      local.internal_alb_host_routing_enabled && length(each.value.internal_alb_hostnames) > 0 ? {
+        internal_alb_shared = {
+          target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
+          container_name   = lookup(each.value, "container_name", each.key)
+          container_port   = each.value.container_port
+        }
+      } : {}
+      ) : (each.value.external_alb ?
       {
         external_alb = {
           target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn

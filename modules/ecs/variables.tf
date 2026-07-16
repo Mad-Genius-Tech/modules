@@ -23,6 +23,24 @@ variable "create_internal_alb" {
   default = true
 }
 
+variable "internal_alb_certificate_domains" {
+  description = "Ordered ACM certificate domains for shared internal ALB HTTPS; the first is the default and the rest are SNI certificates."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = (
+      length(var.internal_alb_certificate_domains) == length(distinct([
+        for domain in var.internal_alb_certificate_domains : lower(trimspace(domain))
+      ])) &&
+      alltrue([
+        for domain in var.internal_alb_certificate_domains : trimspace(domain) != ""
+      ])
+    )
+    error_message = "internal_alb_certificate_domains must contain unique, non-empty domain names."
+  }
+}
+
 variable "create_certmagic_table" {
   type    = bool
   default = false
@@ -62,6 +80,7 @@ variable "ecs_services" {
     create_alb                             = optional(bool)
     external_alb                           = optional(bool)
     dedicated_internal_alb                 = optional(bool)
+    internal_alb_hostnames                 = optional(list(string), [])
     create_nlb                             = optional(bool)
     create_eip                             = optional(bool)
     multiple_ports                         = optional(bool)
@@ -230,6 +249,46 @@ variable "ecs_services" {
       !(lower(v.type) == "scheduled_task" && coalesce(try(v.multiple_containers, null), false))
     ])
     error_message = "ecs_services scheduled_task entries do not support multiple_containers."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.ecs_services) :
+      length(v.internal_alb_hostnames) == 0 || (
+        coalesce(v.create_alb, false) &&
+        !coalesce(v.external_alb, false) &&
+        lower(v.type) == "service" &&
+        length(v.internal_alb_hostnames) <= 3 &&
+        alltrue([for hostname in v.internal_alb_hostnames : trimspace(hostname) != ""])
+      )
+    ])
+    error_message = "ecs_services.internal_alb_hostnames requires an internal ALB-backed service and may contain at most three non-empty hostnames."
+  }
+
+  validation {
+    condition = length(flatten([
+      for v in values(var.ecs_services) : [
+        for hostname in v.internal_alb_hostnames : lower(trimspace(hostname))
+      ]
+      ])) == length(distinct(flatten([
+        for v in values(var.ecs_services) : [
+          for hostname in v.internal_alb_hostnames : lower(trimspace(hostname))
+        ]
+    ])))
+    error_message = "ecs_services.internal_alb_hostnames must be globally unique (case-insensitive)."
+  }
+
+  validation {
+    condition = !anytrue([
+      for v in values(var.ecs_services) : length(v.internal_alb_hostnames) > 0
+      ]) || alltrue([
+      for v in values(var.ecs_services) :
+      !coalesce(v.create_alb, false) ||
+      (coalesce(v.dedicated_internal_alb, false) && !coalesce(v.external_alb, false)) ||
+      length(v.internal_alb_hostnames) > 0 ||
+      !contains([80, 443], coalesce(v.container_port, 8080))
+    ])
+    error_message = "Shared internal ALB host routing cannot coexist with a direct shared listener on port 80 or 443."
   }
 }
 
