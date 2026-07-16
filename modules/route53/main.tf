@@ -16,6 +16,23 @@ locals {
       })
     }
   ]...)
+
+  application_load_balancer_aliases = {
+    for record_key, record in local.records : record_key => try(record.alias.application_load_balancer_name, null)
+    if record.alias != null && try(record.alias.application_load_balancer_name, null) != null
+  }
+}
+
+data "aws_lb" "alias" {
+  for_each = local.application_load_balancer_aliases
+  name     = each.value
+
+  lifecycle {
+    postcondition {
+      condition     = self.load_balancer_type == "application"
+      error_message = "application_load_balancer_name must resolve to an Application Load Balancer."
+    }
+  }
 }
 
 resource "aws_route53_record" "record" {
@@ -29,8 +46,12 @@ resource "aws_route53_record" "record" {
   dynamic "alias" {
     for_each = each.value.alias != null ? [each.value.alias] : []
     content {
-      name                   = alias.value.name
-      zone_id                = alias.value.zone_id
+      name = alias.value.application_load_balancer_name != null ? (
+        "dualstack.${data.aws_lb.alias[each.key].dns_name}"
+      ) : alias.value.name
+      zone_id = alias.value.application_load_balancer_name != null ? (
+        data.aws_lb.alias[each.key].zone_id
+      ) : alias.value.zone_id
       evaluate_target_health = alias.value.evaluate_target_health
     }
   }
