@@ -1,4 +1,12 @@
 
+locals {
+  sns_email_subscriptions = {
+    for endpoint in var.sns_email_subscriptions :
+    lower(trimspace(endpoint)) => trimspace(endpoint)
+    if var.create && trimspace(endpoint) != ""
+  }
+}
+
 resource "aws_sns_topic" "topic" {
   count = var.create ? 1 : 0
   name  = "${module.context.id}-alarm"
@@ -6,7 +14,7 @@ resource "aws_sns_topic" "topic" {
 }
 
 resource "aws_sns_topic_subscription" "subscription" {
-  for_each  = { for k, v in var.sns_email_subscriptions : k => v if var.create && v != "" }
+  for_each  = local.sns_email_subscriptions
   topic_arn = aws_sns_topic.topic[0].arn
   protocol  = "email"
   endpoint  = each.value
