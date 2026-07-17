@@ -50,8 +50,7 @@ resource "aws_secretsmanager_secret_version" "secret_version" {
 
   lifecycle {
     precondition {
-      condition = (
-        local.secrets[each.key].password_section == null ||
+      condition = local.secrets[each.key].password_section == null ? true : (
         contains(
           keys(data.onepassword_item.password_item[each.key].section_map),
           local.secrets[each.key].password_section,
@@ -74,8 +73,7 @@ resource "aws_secretsmanager_secret_version" "secret_version_whitelist" {
 
   lifecycle {
     precondition {
-      condition = (
-        local.secrets[each.key].password_section == null ||
+      condition = local.secrets[each.key].password_section == null ? true : (
         contains(
           keys(data.onepassword_item.password_item[each.key].section_map),
           local.secrets[each.key].password_section,
@@ -85,8 +83,7 @@ resource "aws_secretsmanager_secret_version" "secret_version_whitelist" {
     }
 
     precondition {
-      condition = (
-        local.secrets[each.key].password_section == null ||
+      condition = local.secrets[each.key].password_section == null ? true : (
         alltrue([
           for label in local.secrets[each.key].password_whitelist :
           try(length(local.whitelist_passwords[each.key][label]) > 0, false)
