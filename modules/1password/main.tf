@@ -1,19 +1,28 @@
 locals {
   secrets = var.secrets
 
+  selected_password_fields = {
+    for k in keys(local.secrets) : k => (
+      local.secrets[k].password_section == null
+      ? merge({}, [
+        for section in data.onepassword_item.password_item[k].section : {
+          for field in section.field : field.label => field
+        } if length(section.field) > 0
+      ]...)
+      : try(data.onepassword_item.password_item[k].section_map[local.secrets[k].password_section].field_map, {})
+    )
+  }
   all_passwords = {
-    for k in keys(local.secrets) : k => merge([
-      for item in data.onepassword_item.password_item[k].section : {
-        for secret in item["field"] : secret["label"] => secret["value"] if can(local.secrets[k]["password_exclude"]) && !contains(coalesce(local.secrets[k]["password_exclude"], []), secret["label"])
-      } if length(item["field"]) > 0
-    ]...)
+    for k in keys(local.secrets) : k => {
+      for label, field in local.selected_password_fields[k] : label => field.value
+      if can(local.secrets[k]["password_exclude"]) && !contains(coalesce(local.secrets[k]["password_exclude"], []), label)
+    }
   }
   whitelist_passwords = {
-    for k in keys(local.secrets) : k => merge([
-      for item in data.onepassword_item.password_item[k].section : {
-        for secret in item["field"] : secret["label"] => secret["value"] if contains(coalesce(local.secrets[k].password_whitelist, []), secret["label"])
-      } if length(item["field"]) > 0
-    ]...)
+    for k in keys(local.secrets) : k => {
+      for label, field in local.selected_password_fields[k] : label => field.value
+      if contains(coalesce(local.secrets[k].password_whitelist, []), label)
+    }
   }
 }
 
@@ -38,6 +47,19 @@ resource "aws_secretsmanager_secret_version" "secret_version" {
   }
   secret_id     = each.value.secret_id
   secret_string = each.value.secret_string
+
+  lifecycle {
+    precondition {
+      condition = (
+        local.secrets[each.key].password_section == null ||
+        contains(
+          keys(data.onepassword_item.password_item[each.key].section_map),
+          local.secrets[each.key].password_section,
+        )
+      )
+      error_message = "password_section must identify an existing 1Password item section."
+    }
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "secret_version_whitelist" {
@@ -49,4 +71,28 @@ resource "aws_secretsmanager_secret_version" "secret_version_whitelist" {
   }
   secret_id     = each.value.secret_id
   secret_string = each.value.secret_string
+
+  lifecycle {
+    precondition {
+      condition = (
+        local.secrets[each.key].password_section == null ||
+        contains(
+          keys(data.onepassword_item.password_item[each.key].section_map),
+          local.secrets[each.key].password_section,
+        )
+      )
+      error_message = "password_section must identify an existing 1Password item section."
+    }
+
+    precondition {
+      condition = (
+        local.secrets[each.key].password_section == null ||
+        alltrue([
+          for label in local.secrets[each.key].password_whitelist :
+          try(length(local.whitelist_passwords[each.key][label]) > 0, false)
+        ])
+      )
+      error_message = "Every password_whitelist field must exist and be populated in password_section."
+    }
+  }
 }
