@@ -106,3 +106,40 @@ run "runtime_control_overrides" {
     error_message = "The readonly_root_filesystem override must reach the generated single-container definition."
   }
 }
+
+run "reject_single_container_control_for_multi_container_service" {
+  command = plan
+
+  variables {
+    org_name            = "mgb"
+    stage_name          = "test"
+    service_name        = "rt"
+    team_name           = "platform"
+    tags                = {}
+    private_subnets     = ["subnet-private"]
+    public_subnets      = ["subnet-public"]
+    ingress_cidr_blocks = ["10.0.0.0/16"]
+    vpc_id              = "vpc-test"
+    vpc_cidr            = "10.0.0.0/16"
+    create_internal_alb = false
+
+    ecs_services = {
+      multi = {
+        container_image          = "123456789012.dkr.ecr.us-east-1.amazonaws.com/multi:test"
+        multiple_containers      = true
+        readonly_root_filesystem = true
+        subnet_ids               = ["subnet-private"]
+        container_definitions = {
+          app = {
+            essential = true
+            cpu       = 256
+            memory    = 512
+            image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/multi:test"
+          }
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.ecs_services]
+}

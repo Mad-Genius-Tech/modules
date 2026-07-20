@@ -256,6 +256,14 @@ variable "ecs_services" {
   validation {
     condition = alltrue([
       for v in values(var.ecs_services) :
+      !(coalesce(try(v.multiple_containers, null), false) && coalesce(try(v.readonly_root_filesystem, null), false))
+    ])
+    error_message = "ecs_services.readonly_root_filesystem configures only single-container services; set readonlyRootFilesystem on each container_definitions entry for multiple_containers services."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.ecs_services) :
       length(v.internal_alb_hostnames) == 0 || (
         coalesce(v.create_alb, false) &&
         !coalesce(v.external_alb, false) &&
