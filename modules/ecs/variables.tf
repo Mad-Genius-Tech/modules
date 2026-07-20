@@ -66,6 +66,8 @@ variable "ecs_services" {
     }))
     create                                 = optional(bool)
     enable_service_discovery               = optional(bool)
+    enable_execute_command                 = optional(bool, true)
+    readonly_root_filesystem               = optional(bool, false)
     desired_count                          = optional(number)
     cpu_architecture                       = optional(string)
     fluentbit_cpu                          = optional(number)
