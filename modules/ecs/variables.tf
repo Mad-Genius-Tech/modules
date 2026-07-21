@@ -66,6 +66,8 @@ variable "ecs_services" {
     }))
     create                                 = optional(bool)
     enable_service_discovery               = optional(bool)
+    enable_execute_command                 = optional(bool, true)
+    readonly_root_filesystem               = optional(bool, false)
     desired_count                          = optional(number)
     cpu_architecture                       = optional(string)
     fluentbit_cpu                          = optional(number)
@@ -249,6 +251,14 @@ variable "ecs_services" {
       !(lower(v.type) == "scheduled_task" && coalesce(try(v.multiple_containers, null), false))
     ])
     error_message = "ecs_services scheduled_task entries do not support multiple_containers."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.ecs_services) :
+      !(coalesce(try(v.multiple_containers, null), false) && coalesce(try(v.readonly_root_filesystem, null), false))
+    ])
+    error_message = "ecs_services.readonly_root_filesystem configures only single-container services; set readonlyRootFilesystem on each container_definitions entry for multiple_containers services."
   }
 
   validation {

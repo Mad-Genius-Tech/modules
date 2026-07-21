@@ -14,6 +14,8 @@ locals {
   default_settings = {
     container_insights                     = "disabled"
     enable_service_discovery               = false
+    enable_execute_command                 = true
+    readonly_root_filesystem               = false
     fargate_weight                         = 0
     fargate_spot_weight                    = 100
     fluentbit_cpu                          = 128
@@ -129,6 +131,8 @@ locals {
       "create"                   = coalesce(lookup(v, "create", null), true)
       "type"                     = lower(try(coalesce(lookup(v, "type", null), local.merged_default_settings.type), local.merged_default_settings.type))
       "enable_service_discovery" = try(coalesce(lookup(v, "enable_service_discovery", null), local.merged_default_settings.enable_service_discovery), local.merged_default_settings.enable_service_discovery)
+      "enable_execute_command"   = try(coalesce(lookup(v, "enable_execute_command", null), local.merged_default_settings.enable_execute_command), local.merged_default_settings.enable_execute_command)
+      "readonly_root_filesystem" = try(coalesce(lookup(v, "readonly_root_filesystem", null), local.merged_default_settings.readonly_root_filesystem), local.merged_default_settings.readonly_root_filesystem)
       "desired_count"            = try(coalesce(lookup(v, "desired_count", null), local.merged_default_settings.desired_count), local.merged_default_settings.desired_count)
       "fluentbit_cpu"            = try(coalesce(lookup(v, "fluentbit_cpu", null), local.merged_default_settings.fluentbit_cpu), local.merged_default_settings.fluentbit_cpu)
       "fluentbit_memory"         = try(coalesce(lookup(v, "fluentbit_memory", null), local.merged_default_settings.fluentbit_memory), local.merged_default_settings.fluentbit_memory)
@@ -285,7 +289,7 @@ module "ecs_service" {
   }
   availability_zone_rebalancing     = each.value.availability_zone_rebalancing
   enable_autoscaling                = each.value.enable_autoscaling
-  enable_execute_command            = true
+  enable_execute_command            = each.value.enable_execute_command
   task_exec_secret_arns             = each.value.task_exec_secret_arns
   task_exec_ssm_param_arns          = []
   health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
@@ -307,7 +311,7 @@ module "ecs_service" {
       }
       user                   = each.value.user
       mountPoints            = each.value.mount_points
-      readonlyRootFilesystem = false
+      readonlyRootFilesystem = each.value.readonly_root_filesystem
       # interactive        = true
       # pseudo_terminal    = true
       environment = each.value.environment
@@ -491,7 +495,7 @@ module "ecs_service_multiples" {
     operating_system_family = "LINUX"
   }
   enable_autoscaling                = each.value.enable_autoscaling
-  enable_execute_command            = true
+  enable_execute_command            = each.value.enable_execute_command
   task_exec_secret_arns             = each.value.task_exec_secret_arns
   task_exec_ssm_param_arns          = []
   health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
