@@ -439,13 +439,13 @@ module "ecs_service" {
   #   ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
   # }
   #tasks_iam_role_statements = [each.value.tasks_iam_role_statements]
-  tasks_iam_role_statements = [
+  tasks_iam_role_statements = length(each.value.tasks_iam_role_statements) > 0 ? [
     for v in values(each.value.tasks_iam_role_statements) : {
       resources  = v.resources
       actions    = v.actions
       conditions = v.conditions != null ? v.conditions : []
     }
-  ]
+  ] : null
   # tasks_iam_role_statements = { 
   #   for k, v in each.value.tasks_iam_role_statements: k => {
   #     resources = v.resources
@@ -567,13 +567,13 @@ module "ecs_service_multiples" {
   #   ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
   # }
   #tasks_iam_role_statements = [each.value.tasks_iam_role_statements]
-  tasks_iam_role_statements = [
+  tasks_iam_role_statements = length(each.value.tasks_iam_role_statements) > 0 ? [
     for v in values(each.value.tasks_iam_role_statements) : {
       resources  = v.resources
       actions    = v.actions
       conditions = v.conditions != null ? v.conditions : []
     }
-  ]
+  ] : null
   # tasks_iam_role_statements = { 
   #   for k, v in each.value.tasks_iam_role_statements: k => {
   #     resources = v.resources

@@ -105,6 +105,11 @@ run "runtime_control_overrides" {
     condition     = module.ecs_service["hardened"].container_definitions["hardened"].container_definition.readonlyRootFilesystem == true
     error_message = "The readonly_root_filesystem override must reach the generated single-container definition."
   }
+
+  assert {
+    condition     = length(regexall("tasks_iam_role_statements\\s*=\\s*length\\(each\\.value\\.tasks_iam_role_statements\\)\\s*>\\s*0\\s*\\?\\s*\\[", file("${path.module}/main.tf"))) == 2
+    error_message = "Empty task-policy statements must be passed upstream as null for both single- and multi-container ECS services."
+  }
 }
 
 run "reject_single_container_control_for_multi_container_service" {
