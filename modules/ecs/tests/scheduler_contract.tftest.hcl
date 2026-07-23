@@ -142,8 +142,7 @@ run "scheduler_task_contract" {
     target          = aws_iam_role.scheduler["migration-snapshot"]
     override_during = plan
     values = {
-      arn  = "arn:aws:iam::123456789012:role/mgb-dev-fabric-auth-migration-snapshot-scheduler"
-      name = "mgb-dev-fabric-auth-migration-snapshot-scheduler"
+      arn = "arn:aws:iam::123456789012:role/mgb-dev-fabric-auth-migration-snapshot-scheduler"
     }
   }
 
@@ -246,6 +245,7 @@ run "scheduler_task_contract" {
       output.ecs_map["migration-snapshot"].task_definition_family == "mgb-dev-fabric-auth-migration-snapshot" &&
       !output.ecs_map["migration-snapshot"].task_exec_iam_role_use_name_prefix &&
       !output.ecs_map["migration-snapshot"].tasks_iam_role_use_name_prefix &&
+      aws_iam_role.scheduler["migration-snapshot"].name == "mgb-dev-fabric-auth-migration-snapshot-scheduler" &&
       output.ecs_scheduled_tasks["migration-snapshot"].task_definition_family == "mgb-dev-fabric-auth-migration-snapshot" &&
       output.ecs_scheduled_tasks["migration-snapshot"].task_exec_iam_role_name == "mgb-dev-fabric-auth-migration-snapshot-execution" &&
       output.ecs_scheduled_tasks["migration-snapshot"].task_runtime_iam_role_name == "mgb-dev-fabric-auth-migration-snapshot-task" &&
