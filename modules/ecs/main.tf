@@ -40,6 +40,9 @@ locals {
     wildcard_domain                        = true
     domain_name                            = ""
     health_check_command                   = []
+    enable_health_check                    = true
+    enable_port_mappings                   = true
+    enable_default_ingress_rule            = true
     health_check_start_period              = null
     health_check_grace_period_seconds      = null
     command                                = null
@@ -59,21 +62,25 @@ locals {
     autoscaling_scheduled_actions          = null
     type                                   = "service"
     scheduled = {
-      enabled                      = false
-      schedule_expression          = null
-      schedule_expression_timezone = "UTC"
-      subnet_ids                   = null
-      security_group_ids           = null
-      assign_public_ip             = false
-      task_count                   = 1
-      platform_version             = "LATEST"
-      maximum_retry_attempts       = 0
-      maximum_event_age_in_seconds = 300
-      command                      = null
-      cpu                          = null
-      memory                       = null
-      reuse_task_definition_key    = null
-      reuse_container_name         = null
+      enabled                        = false
+      schedule_expression            = null
+      schedule_expression_timezone   = "UTC"
+      subnet_ids                     = null
+      security_group_ids             = null
+      assign_public_ip               = false
+      task_count                     = 1
+      platform_version               = "LATEST"
+      maximum_retry_attempts         = 0
+      maximum_event_age_in_seconds   = 300
+      scheduler_role_name            = null
+      scheduler_role_use_name_prefix = false
+      command                        = null
+      cpu                            = null
+      memory                         = null
+      dead_letter_config             = null
+      observability                  = null
+      reuse_task_definition_key      = null
+      reuse_container_name           = null
     }
 
 
@@ -93,7 +100,12 @@ locals {
     task_exec_secret_arns = [
       "arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:${var.org_name}-${var.stage_name}/*"
     ]
-    tasks_iam_role_statements = {}
+    task_definition_family             = null
+    task_exec_iam_role_name            = null
+    task_exec_iam_role_use_name_prefix = true
+    tasks_iam_role_name                = null
+    tasks_iam_role_use_name_prefix     = true
+    tasks_iam_role_statements          = {}
     # tasks_iam_role_statements = {
     #   "kms_decrypt" = {
     #     actions = [
@@ -104,7 +116,8 @@ locals {
     #     ]
     #   }
     # }
-    security_group_rules = {}
+    security_group_rules        = {}
+    security_group_egress_rules = null
   }
 
   env_default_settings = {
@@ -163,7 +176,16 @@ locals {
       "wildcard_domain"                        = try(coalesce(lookup(v, "wildcard_domain", null), local.merged_default_settings.wildcard_domain), local.merged_default_settings.wildcard_domain)
       "domain_name"                            = try(coalesce(lookup(v, "domain_name", null), local.merged_default_settings.domain_name), local.merged_default_settings.domain_name)
       "task_exec_secret_arns"                  = try(coalesce(lookup(v, "task_exec_secret_arns", null), local.merged_default_settings.task_exec_secret_arns), local.merged_default_settings.task_exec_secret_arns)
+      "task_definition_family"                 = lookup(v, "task_definition_family", null)
+      "task_exec_iam_role_name"                = lookup(v, "task_exec_iam_role_name", null)
+      "task_exec_iam_role_use_name_prefix"     = try(coalesce(lookup(v, "task_exec_iam_role_use_name_prefix", null), local.merged_default_settings.task_exec_iam_role_use_name_prefix), local.merged_default_settings.task_exec_iam_role_use_name_prefix)
+      "tasks_iam_role_name"                    = lookup(v, "tasks_iam_role_name", null)
+      "tasks_iam_role_use_name_prefix"         = try(coalesce(lookup(v, "tasks_iam_role_use_name_prefix", null), local.merged_default_settings.tasks_iam_role_use_name_prefix), local.merged_default_settings.tasks_iam_role_use_name_prefix)
       "security_group_rules"                   = merge(coalesce(lookup(v, "security_group_rules", {}), {}), local.merged_default_settings.security_group_rules)
+      "security_group_egress_rules"            = lookup(v, "security_group_egress_rules", null)
+      "enable_health_check"                    = try(coalesce(lookup(v, "enable_health_check", null), local.merged_default_settings.enable_health_check), local.merged_default_settings.enable_health_check)
+      "enable_port_mappings"                   = try(coalesce(lookup(v, "enable_port_mappings", null), local.merged_default_settings.enable_port_mappings), local.merged_default_settings.enable_port_mappings)
+      "enable_default_ingress_rule"            = try(coalesce(lookup(v, "enable_default_ingress_rule", null), local.merged_default_settings.enable_default_ingress_rule), local.merged_default_settings.enable_default_ingress_rule)
       "require_repository_credentials"         = try(coalesce(lookup(v, "require_repository_credentials", null), local.merged_default_settings.require_repository_credentials), local.merged_default_settings.require_repository_credentials)
       "repository_credentials"                 = try(coalesce(lookup(v, "repository_credentials", null), local.merged_default_settings.repository_credentials), local.merged_default_settings.repository_credentials)
       "container_name"                         = lookup(v, "container_name", null)
@@ -190,6 +212,29 @@ locals {
 
   ecs_map = {
     for k, v in local.ecs_map_base : k => merge(v, {
+      security_group_ingress_rules_resolved = merge(v.enable_default_ingress_rule ? {
+        "ingress_${v.container_port}" = {
+          from_port   = v.container_port
+          to_port     = v.container_port
+          ip_protocol = "tcp"
+          description = "ECS Container Service port"
+          cidr_ipv4   = var.vpc_cidr
+        }
+      } : {}, v.security_group_rules)
+      security_group_egress_rules_resolved = v.security_group_egress_rules != null ? v.security_group_egress_rules : {
+        egress_all = {
+          name                         = null
+          cidr_ipv4                    = "0.0.0.0/0"
+          cidr_ipv6                    = null
+          description                  = null
+          from_port                    = null
+          ip_protocol                  = "-1"
+          prefix_list_id               = null
+          referenced_security_group_id = null
+          tags                         = {}
+          to_port                      = null
+        }
+      }
       health_check_command_resolved = (
         length(v.health_check_command) == 0 ? [
           "CMD-SHELL",
@@ -262,6 +307,24 @@ locals {
       } if v.secrets != null && length(v.secrets) > 0
     ]
   }
+
+  resolved_container_secret_arns = {
+    for k, v in local.ecs_map : k => distinct([
+      for s in v.secrets : data.aws_secretsmanager_secret.secret["${k}|${s.name}"].arn
+    ])
+  }
+
+  scheduled_task_exec_secret_arns = {
+    for k, v in local.ecs_map : k => distinct(compact(concat(
+      local.resolved_container_secret_arns[k],
+      v.require_repository_credentials &&
+      v.repository_credentials != null &&
+      !(v.container_image != null && strcontains(v.container_image, "ecr.${data.aws_region.current.region}.amazonaws.com"))
+      ? [v.repository_credentials.credentialsParameter]
+      : []
+    )))
+    if v.type == "scheduled_task"
+  }
 }
 
 # output "test" {
@@ -279,6 +342,7 @@ module "ecs_service" {
   autoscaling_max_capacity           = coalesce(each.value.autoscaling_max_capacity, 10)
   autoscaling_scheduled_actions      = each.value.autoscaling_scheduled_actions
   cluster_arn                        = module.ecs_cluster.arn
+  family                             = coalesce(each.value.task_definition_family, each.value.identifier)
   cpu                                = max(ceil(each.value.container_cpu / 256) * 256, 256)
   memory                             = max(ceil(each.value.container_memory / 512) * 512, 512)
   deployment_minimum_healthy_percent = each.value.deployment_minimum_healthy_percent
@@ -287,28 +351,30 @@ module "ecs_service" {
     cpu_architecture        = upper(each.value.cpu_architecture)
     operating_system_family = "LINUX"
   }
-  availability_zone_rebalancing     = each.value.availability_zone_rebalancing
-  enable_autoscaling                = each.value.enable_autoscaling
-  enable_execute_command            = each.value.enable_execute_command
-  task_exec_secret_arns             = each.value.task_exec_secret_arns
-  task_exec_ssm_param_arns          = []
-  health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
-  volume                            = each.value.volume
+  availability_zone_rebalancing      = each.value.availability_zone_rebalancing
+  enable_autoscaling                 = each.value.enable_autoscaling
+  enable_execute_command             = each.value.enable_execute_command
+  task_exec_secret_arns              = each.value.type == "scheduled_task" ? local.scheduled_task_exec_secret_arns[each.key] : each.value.task_exec_secret_arns
+  task_exec_iam_role_name            = each.value.task_exec_iam_role_name
+  task_exec_iam_role_use_name_prefix = each.value.task_exec_iam_role_use_name_prefix
+  task_exec_ssm_param_arns           = []
+  health_check_grace_period_seconds  = each.value.health_check_grace_period_seconds
+  volume                             = each.value.volume
   container_definitions = {
-    (each.key) = merge({
+    (coalesce(each.value.container_name, each.key)) = merge({
       essential             = true
       cpu                   = max(ceil(each.value.container_cpu / 256) * 256, 256)
       memory                = max(ceil(each.value.container_memory / 512) * 512, 512)
       memoryReservation     = max(ceil(each.value.container_memory / 512) * 512, 512) / 2
       image                 = each.value.container_image == null ? data.external.current_image[each.key].result["IMAGE_NAME"] : each.value.container_image
       repositoryCredentials = each.value.container_image != null && strcontains(coalesce(each.value.container_image, "null_value"), "ecr.${data.aws_region.current.name}.amazonaws.com") ? null : (each.value.require_repository_credentials ? each.value.repository_credentials : null)
-      healthCheck = {
+      healthCheck = each.value.enable_health_check ? {
         "command"     = each.value.health_check_command_resolved
         "interval"    = 15
         "timeout"     = 5
         "retries"     = 3
         "startPeriod" = each.value.health_check_start_period
-      }
+      } : null
       user                   = each.value.user
       mountPoints            = each.value.mount_points
       readonlyRootFilesystem = each.value.readonly_root_filesystem
@@ -316,7 +382,7 @@ module "ecs_service" {
       # pseudo_terminal    = true
       environment = each.value.environment
       secrets     = lookup(local.secrets_output, each.key, null)
-      portMappings = each.value.multiple_ports ? [
+      portMappings = !each.value.enable_port_mappings ? null : each.value.multiple_ports ? [
         {
           protocol      = "tcp"
           containerPort = 80
@@ -380,14 +446,14 @@ module "ecs_service" {
       {
         internal_alb = {
           target_group_arn = module.alb_internal_dedicated[each.key].target_groups[each.value.identifier].arn
-          container_name   = each.key
+          container_name   = coalesce(each.value.container_name, each.key)
           container_port   = each.value.container_port
         }
       },
       local.internal_alb_host_routing_enabled && length(each.value.internal_alb_hostnames) > 0 ? {
         internal_alb_shared = {
           target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
-          container_name   = each.key
+          container_name   = coalesce(each.value.container_name, each.key)
           container_port   = each.value.container_port
         }
       } : {}
@@ -395,46 +461,47 @@ module "ecs_service" {
       {
         external_alb = {
           target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
-          container_name   = each.key
+          container_name   = coalesce(each.value.container_name, each.key)
           container_port   = each.value.container_port
         }
         internal_alb = {
           target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
-          container_name   = each.key
+          container_name   = coalesce(each.value.container_name, each.key)
           container_port   = each.value.container_port
         }
         } : (each.value.external_alb ? {
           external_alb = {
             target_group_arn = module.alb[each.key].target_groups[each.value.identifier].arn
-            container_name   = each.key
+            container_name   = coalesce(each.value.container_name, each.key)
             container_port   = each.value.container_port
           } } : {
           internal_alb = {
             target_group_arn = module.alb_internal.target_groups[each.value.identifier].arn
-            container_name   = each.key
+            container_name   = coalesce(each.value.container_name, each.key)
             container_port   = each.value.container_port
           }
       }))) : (each.value.create_nlb ? (each.value.multiple_ports ?
       {
         service_80 = {
           target_group_arn = module.nlb[each.key].target_groups["${each.value.identifier}-80"].arn
-          container_name   = each.key
+          container_name   = coalesce(each.value.container_name, each.key)
           container_port   = 80
         }
         service_443 = {
           target_group_arn = module.nlb[each.key].target_groups["${each.value.identifier}-443"].arn
-          container_name   = each.key
+          container_name   = coalesce(each.value.container_name, each.key)
           container_port   = 443
         }
         } : {
         service = {
           target_group_arn = module.nlb[each.key].target_groups[each.value.identifier].arn
-          container_name   = each.key
+          container_name   = coalesce(each.value.container_name, each.key)
           container_port   = each.value.container_port
         }
   }) : {})
-  tasks_iam_role_name        = "${each.value.identifier}-taskrole"
-  tasks_iam_role_description = "Tasks IAM role for ${each.value.identifier}"
+  tasks_iam_role_name            = coalesce(each.value.tasks_iam_role_name, "${each.value.identifier}-taskrole")
+  tasks_iam_role_use_name_prefix = each.value.tasks_iam_role_use_name_prefix
+  tasks_iam_role_description     = "Tasks IAM role for ${each.value.identifier}"
   # tasks_iam_role_policies = {
   #   ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
   # }
@@ -453,25 +520,12 @@ module "ecs_service" {
   #     conditions = v.conditions != null ? v.conditions : []
   #   }
   # }
-  subnet_ids = coalesce(each.value.subnet_ids, var.private_subnets)
-  security_group_ingress_rules = merge({
-    "ingress_${each.value.container_port}" = {
-      from_port   = each.value.container_port
-      to_port     = each.value.container_port
-      ip_protocol = "tcp"
-      description = "ECS Container Service port"
-      cidr_ipv4   = var.vpc_cidr
-    }
-  }, each.value.security_group_rules)
-  security_group_egress_rules = {
-    egress_all = {
-      ip_protocol = "-1"
-      cidr_ipv4   = "0.0.0.0/0"
-    }
-  }
+  subnet_ids                   = coalesce(each.value.subnet_ids, var.private_subnets)
+  security_group_ingress_rules = each.value.security_group_ingress_rules_resolved
+  security_group_egress_rules  = each.value.security_group_egress_rules_resolved
   service_registries = each.value.enable_service_discovery ? {
     registry_arn   = aws_service_discovery_service.service_discovery[each.key].arn
-    container_name = each.key
+    container_name = coalesce(each.value.container_name, each.key)
     # container_port = each.value.container_port
   } : null
 
@@ -488,17 +542,20 @@ module "ecs_service_multiples" {
   autoscaling_max_capacity      = coalesce(each.value.autoscaling_max_capacity, 10)
   autoscaling_scheduled_actions = each.value.autoscaling_scheduled_actions
   cluster_arn                   = module.ecs_cluster.arn
+  family                        = coalesce(each.value.task_definition_family, each.value.identifier)
   cpu                           = max(ceil(each.value.container_cpu / 256) * 256, 256)
   memory                        = max(ceil(each.value.container_memory / 512) * 512, 512)
   runtime_platform = {
     cpu_architecture        = upper(each.value.cpu_architecture)
     operating_system_family = "LINUX"
   }
-  enable_autoscaling                = each.value.enable_autoscaling
-  enable_execute_command            = each.value.enable_execute_command
-  task_exec_secret_arns             = each.value.task_exec_secret_arns
-  task_exec_ssm_param_arns          = []
-  health_check_grace_period_seconds = each.value.health_check_grace_period_seconds
+  enable_autoscaling                 = each.value.enable_autoscaling
+  enable_execute_command             = each.value.enable_execute_command
+  task_exec_secret_arns              = each.value.task_exec_secret_arns
+  task_exec_iam_role_name            = each.value.task_exec_iam_role_name
+  task_exec_iam_role_use_name_prefix = each.value.task_exec_iam_role_use_name_prefix
+  task_exec_ssm_param_arns           = []
+  health_check_grace_period_seconds  = each.value.health_check_grace_period_seconds
   container_definitions = {
     for k, v in each.value.container_definitions : k => merge(v, {
       image = try(v.image, null) == null ? data.external.current_image[each.key].result[k] : v.image
@@ -561,8 +618,9 @@ module "ecs_service_multiples" {
         }
   }) : {})
 
-  tasks_iam_role_name        = "${each.value.identifier}-taskrole"
-  tasks_iam_role_description = "Tasks IAM role for ${each.value.identifier}"
+  tasks_iam_role_name            = coalesce(each.value.tasks_iam_role_name, "${each.value.identifier}-taskrole")
+  tasks_iam_role_use_name_prefix = each.value.tasks_iam_role_use_name_prefix
+  tasks_iam_role_description     = "Tasks IAM role for ${each.value.identifier}"
   # tasks_iam_role_policies = {
   #   ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
   # }

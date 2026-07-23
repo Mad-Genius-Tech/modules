@@ -72,14 +72,31 @@ output "ecs_services" {
 
 output "ecs_scheduled_tasks" {
   value = {
-    for k, v in aws_cloudwatch_event_rule.ecs_scheduled_task : k => {
-      schedule_arn          = v.arn
-      schedule_name         = v.name
-      schedule_expression   = v.schedule_expression
-      event_target_id       = aws_cloudwatch_event_target.ecs_scheduled_task[k].target_id
-      task_definition_arn   = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_definition_arn
-      task_exec_iam_role    = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_arn
-      task_runtime_iam_role = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_arn
+    for k, v in aws_scheduler_schedule.ecs_scheduled_task : k => {
+      schedule_arn                 = v.arn
+      schedule_name                = v.name
+      schedule_expression          = v.schedule_expression
+      schedule_expression_timezone = v.schedule_expression_timezone
+      schedule_group_name          = aws_scheduler_schedule_group.scheduled_task[k].name
+      schedule_group_arn           = aws_scheduler_schedule_group.scheduled_task[k].arn
+      enabled                      = local.scheduled_task_map[k].scheduled.enabled
+      task_definition_arn          = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_definition_arn
+      task_definition_family       = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_definition_family
+      task_exec_iam_role_name      = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_name
+      task_exec_iam_role_arn       = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_arn
+      task_exec_secret_arns        = try(local.scheduled_task_exec_secret_arns[local.scheduled_task_ecs_service_key[k]], [])
+      task_runtime_iam_role_name   = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_name
+      task_runtime_iam_role_arn    = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_arn
+      scheduler_iam_role_name      = aws_iam_role.scheduler[k].name
+      scheduler_iam_role_arn       = aws_iam_role.scheduler[k].arn
+      dead_letter_queue_arn        = local.scheduled_task_dlq_arn[k]
+      container_name               = local.scheduled_task_container_override_name[k]
+      cloudwatch_log_group_name    = "/aws/ecs/${local.scheduled_task_map[k].identifier}/${local.scheduled_task_container_override_name[k]}"
+      observability_alarm_arns = try(local.scheduled_task_map[k].scheduled.observability.enabled, false) ? {
+        scheduler_launch_failure = aws_cloudwatch_metric_alarm.scheduled_task_launch_failure[k].arn
+        task_nonzero_exit        = aws_cloudwatch_metric_alarm.scheduled_task_nonzero_exit[k].arn
+        success_freshness        = aws_cloudwatch_metric_alarm.scheduled_task_freshness[k].arn
+      } : null
     }
   }
 }
