@@ -95,7 +95,15 @@ variable "ecs_services" {
     wildcard_domain                        = optional(bool)
     domain_name                            = optional(string)
     task_exec_secret_arns                  = optional(list(string))
+    task_definition_family                 = optional(string)
+    task_exec_iam_role_name                = optional(string)
+    task_exec_iam_role_use_name_prefix     = optional(bool, true)
+    tasks_iam_role_name                    = optional(string)
+    tasks_iam_role_use_name_prefix         = optional(bool, true)
     health_check_command                   = optional(list(string))
+    enable_health_check                    = optional(bool, true)
+    enable_port_mappings                   = optional(bool, true)
+    enable_default_ingress_rule            = optional(bool, true)
     health_check_start_period              = optional(number)
     command                                = optional(list(string))
     entry_point                            = optional(list(string))
@@ -155,6 +163,18 @@ variable "ecs_services" {
       description = optional(string)
       cidr_ipv4   = string
     })))
+    security_group_egress_rules = optional(map(object({
+      name                         = optional(string)
+      cidr_ipv4                    = optional(string)
+      cidr_ipv6                    = optional(string)
+      description                  = optional(string)
+      from_port                    = optional(string)
+      ip_protocol                  = optional(string, "tcp")
+      prefix_list_id               = optional(string)
+      referenced_security_group_id = optional(string)
+      tags                         = optional(map(string), {})
+      to_port                      = optional(string)
+    })))
     container_name = optional(string)
     container_definitions = optional(map(object({
       essential         = bool
@@ -209,19 +229,41 @@ variable "ecs_services" {
       })), [])
     })))
     scheduled = optional(object({
-      enabled                      = optional(bool, false)
-      schedule_expression          = optional(string)
-      schedule_expression_timezone = optional(string, "UTC")
-      subnet_ids                   = optional(list(string))
-      security_group_ids           = optional(list(string))
-      assign_public_ip             = optional(bool, false)
-      task_count                   = optional(number, 1)
-      platform_version             = optional(string, "LATEST")
-      maximum_retry_attempts       = optional(number, 0)
-      maximum_event_age_in_seconds = optional(number, 300)
-      command                      = optional(list(string))
-      cpu                          = optional(number)
-      memory                       = optional(number)
+      enabled                        = optional(bool, false)
+      schedule_expression            = optional(string)
+      schedule_expression_timezone   = optional(string, "UTC")
+      subnet_ids                     = optional(list(string))
+      security_group_ids             = optional(list(string))
+      assign_public_ip               = optional(bool, false)
+      task_count                     = optional(number, 1)
+      platform_version               = optional(string, "LATEST")
+      maximum_retry_attempts         = optional(number, 0)
+      maximum_event_age_in_seconds   = optional(number, 300)
+      scheduler_role_name            = optional(string)
+      scheduler_role_use_name_prefix = optional(bool, false)
+      command                        = optional(list(string))
+      cpu                            = optional(number)
+      memory                         = optional(number)
+      dead_letter_config = optional(object({
+        arn                        = optional(string)
+        create                     = optional(bool, false)
+        name                       = optional(string)
+        message_retention_seconds  = optional(number, 1209600)
+        visibility_timeout_seconds = optional(number, 30)
+      }))
+      observability = optional(object({
+        enabled       = optional(bool, false)
+        alarm_actions = optional(list(string), [])
+        ok_actions    = optional(list(string), [])
+        success_signal = optional(object({
+          namespace                = string
+          metric_name              = string
+          dimensions               = optional(map(string), {})
+          statistic                = optional(string, "Sum")
+          period_seconds           = optional(number, 3600)
+          freshness_window_seconds = number
+        }))
+      }))
       # Source: exact `ecs_services` map key, or that service full `identifier` string (context-prefixed name in main.tf)
       reuse_task_definition_key = optional(string)
       # When the source is multiple_containers, which container in the task def to override (defaults: container_name, then first container_definitions key)
@@ -251,6 +293,33 @@ variable "ecs_services" {
       !(lower(v.type) == "scheduled_task" && coalesce(try(v.multiple_containers, null), false))
     ])
     error_message = "ecs_services scheduled_task entries do not support multiple_containers."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.ecs_services) :
+      lower(v.type) != "scheduled_task" || try(
+        !(coalesce(v.scheduled.dead_letter_config.create, false) && trimspace(coalesce(v.scheduled.dead_letter_config.arn, "")) != ""),
+        true
+      )
+    ])
+    error_message = "ecs_services scheduled_task dead_letter_config must choose either create=true or an existing arn, not both."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in values(var.ecs_services) :
+      lower(v.type) != "scheduled_task" || !try(v.scheduled.observability.enabled, false) || (
+        try(v.scheduled.observability.success_signal, null) != null &&
+        try(v.scheduled.observability.success_signal.period_seconds >= 60, false) &&
+        try(v.scheduled.observability.success_signal.period_seconds % 60 == 0, false) &&
+        try(v.scheduled.observability.success_signal.freshness_window_seconds >= v.scheduled.observability.success_signal.period_seconds, false) &&
+        try(v.scheduled.observability.success_signal.freshness_window_seconds % v.scheduled.observability.success_signal.period_seconds == 0, false) &&
+        try(v.scheduled.observability.success_signal.freshness_window_seconds <= 604800, false) &&
+        try(v.scheduled.observability.success_signal.period_seconds >= 3600 || v.scheduled.observability.success_signal.freshness_window_seconds <= 86400, false)
+      )
+    ])
+    error_message = "ecs_services scheduled_task observability requires a success_signal whose period is a positive minute interval, whose freshness window is divisible by that period, and whose evaluation range fits CloudWatch limits (one day for sub-hour periods or seven days otherwise)."
   }
 
   validation {
