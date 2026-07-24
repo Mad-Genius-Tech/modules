@@ -18,6 +18,25 @@ mock_provider "aws" {
       json = "{}"
     }
   }
+
+  mock_data "aws_ecs_service" {
+    defaults = {
+      task_definition = "arn:aws:ecs:us-east-1:123456789012:task-definition/mgb-test-rt-auth:7"
+      network_configuration = [{
+        assign_public_ip = false
+        security_groups  = ["sg-auth"]
+        subnets          = ["subnet-private"]
+      }]
+    }
+  }
+
+  mock_data "aws_ecs_task_definition" {
+    defaults = {
+      arn                = "arn:aws:ecs:us-east-1:123456789012:task-definition/mgb-test-rt-auth:7"
+      execution_role_arn = "arn:aws:iam::123456789012:role/auth-execution"
+      task_role_arn      = "arn:aws:iam::123456789012:role/auth-task"
+    }
+  }
 }
 
 run "runtime_control_defaults" {
@@ -72,6 +91,11 @@ run "runtime_control_defaults" {
   assert {
     condition     = length(regexall("depends_on\\s*=\\s*\\[\\s*aws_iam_role_policy\\.scheduler_run_task\\s*\\]", file("${path.module}/scheduled_tasks.tf"))) == 1
     error_message = "Scheduled targets must wait for their exact scheduler IAM policy."
+  }
+
+  assert {
+    condition     = length(regexall("module\\.ecs_service", file("${path.module}/scheduled_tasks.tf"))) == 0
+    error_message = "Scheduled-task resources must not depend on ECS service module instances."
   }
 }
 
