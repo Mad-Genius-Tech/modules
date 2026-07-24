@@ -1,3 +1,23 @@
+# CloudFront module
+
+## Edge observability controls
+
+Access logging and paid additional metrics are opt-in per distribution.
+`enable_standard_logging_v2 = true` creates a private encrypted log bucket
+with finite retention and a JSON delivery that excludes viewer IP, query
+string, cookie, referer, user-agent, and forwarded-for fields. Override the
+30-day retention with `logging_retention_days`; values outside 1–365 are
+rejected.
+
+The legacy `enable_logs` path remains for compatibility. Its cookie logging
+defaults to disabled and must be explicitly enabled with
+`logging_include_cookies = true`. New consumers should use standard logging v2
+when they need privacy-filtered path evidence.
+
+`enable_additional_metrics = true` creates the CloudFront monitoring
+subscription that exposes cache-hit rate, origin latency, and status-specific
+error metrics. Consumers must review cost and the exact plan before apply.
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
