@@ -4,6 +4,10 @@ locals {
   default_settings = {
     enabled                                = true
     enable_logs                            = false
+    enable_standard_logging_v2             = false
+    logging_include_cookies                = false
+    logging_retention_days                 = 30
+    enable_additional_metrics              = false
     price_class                            = "PriceClass_100"
     default_presigned_url                  = false
     disable_presigned_url                  = false
@@ -41,6 +45,30 @@ locals {
     ordered_cache_behavior    = []
   }
 
+  standard_logging_v2_record_fields = [
+    "date",
+    "time",
+    "x-edge-location",
+    "cs-method",
+    "cs(Host)",
+    "cs-uri-stem",
+    "sc-status",
+    "sc-bytes",
+    "cs-bytes",
+    "time-taken",
+    "time-to-first-byte",
+    "x-edge-result-type",
+    "x-edge-response-result-type",
+    "x-edge-detailed-result-type",
+    "x-edge-request-id",
+    "cs-protocol",
+    "cs-protocol-version",
+    "ssl-protocol",
+    "sc-content-type",
+    "sc-content-len",
+    "cache-behavior-path-pattern",
+  ]
+
   env_default_settings = {
     prod = merge(local.default_settings,
       {
@@ -68,6 +96,10 @@ locals {
       )))
       "enabled"                                = try(coalesce(lookup(v, "enabled", null), local.merged_default_settings.enabled), local.merged_default_settings.enabled)
       "enable_logs"                            = try(coalesce(lookup(v, "enable_logs", null), local.merged_default_settings.enable_logs), local.merged_default_settings.enable_logs)
+      "enable_standard_logging_v2"             = try(coalesce(lookup(v, "enable_standard_logging_v2", null), local.merged_default_settings.enable_standard_logging_v2), local.merged_default_settings.enable_standard_logging_v2)
+      "logging_include_cookies"                = try(coalesce(lookup(v, "logging_include_cookies", null), local.merged_default_settings.logging_include_cookies), local.merged_default_settings.logging_include_cookies)
+      "logging_retention_days"                 = try(coalesce(lookup(v, "logging_retention_days", null), local.merged_default_settings.logging_retention_days), local.merged_default_settings.logging_retention_days)
+      "enable_additional_metrics"              = try(coalesce(lookup(v, "enable_additional_metrics", null), local.merged_default_settings.enable_additional_metrics), local.merged_default_settings.enable_additional_metrics)
       "s3_bucket"                              = try(coalesce(lookup(v, "s3_bucket", null), local.merged_default_settings.s3_bucket), local.merged_default_settings.s3_bucket)
       "default_presigned_url"                  = try(coalesce(lookup(v, "default_presigned_url", null), local.merged_default_settings.default_presigned_url), local.merged_default_settings.default_presigned_url)
       "disable_presigned_url"                  = try(coalesce(lookup(v, "disable_presigned_url", null), local.merged_default_settings.disable_presigned_url), local.merged_default_settings.disable_presigned_url)
@@ -102,12 +134,19 @@ locals {
       "allow_list_bucket_access"               = try(coalesce(lookup(v, "allow_list_bucket_access", null), local.merged_default_settings.allow_list_bucket_access), local.merged_default_settings.allow_list_bucket_access)
     } if coalesce(lookup(v, "create", null), true)
   }
+
+  standard_logging_v2_names = {
+    for k, v in local.cloudfront_map :
+    k => "${substr(v.identifier, 0, 40)}-${substr(sha1(v.identifier), 0, 8)}"
+  }
 }
 
 provider "aws" {
   alias  = "us-east-1"
   region = "us-east-1"
 }
+
+data "aws_caller_identity" "current" {}
 
 data "aws_acm_certificate" "wildcard" {
   for_each = { for k, v in local.cloudfront_map : k => v if v.use_acm_cert && v.wildcard_domain && v.certificate_domain_name != null }
@@ -143,15 +182,71 @@ resource "aws_cloudfront_function" "function" {
 
 
 module "s3_bucket" {
-  for_each                 = local.cloudfront_map
-  source                   = "terraform-aws-modules/s3-bucket/aws"
-  version                  = "~> 3.15.1"
-  create_bucket            = each.value.enable_logs ? true : false
-  bucket                   = "${each.value.identifier}-logs"
-  acl                      = "private"
-  control_object_ownership = true
-  object_ownership         = "ObjectWriter"
-  tags                     = local.tags
+  for_each                              = local.cloudfront_map
+  source                                = "terraform-aws-modules/s3-bucket/aws"
+  version                               = "~> 3.15.1"
+  create_bucket                         = each.value.enable_logs || each.value.enable_standard_logging_v2
+  bucket                                = "${each.value.identifier}-logs"
+  acl                                   = "private"
+  control_object_ownership              = true
+  object_ownership                      = "ObjectWriter"
+  attach_deny_insecure_transport_policy = each.value.enable_logs || each.value.enable_standard_logging_v2
+  attach_require_latest_tls_policy      = each.value.enable_logs || each.value.enable_standard_logging_v2
+  attach_policy                         = each.value.enable_standard_logging_v2
+  policy                                = each.value.enable_standard_logging_v2 ? data.aws_iam_policy_document.standard_logging_v2_bucket[each.key].json : null
+  server_side_encryption_configuration = each.value.enable_logs || each.value.enable_standard_logging_v2 ? {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        sse_algorithm = "AES256"
+      }
+    }
+  } : {}
+  lifecycle_rule = each.value.enable_logs || each.value.enable_standard_logging_v2 ? [
+    {
+      id                                     = "expire-access-logs"
+      enabled                                = true
+      abort_incomplete_multipart_upload_days = 1
+      expiration = {
+        days = each.value.logging_retention_days
+      }
+    }
+  ] : []
+  tags = local.tags
+}
+
+data "aws_iam_policy_document" "standard_logging_v2_bucket" {
+  for_each = { for k, v in local.cloudfront_map : k => v if v.enable_standard_logging_v2 }
+
+  statement {
+    sid     = "AWSLogsDeliveryWrite"
+    actions = ["s3:PutObject"]
+    resources = [
+      "arn:aws:s3:::${each.value.identifier}-logs/*",
+    ]
+
+    principals {
+      type        = "Service"
+      identifiers = ["delivery.logs.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:delivery-source:*"]
+    }
+  }
 }
 
 module "cloudfront" {
@@ -203,7 +298,7 @@ module "cloudfront" {
 
   logging_config = each.value.enable_logs ? {
     bucket          = module.s3_bucket[each.key].s3_bucket_bucket_domain_name
-    include_cookies = true
+    include_cookies = each.value.logging_include_cookies
   } : {}
 
   origin = merge(
@@ -306,6 +401,55 @@ module "cloudfront" {
     error_code            = 403
     error_caching_min_ttl = 5
   }] : each.value.custom_error_response
+
+  tags = local.tags
+}
+
+resource "aws_cloudfront_monitoring_subscription" "additional_metrics" {
+  provider        = aws.us-east-1
+  for_each        = { for k, v in local.cloudfront_map : k => v if v.enable_additional_metrics }
+  distribution_id = module.cloudfront[each.key].cloudfront_distribution_id
+
+  monitoring_subscription {
+    realtime_metrics_subscription_config {
+      realtime_metrics_subscription_status = "Enabled"
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_delivery_source" "standard_v2" {
+  provider     = aws.us-east-1
+  for_each     = { for k, v in local.cloudfront_map : k => v if v.enable_standard_logging_v2 }
+  name         = "${local.standard_logging_v2_names[each.key]}-src"
+  log_type     = "ACCESS_LOGS"
+  resource_arn = module.cloudfront[each.key].cloudfront_distribution_arn
+  tags         = local.tags
+}
+
+resource "aws_cloudwatch_log_delivery_destination" "standard_v2" {
+  provider = aws.us-east-1
+  for_each = { for k, v in local.cloudfront_map : k => v if v.enable_standard_logging_v2 }
+  name     = "${local.standard_logging_v2_names[each.key]}-dst"
+
+  delivery_destination_configuration {
+    destination_resource_arn = module.s3_bucket[each.key].s3_bucket_arn
+  }
+
+  output_format = "json"
+  tags          = local.tags
+}
+
+resource "aws_cloudwatch_log_delivery" "standard_v2" {
+  provider                 = aws.us-east-1
+  for_each                 = { for k, v in local.cloudfront_map : k => v if v.enable_standard_logging_v2 }
+  delivery_source_name     = aws_cloudwatch_log_delivery_source.standard_v2[each.key].name
+  delivery_destination_arn = aws_cloudwatch_log_delivery_destination.standard_v2[each.key].arn
+  record_fields            = local.standard_logging_v2_record_fields
+
+  s3_delivery_configuration {
+    enable_hive_compatible_path = true
+    suffix_path                 = "distribution={distributionid}/year={yyyy}/month={MM}/day={dd}/hour={HH}"
+  }
 
   tags = local.tags
 }

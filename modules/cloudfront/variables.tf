@@ -2,6 +2,10 @@ variable "cloudfront" {
   type = map(object({
     create                                 = optional(bool)
     enable_logs                            = optional(bool)
+    enable_standard_logging_v2             = optional(bool)
+    logging_include_cookies                = optional(bool)
+    logging_retention_days                 = optional(number)
+    enable_additional_metrics              = optional(bool)
     aliases                                = optional(list(string))
     enabled                                = optional(bool)
     price_class                            = optional(string)
@@ -72,6 +76,16 @@ variable "cloudfront" {
       origin_read_timeout    = optional(number)
     }))
   }))
+
+  validation {
+    condition = alltrue([
+      for config in values(var.cloudfront) :
+      coalesce(config.logging_retention_days, 30) >= 1 &&
+      coalesce(config.logging_retention_days, 30) <= 365 &&
+      floor(coalesce(config.logging_retention_days, 30)) == coalesce(config.logging_retention_days, 30)
+    ])
+    error_message = "logging_retention_days must be a whole number between 1 and 365 days."
+  }
 }
 
 variable "output_keyfile" {
