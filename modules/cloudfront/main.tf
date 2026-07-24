@@ -8,6 +8,14 @@ locals {
     logging_include_cookies                = false
     logging_retention_days                 = 30
     enable_additional_metrics              = false
+    enable_cloudwatch_alarms               = false
+    cloudwatch_alarm_actions               = []
+    cloudwatch_ok_actions                  = []
+    cloudwatch_alarm_period                = 300
+    cloudwatch_alarm_evaluation_periods    = 2
+    cloudwatch_alarm_datapoints_to_alarm   = 2
+    cloudwatch_4xx_error_rate_threshold    = 10
+    cloudwatch_5xx_error_rate_threshold    = 5
     price_class                            = "PriceClass_100"
     default_presigned_url                  = false
     disable_presigned_url                  = false
@@ -100,6 +108,14 @@ locals {
       "logging_include_cookies"                = try(coalesce(lookup(v, "logging_include_cookies", null), local.merged_default_settings.logging_include_cookies), local.merged_default_settings.logging_include_cookies)
       "logging_retention_days"                 = try(coalesce(lookup(v, "logging_retention_days", null), local.merged_default_settings.logging_retention_days), local.merged_default_settings.logging_retention_days)
       "enable_additional_metrics"              = try(coalesce(lookup(v, "enable_additional_metrics", null), local.merged_default_settings.enable_additional_metrics), local.merged_default_settings.enable_additional_metrics)
+      "enable_cloudwatch_alarms"               = try(coalesce(lookup(v, "enable_cloudwatch_alarms", null), local.merged_default_settings.enable_cloudwatch_alarms), local.merged_default_settings.enable_cloudwatch_alarms)
+      "cloudwatch_alarm_actions"               = try(coalesce(lookup(v, "cloudwatch_alarm_actions", null), local.merged_default_settings.cloudwatch_alarm_actions), local.merged_default_settings.cloudwatch_alarm_actions)
+      "cloudwatch_ok_actions"                  = try(coalesce(lookup(v, "cloudwatch_ok_actions", null), local.merged_default_settings.cloudwatch_ok_actions), local.merged_default_settings.cloudwatch_ok_actions)
+      "cloudwatch_alarm_period"                = try(coalesce(lookup(v, "cloudwatch_alarm_period", null), local.merged_default_settings.cloudwatch_alarm_period), local.merged_default_settings.cloudwatch_alarm_period)
+      "cloudwatch_alarm_evaluation_periods"    = try(coalesce(lookup(v, "cloudwatch_alarm_evaluation_periods", null), local.merged_default_settings.cloudwatch_alarm_evaluation_periods), local.merged_default_settings.cloudwatch_alarm_evaluation_periods)
+      "cloudwatch_alarm_datapoints_to_alarm"   = try(coalesce(lookup(v, "cloudwatch_alarm_datapoints_to_alarm", null), local.merged_default_settings.cloudwatch_alarm_datapoints_to_alarm), local.merged_default_settings.cloudwatch_alarm_datapoints_to_alarm)
+      "cloudwatch_4xx_error_rate_threshold"    = try(coalesce(lookup(v, "cloudwatch_4xx_error_rate_threshold", null), local.merged_default_settings.cloudwatch_4xx_error_rate_threshold), local.merged_default_settings.cloudwatch_4xx_error_rate_threshold)
+      "cloudwatch_5xx_error_rate_threshold"    = try(coalesce(lookup(v, "cloudwatch_5xx_error_rate_threshold", null), local.merged_default_settings.cloudwatch_5xx_error_rate_threshold), local.merged_default_settings.cloudwatch_5xx_error_rate_threshold)
       "s3_bucket"                              = try(coalesce(lookup(v, "s3_bucket", null), local.merged_default_settings.s3_bucket), local.merged_default_settings.s3_bucket)
       "default_presigned_url"                  = try(coalesce(lookup(v, "default_presigned_url", null), local.merged_default_settings.default_presigned_url), local.merged_default_settings.default_presigned_url)
       "disable_presigned_url"                  = try(coalesce(lookup(v, "disable_presigned_url", null), local.merged_default_settings.disable_presigned_url), local.merged_default_settings.disable_presigned_url)
@@ -139,6 +155,19 @@ locals {
     for k, v in local.cloudfront_map :
     k => "${substr(v.identifier, 0, 40)}-${substr(sha1(v.identifier), 0, 8)}"
   }
+
+  cloudfront_error_alarms = merge({}, [
+    for distribution_key, config in local.cloudfront_map : {
+      for metric_name, threshold in {
+        "4xxErrorRate" = config.cloudwatch_4xx_error_rate_threshold
+        "5xxErrorRate" = config.cloudwatch_5xx_error_rate_threshold
+        } : "${distribution_key}-${metric_name}" => {
+        distribution_key = distribution_key
+        metric_name      = metric_name
+        threshold        = threshold
+      }
+    } if config.enable_cloudwatch_alarms
+  ]...)
 }
 
 provider "aws" {
@@ -415,6 +444,32 @@ resource "aws_cloudfront_monitoring_subscription" "additional_metrics" {
       realtime_metrics_subscription_status = "Enabled"
     }
   }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cloudfront_error_rate" {
+  provider = aws.us-east-1
+  for_each = local.cloudfront_error_alarms
+
+  alarm_name          = "${local.cloudfront_map[each.value.distribution_key].identifier}-${lower(each.value.metric_name)}"
+  alarm_description   = "CloudFront ${each.value.metric_name} exceeded the reviewed error-rate threshold."
+  namespace           = "AWS/CloudFront"
+  metric_name         = each.value.metric_name
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = each.value.threshold
+  period              = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_period
+  evaluation_periods  = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_evaluation_periods
+  datapoints_to_alarm = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_datapoints_to_alarm
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DistributionId = module.cloudfront[each.value.distribution_key].cloudfront_distribution_id
+    Region         = "Global"
+  }
+
+  alarm_actions = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_actions
+  ok_actions    = local.cloudfront_map[each.value.distribution_key].cloudwatch_ok_actions
+  tags          = local.tags
 }
 
 resource "aws_cloudwatch_log_delivery_source" "standard_v2" {

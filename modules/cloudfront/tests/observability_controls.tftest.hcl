@@ -74,6 +74,11 @@ run "privacy_safe_observability_defaults" {
     condition     = !local.cloudfront_map.default.enable_additional_metrics
     error_message = "Paid additional CloudFront metrics must remain opt-in."
   }
+
+  assert {
+    condition     = !local.cloudfront_map.default.enable_cloudwatch_alarms
+    error_message = "CloudFront error-rate alarms must remain opt-in."
+  }
 }
 
 run "opted_in_observability_controls" {
@@ -95,6 +100,9 @@ run "opted_in_observability_controls" {
         logging_include_cookies    = false
         logging_retention_days     = 14
         enable_additional_metrics  = true
+        enable_cloudwatch_alarms   = true
+        cloudwatch_alarm_actions   = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
+        cloudwatch_ok_actions      = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
       }
     }
   }
@@ -122,6 +130,26 @@ run "opted_in_observability_controls" {
   assert {
     condition     = length(aws_cloudwatch_log_delivery.standard_v2) == 1
     error_message = "An opted-in distribution must create one privacy-filtered standard logging v2 delivery."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.cloudfront_error_rate) == 2
+    error_message = "An opted-in distribution must create separate 4xx and 5xx error-rate alarms."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].treat_missing_data == "notBreaching"
+    error_message = "Idle CloudFront traffic must not create false alarms."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-5xxErrorRate"].dimensions["Region"] == "Global"
+    error_message = "CloudFront alarms must use the global metric dimension."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-5xxErrorRate"].alarm_actions == toset(["arn:aws:sns:us-east-1:123456789012:edge-alerts"])
+    error_message = "The reviewed global-region notification route must reach each alarm."
   }
 
   assert {
@@ -165,6 +193,29 @@ run "reject_unbounded_log_retention" {
         origin_domain_name     = "origin.example.com"
         enable_logs            = true
         logging_retention_days = 0
+      }
+    }
+  }
+
+  expect_failures = [var.cloudfront]
+}
+
+run "reject_alarm_without_route" {
+  command = plan
+
+  variables {
+    org_name     = "mgb"
+    stage_name   = "test"
+    service_name = "cloudfront"
+    team_name    = "platform"
+    tags         = {}
+
+    cloudfront = {
+      invalid = {
+        use_acm_cert             = false
+        domain_name              = "example.com"
+        origin_domain_name       = "origin.example.com"
+        enable_cloudwatch_alarms = true
       }
     }
   }
