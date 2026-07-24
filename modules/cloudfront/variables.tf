@@ -6,6 +6,14 @@ variable "cloudfront" {
     logging_include_cookies                = optional(bool)
     logging_retention_days                 = optional(number)
     enable_additional_metrics              = optional(bool)
+    enable_cloudwatch_alarms               = optional(bool)
+    cloudwatch_alarm_actions               = optional(list(string))
+    cloudwatch_ok_actions                  = optional(list(string))
+    cloudwatch_alarm_period                = optional(number)
+    cloudwatch_alarm_evaluation_periods    = optional(number)
+    cloudwatch_alarm_datapoints_to_alarm   = optional(number)
+    cloudwatch_4xx_error_rate_threshold    = optional(number)
+    cloudwatch_5xx_error_rate_threshold    = optional(number)
     aliases                                = optional(list(string))
     enabled                                = optional(bool)
     price_class                            = optional(string)
@@ -85,6 +93,41 @@ variable "cloudfront" {
       floor(coalesce(config.logging_retention_days, 30)) == coalesce(config.logging_retention_days, 30)
     ])
     error_message = "logging_retention_days must be a whole number between 1 and 365 days."
+  }
+
+  validation {
+    condition = alltrue([
+      for config in values(var.cloudfront) :
+      !coalesce(config.enable_cloudwatch_alarms, false) ||
+      length(coalesce(config.cloudwatch_alarm_actions, [])) > 0
+    ])
+    error_message = "cloudwatch_alarm_actions must contain at least one target when enable_cloudwatch_alarms is true."
+  }
+
+  validation {
+    condition = alltrue([
+      for config in values(var.cloudfront) :
+      coalesce(config.cloudwatch_alarm_period, 300) >= 60 &&
+      floor(coalesce(config.cloudwatch_alarm_period, 300)) == coalesce(config.cloudwatch_alarm_period, 300) &&
+      coalesce(config.cloudwatch_alarm_period, 300) % 60 == 0 &&
+      coalesce(config.cloudwatch_alarm_evaluation_periods, 2) >= 1 &&
+      floor(coalesce(config.cloudwatch_alarm_evaluation_periods, 2)) == coalesce(config.cloudwatch_alarm_evaluation_periods, 2) &&
+      coalesce(config.cloudwatch_alarm_datapoints_to_alarm, 2) >= 1 &&
+      floor(coalesce(config.cloudwatch_alarm_datapoints_to_alarm, 2)) == coalesce(config.cloudwatch_alarm_datapoints_to_alarm, 2) &&
+      coalesce(config.cloudwatch_alarm_datapoints_to_alarm, 2) <= coalesce(config.cloudwatch_alarm_evaluation_periods, 2)
+    ])
+    error_message = "CloudWatch alarm timing must use whole numbers, a period that is a multiple of 60 seconds, and datapoints_to_alarm between 1 and evaluation_periods."
+  }
+
+  validation {
+    condition = alltrue([
+      for config in values(var.cloudfront) :
+      coalesce(config.cloudwatch_4xx_error_rate_threshold, 10) >= 0 &&
+      coalesce(config.cloudwatch_4xx_error_rate_threshold, 10) <= 100 &&
+      coalesce(config.cloudwatch_5xx_error_rate_threshold, 5) >= 0 &&
+      coalesce(config.cloudwatch_5xx_error_rate_threshold, 5) <= 100
+    ])
+    error_message = "CloudFront 4xx and 5xx error-rate thresholds must be percentages between 0 and 100."
   }
 }
 
