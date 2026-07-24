@@ -21,10 +21,11 @@ error metrics. Consumers must review cost and the exact plan before apply.
 `enable_cloudwatch_alarms = true` creates separate `4xxErrorRate` and
 `5xxErrorRate` alarms in `us-east-1`, where CloudFront publishes its global
 metrics. Consumers must provide at least one `cloudwatch_alarm_actions` target
-that CloudWatch can invoke from `us-east-1`, and explicitly review thresholds.
-For SNS, use an `us-east-1` topic; do not point these global-region alarms at
-the environment's workload-region topic. Missing traffic is non-breaching;
-successful recovery can route through `cloudwatch_ok_actions`.
+and explicitly review thresholds. AWS supports alarms from multiple Regions
+targeting a common SNS topic, so an existing account-owned route can be reused;
+verify its topic policy and delivery during runtime acceptance. Missing traffic
+is non-breaching; successful recovery can route through
+`cloudwatch_ok_actions`.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
