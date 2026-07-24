@@ -170,9 +170,12 @@ resource "aws_cloudwatch_event_target" "ecs_scheduled_task" {
     maximum_event_age_in_seconds = each.value.scheduled.maximum_event_age_in_seconds
   }
 
+  # The rule, cluster, role, task definition, and security group references
+  # above form the exact service dependency graph. Keep only the scheduler
+  # policy ordering here; module-wide service dependencies pull every ECS
+  # service into otherwise targeted scheduled-task plans.
   depends_on = [
-    module.ecs_service,
-    module.ecs_service_multiples
+    aws_iam_role_policy.scheduler_run_task
   ]
 
   lifecycle {

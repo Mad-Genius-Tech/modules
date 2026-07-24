@@ -63,6 +63,16 @@ run "runtime_control_defaults" {
     condition     = length(regexall("enable_execute_command\\s*=\\s*each\\.value\\.enable_execute_command", file("${path.module}/main.tf"))) == 2
     error_message = "Normalized enable_execute_command must be forwarded to both single- and multi-container ECS services."
   }
+
+  assert {
+    condition     = length(regexall("depends_on\\s*=\\s*\\[\\s*module\\.ecs_service,\\s*module\\.ecs_service_multiples\\s*\\]", file("${path.module}/scheduled_tasks.tf"))) == 0
+    error_message = "Scheduled targets must rely on exact resource references instead of a module-wide ECS service dependency."
+  }
+
+  assert {
+    condition     = length(regexall("depends_on\\s*=\\s*\\[\\s*aws_iam_role_policy\\.scheduler_run_task\\s*\\]", file("${path.module}/scheduled_tasks.tf"))) == 1
+    error_message = "Scheduled targets must wait for their exact scheduler IAM policy."
+  }
 }
 
 run "runtime_control_overrides" {
