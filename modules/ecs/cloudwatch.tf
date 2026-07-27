@@ -90,9 +90,12 @@ resource "aws_cloudwatch_metric_alarm" "ecs_low_mem_reservation" {
 # gated on Container Insights being enabled in addition to the SNS topic;
 # callers with insights disabled see no diff.
 resource "aws_cloudwatch_metric_alarm" "ecs_service_running_tasks_below_desired" {
-  for_each = var.sns_topic_cloudwatch_alarm_arn != "" && contains(["enabled", "enhanced"], var.container_insights) ? {
-    for k, v in local.ecs_map : k => v if v.create && v.type == "service"
-  } : {}
+  # Single for-expression (no conditional) so Terraform <= 1.8 does not
+  # reject the heterogeneous object type against the empty-map fallback.
+  for_each = {
+    for k, v in local.ecs_map : k => v
+    if var.sns_topic_cloudwatch_alarm_arn != "" && contains(["enabled", "enhanced"], var.container_insights) && v.create && v.type == "service"
+  }
 
   alarm_name          = "${each.value.identifier}-running-tasks-below-desired"
   alarm_description   = "ECS service ${each.value.identifier} has fewer running tasks than desired"

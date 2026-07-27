@@ -319,7 +319,9 @@ locals {
       local.resolved_container_secret_arns[k],
       v.require_repository_credentials &&
       v.repository_credentials != null &&
-      !(v.container_image != null && strcontains(v.container_image, "ecr.${data.aws_region.current.region}.amazonaws.com"))
+      # coalesce guards the null image: Terraform <= 1.8 evaluates both
+      # sides of && eagerly, so strcontains(null, ...) would error.
+      !strcontains(coalesce(v.container_image, ""), "ecr.${data.aws_region.current.region}.amazonaws.com")
       ? [v.repository_credentials.credentialsParameter]
       : []
     )))
