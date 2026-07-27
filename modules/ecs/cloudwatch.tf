@@ -86,6 +86,39 @@ resource "aws_cloudwatch_metric_alarm" "ecs_low_mem_reservation" {
   ]
 }
 
+# RunningTaskCount only exists in ECS/ContainerInsights, so this alarm is
+# gated on Container Insights being enabled in addition to the SNS topic;
+# callers with insights disabled see no diff.
+resource "aws_cloudwatch_metric_alarm" "ecs_service_running_tasks_below_desired" {
+  for_each = var.sns_topic_cloudwatch_alarm_arn != "" && contains(["enabled", "enhanced"], var.container_insights) ? {
+    for k, v in local.ecs_map : k => v if v.create && v.type == "service"
+  } : {}
+
+  alarm_name          = "${each.value.identifier}-running-tasks-below-desired"
+  alarm_description   = "ECS service ${each.value.identifier} has fewer running tasks than desired"
+  comparison_operator = "LessThanThreshold"
+  threshold           = each.value.desired_count
+  metric_name         = "RunningTaskCount"
+  namespace           = "ECS/ContainerInsights"
+  statistic           = "Minimum"
+  period              = 60
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  treat_missing_data  = "breaching"
+  dimensions = {
+    ClusterName = module.ecs_cluster.name
+    ServiceName = each.value.identifier
+  }
+  actions_enabled           = true
+  insufficient_data_actions = []
+  ok_actions = [
+    var.sns_topic_cloudwatch_alarm_arn
+  ]
+  alarm_actions = [
+    var.sns_topic_cloudwatch_alarm_arn
+  ]
+}
+
 resource "aws_cloudwatch_dashboard" "ecs" {
   dashboard_name = module.ecs_cluster.name
   dashboard_body = templatefile("${path.module}/templates/ecs_dashboard.tpl",
