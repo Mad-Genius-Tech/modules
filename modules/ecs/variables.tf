@@ -51,6 +51,20 @@ variable "service_discovery_dns_name" {
   default = ""
 }
 
+variable "service_discovery_cname_aliases" {
+  description = "Private DNS CNAME aliases keyed by hostname. An alias must not share a name with an ECS service-discovery registration."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for name, target in var.service_discovery_cname_aliases :
+      trimspace(name) != "" && trimspace(target) != ""
+    ])
+    error_message = "service_discovery_cname_aliases keys and targets must be non-empty."
+  }
+}
+
 variable "container_insights" {
   type    = string
   default = ""

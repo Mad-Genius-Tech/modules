@@ -170,6 +170,7 @@ No requirements.
 | <a name="input_org_name"></a> [org\_name](#input\_org\_name) | n/a | `string` | n/a | yes |
 | <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | n/a | `list(string)` | n/a | yes |
 | <a name="input_public_subnets"></a> [public\_subnets](#input\_public\_subnets) | n/a | `list(string)` | n/a | yes |
+| <a name="input_service_discovery_cname_aliases"></a> [service\_discovery\_cname\_aliases](#input\_service\_discovery\_cname\_aliases) | Private DNS CNAME aliases keyed by hostname. An alias must not share a name with an ECS service-discovery registration. | `map(string)` | `{}` | no |
 | <a name="input_service_discovery_dns_name"></a> [service\_discovery\_dns\_name](#input\_service\_discovery\_dns\_name) | n/a | `string` | `""` | no |
 | <a name="input_service_name"></a> [service\_name](#input\_service\_name) | n/a | `string` | n/a | yes |
 | <a name="input_sns_topic_cloudwatch_alarm_arn"></a> [sns\_topic\_cloudwatch\_alarm\_arn](#input\_sns\_topic\_cloudwatch\_alarm\_arn) | n/a | `string` | `""` | no |
