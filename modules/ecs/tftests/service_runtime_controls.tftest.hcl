@@ -87,6 +87,10 @@ run "runtime_control_overrides" {
         require_repository_credentials = false
         enable_execute_command         = false
         readonly_root_filesystem       = true
+        deployment_circuit_breaker = {
+          enable   = true
+          rollback = true
+        }
       }
     }
   }
@@ -99,6 +103,16 @@ run "runtime_control_overrides" {
   assert {
     condition     = output.ecs_map.hardened.readonly_root_filesystem
     error_message = "An explicit readonly_root_filesystem=true override must survive normalization."
+  }
+
+  assert {
+    condition     = output.ecs_map.hardened.deployment_circuit_breaker.enable && output.ecs_map.hardened.deployment_circuit_breaker.rollback
+    error_message = "An explicit deployment circuit breaker must survive normalization."
+  }
+
+  assert {
+    condition     = length(regexall("deployment_circuit_breaker\\s*=\\s*each\\.value\\.deployment_circuit_breaker", file("${path.module}/main.tf"))) == 2
+    error_message = "The deployment circuit breaker override must reach both single- and multi-container ECS services."
   }
 
   assert {
