@@ -57,6 +57,7 @@ locals {
     volume                                 = {}
     deployment_minimum_healthy_percent     = 66
     deployment_maximum_percent             = 200
+    deployment_circuit_breaker             = null
     capacity_provider_strategy             = null
     autoscaling_max_capacity               = null
     autoscaling_scheduled_actions          = null
@@ -203,6 +204,7 @@ locals {
       "volume"                                 = try(coalesce(lookup(v, "volume", null), local.merged_default_settings.volume), local.merged_default_settings.volume)
       "deployment_maximum_percent"             = try(coalesce(lookup(v, "deployment_maximum_percent", null), local.merged_default_settings.deployment_maximum_percent), local.merged_default_settings.deployment_maximum_percent)
       "deployment_minimum_healthy_percent"     = try(coalesce(lookup(v, "deployment_minimum_healthy_percent", null), local.merged_default_settings.deployment_minimum_healthy_percent), local.merged_default_settings.deployment_minimum_healthy_percent)
+      "deployment_circuit_breaker"             = try(coalesce(lookup(v, "deployment_circuit_breaker", null), local.merged_default_settings.deployment_circuit_breaker), local.merged_default_settings.deployment_circuit_breaker)
       "capacity_provider_strategy"             = try(coalesce(lookup(v, "capacity_provider_strategy", null), local.merged_default_settings.capacity_provider_strategy), local.merged_default_settings.capacity_provider_strategy)
       "autoscaling_max_capacity"               = try(coalesce(lookup(v, "autoscaling_max_capacity", null), local.merged_default_settings.autoscaling_max_capacity), local.merged_default_settings.autoscaling_max_capacity)
       "autoscaling_scheduled_actions"          = try(coalesce(lookup(v, "autoscaling_scheduled_actions", null), local.merged_default_settings.autoscaling_scheduled_actions), local.merged_default_settings.autoscaling_scheduled_actions)
@@ -350,6 +352,7 @@ module "ecs_service" {
   memory                             = max(ceil(each.value.container_memory / 512) * 512, 512)
   deployment_minimum_healthy_percent = each.value.deployment_minimum_healthy_percent
   deployment_maximum_percent         = each.value.deployment_maximum_percent
+  deployment_circuit_breaker         = each.value.deployment_circuit_breaker
   runtime_platform = {
     cpu_architecture        = upper(each.value.cpu_architecture)
     operating_system_family = "LINUX"
@@ -548,6 +551,7 @@ module "ecs_service_multiples" {
   family                        = coalesce(each.value.task_definition_family, each.value.identifier)
   cpu                           = max(ceil(each.value.container_cpu / 256) * 256, 256)
   memory                        = max(ceil(each.value.container_memory / 512) * 512, 512)
+  deployment_circuit_breaker    = each.value.deployment_circuit_breaker
   runtime_platform = {
     cpu_architecture        = upper(each.value.cpu_architecture)
     operating_system_family = "LINUX"

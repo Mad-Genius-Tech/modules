@@ -127,6 +127,10 @@ variable "ecs_services" {
     user                                   = optional(string)
     deployment_minimum_healthy_percent     = optional(number)
     deployment_maximum_percent             = optional(number)
+    deployment_circuit_breaker = optional(object({
+      enable   = bool
+      rollback = bool
+    }))
     capacity_provider_strategy = optional(map(object({
       base              = optional(number)
       capacity_provider = string
