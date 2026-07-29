@@ -114,7 +114,7 @@ variable "s3_buckets" {
   validation {
     condition = alltrue([
       for bucket in values(var.s3_buckets) :
-      bucket.inventory == null || contains(["All", "Current"], bucket.inventory.included_object_versions)
+      try(contains(["All", "Current"], bucket.inventory.included_object_versions), true)
     ])
     error_message = "inventory.included_object_versions must be either All or Current."
   }
@@ -122,7 +122,7 @@ variable "s3_buckets" {
   validation {
     condition = alltrue([
       for bucket in values(var.s3_buckets) :
-      bucket.inventory == null || contains(["Daily", "Weekly"], bucket.inventory.frequency)
+      try(contains(["Daily", "Weekly"], bucket.inventory.frequency), true)
     ])
     error_message = "inventory.frequency must be either Daily or Weekly."
   }
@@ -130,7 +130,7 @@ variable "s3_buckets" {
   validation {
     condition = alltrue([
       for bucket in values(var.s3_buckets) :
-      bucket.inventory == null || can(regex("^arn:[^:]+:s3:::[^/]+$", bucket.inventory.destination_bucket_arn))
+      bucket.inventory == null || can(regex("^arn:[^:]+:s3:::[^/]+$", try(bucket.inventory.destination_bucket_arn, "")))
     ])
     error_message = "inventory.destination_bucket_arn must be an S3 bucket ARN."
   }

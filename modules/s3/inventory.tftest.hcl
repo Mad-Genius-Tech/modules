@@ -81,3 +81,52 @@ run "invalid_inventory_frequency_is_rejected" {
 
   expect_failures = [var.s3_buckets]
 }
+
+run "invalid_inventory_object_versions_are_rejected" {
+  command = plan
+
+  providers = {
+    aws = aws.contract
+  }
+
+  variables {
+    org_name     = "example"
+    stage_name   = "dev"
+    service_name = "archive"
+    team_name    = "platform"
+    s3_buckets = {
+      records = {
+        inventory = {
+          destination_bucket_arn   = "arn:aws:s3:::example-inventory-destination"
+          included_object_versions = "None"
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.s3_buckets]
+}
+
+run "invalid_inventory_destination_bucket_arn_is_rejected" {
+  command = plan
+
+  providers = {
+    aws = aws.contract
+  }
+
+  variables {
+    org_name     = "example"
+    stage_name   = "dev"
+    service_name = "archive"
+    team_name    = "platform"
+    s3_buckets = {
+      records = {
+        inventory = {
+          destination_bucket_arn = "not-an-s3-bucket-arn"
+        }
+      }
+    }
+  }
+
+  expect_failures = [var.s3_buckets]
+}
