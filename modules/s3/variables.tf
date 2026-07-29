@@ -96,7 +96,42 @@ variable "s3_buckets" {
         storage_class = optional(string)
       })), [])
     }))
+    inventory = optional(object({
+      name                     = optional(string, "inventory")
+      destination_bucket_arn   = string
+      destination_prefix       = optional(string)
+      destination_account_id   = optional(string)
+      included_object_versions = optional(string, "All")
+      optional_fields          = optional(set(string), [])
+      frequency                = optional(string, "Daily")
+      filter_prefix            = optional(string)
+      sse_kms_key_id           = optional(string)
+    }))
     tags = optional(map(string))
   }))
   default = {}
+
+  validation {
+    condition = alltrue([
+      for bucket in values(var.s3_buckets) :
+      bucket.inventory == null || contains(["All", "Current"], bucket.inventory.included_object_versions)
+    ])
+    error_message = "inventory.included_object_versions must be either All or Current."
+  }
+
+  validation {
+    condition = alltrue([
+      for bucket in values(var.s3_buckets) :
+      bucket.inventory == null || contains(["Daily", "Weekly"], bucket.inventory.frequency)
+    ])
+    error_message = "inventory.frequency must be either Daily or Weekly."
+  }
+
+  validation {
+    condition = alltrue([
+      for bucket in values(var.s3_buckets) :
+      bucket.inventory == null || can(regex("^arn:[^:]+:s3:::[^/]+$", bucket.inventory.destination_bucket_arn))
+    ])
+    error_message = "inventory.destination_bucket_arn must be an S3 bucket ARN."
+  }
 }

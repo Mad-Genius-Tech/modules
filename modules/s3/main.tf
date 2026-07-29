@@ -179,6 +179,7 @@ locals {
       "object_ownership"                      = coalesce(lookup(v, "object_ownership", null), local.default_settings.object_ownership)
       "lambda_function_name"                  = try(coalesce(lookup(v, "lambda_function_name", null), local.default_settings.lambda_function_name), local.default_settings.lambda_function_name)
       "events_filter"                         = try(coalesce(lookup(v, "events_filter", null), local.default_settings.events_filter), local.default_settings.events_filter)
+      "inventory"                             = try(v.inventory, null)
       "lifecycle_rules" = concat(
         local.lifecycle_rule_by_bucket[k],
         try(v.intelligent_tiering.enabled, false) ? local.merged_default_settings.intelligent_tiering : []
@@ -241,6 +242,53 @@ resource "aws_lambda_permission" "lambda_permission" {
   principal     = "s3.amazonaws.com"
   function_name = "arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:${each.value}"
   source_arn    = module.s3_bucket[split("|", each.key)[0]].s3_bucket_arn
+}
+
+resource "aws_s3_bucket_inventory" "inventory" {
+  for_each = {
+    for key, bucket in local.s3_buckets_map : key => bucket
+    if bucket.inventory != null
+  }
+
+  bucket                   = module.s3_bucket[each.key].s3_bucket_id
+  name                     = each.value.inventory.name
+  enabled                  = true
+  included_object_versions = each.value.inventory.included_object_versions
+  optional_fields          = each.value.inventory.optional_fields
+
+  schedule {
+    frequency = each.value.inventory.frequency
+  }
+
+  destination {
+    bucket {
+      bucket_arn = each.value.inventory.destination_bucket_arn
+      format     = "CSV"
+      prefix     = each.value.inventory.destination_prefix
+      account_id = each.value.inventory.destination_account_id
+
+      encryption {
+        dynamic "sse_kms" {
+          for_each = each.value.inventory.sse_kms_key_id == null ? [] : [each.value.inventory.sse_kms_key_id]
+          content {
+            key_id = sse_kms.value
+          }
+        }
+
+        dynamic "sse_s3" {
+          for_each = each.value.inventory.sse_kms_key_id == null ? [true] : []
+          content {}
+        }
+      }
+    }
+  }
+
+  dynamic "filter" {
+    for_each = each.value.inventory.filter_prefix == null ? [] : [each.value.inventory.filter_prefix]
+    content {
+      prefix = filter.value
+    }
+  }
 }
 
 module "s3_bucket" {

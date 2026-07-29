@@ -1,3 +1,24 @@
+## Optional S3 Inventory
+
+Set `inventory` only on buckets that need a report. Buckets without this object
+create no Inventory configuration, preserving existing consumers. An enabled
+configuration defaults to an all-versions, daily CSV report with SSE-S3
+encryption; set `sse_kms_key_id` to use a customer-managed KMS key instead.
+
+```hcl
+s3_buckets = {
+  source = {
+    inventory = {
+      destination_bucket_arn = "arn:aws:s3:::example-inventory-destination"
+      destination_prefix     = "source/"
+      optional_fields        = ["Size", "StorageClass"]
+    }
+  }
+}
+```
+
+The destination bucket and any required delivery policy remain consumer-owned.
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
