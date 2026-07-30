@@ -126,6 +126,23 @@ locals {
     ]
   }
 
+  lifecycle_rule_suppressed_default_ids_by_bucket = {
+    for k, custom_rules in local.lifecycle_rule_custom_by_bucket : k => toset([
+      for rule in custom_rules : rule.id
+      if(
+        try(rule.enabled, true) == false &&
+        contains(keys(local.lifecycle_rule_defaults_by_id), try(rule.id, "")) &&
+        !anytrue([
+          try(rule.abort_incomplete_multipart_upload_days != null, false),
+          try(length(keys(rule.expiration)) > 0, false),
+          try(length(rule.transition) > 0, false),
+          try(length(keys(rule.noncurrent_version_expiration)) > 0, false),
+          try(length(rule.noncurrent_version_transition) > 0, false),
+        ])
+      )
+    ])
+  }
+
   lifecycle_rule_by_bucket = {
     for k, custom_rules in local.lifecycle_rule_custom_by_bucket : k => concat(
       [
@@ -140,6 +157,7 @@ locals {
           ),
           default_rule
         )
+        if !contains(local.lifecycle_rule_suppressed_default_ids_by_bucket[k], default_rule.id)
       ],
       [
         for custom_rule in custom_rules : custom_rule if try(custom_rule.id, null) == null
