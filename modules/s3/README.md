@@ -22,6 +22,13 @@ Inventory waits for this module's S3 bucket resources, including attached
 bucket policies. If the destination policy is managed outside this module, add
 an explicit `depends_on` to the calling module so that policy is created first.
 
+## Lifecycle default suppression
+
+To remove a module-provided lifecycle default for one bucket, provide a rule
+with the same `id` and `enabled = false` and no lifecycle action. The module
+omits that default instead of sending AWS an invalid empty disabled rule. A
+disabled rule that includes an action remains an explicit lifecycle rule.
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
