@@ -289,6 +289,11 @@ resource "aws_s3_bucket_inventory" "inventory" {
       prefix = filter.value
     }
   }
+
+  # An inventory destination can be another bucket managed by this module.
+  # Wait for its bucket policy (and the rest of the bucket configuration)
+  # before AWS validates the inventory destination.
+  depends_on = [module.s3_bucket]
 }
 
 module "s3_bucket" {
