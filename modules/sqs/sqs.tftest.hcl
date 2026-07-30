@@ -2,6 +2,42 @@ mock_provider "aws" {
   alias = "contract"
 }
 
+run "standard_queue_and_dlq_allow_omitted_kms_reuse_periods" {
+  command = plan
+
+  providers = {
+    aws = aws.contract
+  }
+
+  variables {
+    org_name     = "example"
+    stage_name   = "dev"
+    service_name = "worker"
+    team_name    = "platform"
+    sqs = {
+      delivery = {
+        fifo_queue                     = false
+        create_dlq                     = true
+        message_retention_seconds      = 1209600
+        dlq_message_retention_seconds  = 1209600
+        receive_wait_time_seconds      = 20
+        dlq_receive_wait_time_seconds  = 20
+        visibility_timeout_seconds     = 30
+        dlq_visibility_timeout_seconds = 30
+        max_receive_count              = 5
+      }
+    }
+  }
+
+  assert {
+    condition = (
+      local.sqs_map.delivery.kms_data_key_reuse_period_seconds == null &&
+      local.sqs_map.delivery.dlq_kms_data_key_reuse_period_seconds == null
+    )
+    error_message = "Standard queues with DLQs must allow omitted optional KMS reuse periods."
+  }
+}
+
 run "primary_and_dlq_contract_defaults" {
   command = plan
 
@@ -106,6 +142,29 @@ run "invalid_delivery_controls_are_rejected" {
     sqs = {
       delivery = {
         message_retention_seconds = 1209601
+      }
+    }
+  }
+
+  expect_failures = [var.sqs]
+}
+
+run "invalid_kms_reuse_periods_are_rejected" {
+  command = plan
+
+  providers = {
+    aws = aws.contract
+  }
+
+  variables {
+    org_name     = "example"
+    stage_name   = "dev"
+    service_name = "worker"
+    team_name    = "platform"
+    sqs = {
+      delivery = {
+        kms_data_key_reuse_period_seconds     = 59
+        dlq_kms_data_key_reuse_period_seconds = 86401
       }
     }
   }

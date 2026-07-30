@@ -35,8 +35,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.message_retention_seconds == null || (
-        queue.message_retention_seconds >= 60 && queue.message_retention_seconds <= 1209600
+      try(
+        queue.message_retention_seconds >= 60 && queue.message_retention_seconds <= 1209600,
+        true,
       )
     ])
     error_message = "message_retention_seconds must be between 60 seconds and 14 days (1209600 seconds)."
@@ -45,8 +46,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.dlq_message_retention_seconds == null || (
-        queue.dlq_message_retention_seconds >= 60 && queue.dlq_message_retention_seconds <= 1209600
+      try(
+        queue.dlq_message_retention_seconds >= 60 && queue.dlq_message_retention_seconds <= 1209600,
+        true,
       )
     ])
     error_message = "dlq_message_retention_seconds must be between 60 seconds and 14 days (1209600 seconds)."
@@ -55,8 +57,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.receive_wait_time_seconds == null || (
-        queue.receive_wait_time_seconds >= 0 && queue.receive_wait_time_seconds <= 20
+      try(
+        queue.receive_wait_time_seconds >= 0 && queue.receive_wait_time_seconds <= 20,
+        true,
       )
     ])
     error_message = "receive_wait_time_seconds must be between 0 and 20 seconds."
@@ -65,8 +68,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.dlq_receive_wait_time_seconds == null || (
-        queue.dlq_receive_wait_time_seconds >= 0 && queue.dlq_receive_wait_time_seconds <= 20
+      try(
+        queue.dlq_receive_wait_time_seconds >= 0 && queue.dlq_receive_wait_time_seconds <= 20,
+        true,
       )
     ])
     error_message = "dlq_receive_wait_time_seconds must be between 0 and 20 seconds."
@@ -75,8 +79,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.visibility_timeout_seconds == null || (
-        queue.visibility_timeout_seconds >= 0 && queue.visibility_timeout_seconds <= 43200
+      try(
+        queue.visibility_timeout_seconds >= 0 && queue.visibility_timeout_seconds <= 43200,
+        true,
       )
     ])
     error_message = "visibility_timeout_seconds must be between 0 and 43200 seconds."
@@ -85,8 +90,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.dlq_visibility_timeout_seconds == null || (
-        queue.dlq_visibility_timeout_seconds >= 0 && queue.dlq_visibility_timeout_seconds <= 43200
+      try(
+        queue.dlq_visibility_timeout_seconds >= 0 && queue.dlq_visibility_timeout_seconds <= 43200,
+        true,
       )
     ])
     error_message = "dlq_visibility_timeout_seconds must be between 0 and 43200 seconds."
@@ -95,8 +101,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.max_receive_count == null || (
-        queue.max_receive_count >= 1 && queue.max_receive_count <= 1000 && floor(queue.max_receive_count) == queue.max_receive_count
+      try(
+        queue.max_receive_count >= 1 && queue.max_receive_count <= 1000 && floor(queue.max_receive_count) == queue.max_receive_count,
+        true,
       )
     ])
     error_message = "max_receive_count must be a whole number between 1 and 1000."
@@ -105,8 +112,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.kms_data_key_reuse_period_seconds == null || (
-        queue.kms_data_key_reuse_period_seconds >= 60 && queue.kms_data_key_reuse_period_seconds <= 86400
+      try(
+        queue.kms_data_key_reuse_period_seconds >= 60 && queue.kms_data_key_reuse_period_seconds <= 86400,
+        true,
       )
     ])
     error_message = "kms_data_key_reuse_period_seconds must be between 60 and 86400 seconds."
@@ -115,8 +123,9 @@ variable "sqs" {
   validation {
     condition = alltrue([
       for queue in values(var.sqs) :
-      queue.dlq_kms_data_key_reuse_period_seconds == null || (
-        queue.dlq_kms_data_key_reuse_period_seconds >= 60 && queue.dlq_kms_data_key_reuse_period_seconds <= 86400
+      try(
+        queue.dlq_kms_data_key_reuse_period_seconds >= 60 && queue.dlq_kms_data_key_reuse_period_seconds <= 86400,
+        true,
       )
     ])
     error_message = "dlq_kms_data_key_reuse_period_seconds must be between 60 and 86400 seconds."
