@@ -18,6 +18,9 @@ s3_buckets = {
 ```
 
 The destination bucket and any required delivery policy remain consumer-owned.
+Inventory waits for this module's S3 bucket resources, including attached
+bucket policies. If the destination policy is managed outside this module, add
+an explicit `depends_on` to the calling module so that policy is created first.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
