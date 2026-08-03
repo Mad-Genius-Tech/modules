@@ -511,21 +511,13 @@ module "ecs_service" {
   # tasks_iam_role_policies = {
   #   ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
   # }
-  #tasks_iam_role_statements = [each.value.tasks_iam_role_statements]
   tasks_iam_role_statements = length(each.value.tasks_iam_role_statements) > 0 ? [
     for v in values(each.value.tasks_iam_role_statements) : {
-      resources  = v.resources
-      actions    = v.actions
-      conditions = v.conditions != null ? v.conditions : []
+      resources = v.resources
+      actions   = v.actions
+      condition = v.conditions != null ? v.conditions : []
     }
   ] : null
-  # tasks_iam_role_statements = { 
-  #   for k, v in each.value.tasks_iam_role_statements: k => {
-  #     resources = v.resources
-  #     actions   = v.actions
-  #     conditions = v.conditions != null ? v.conditions : []
-  #   }
-  # }
   subnet_ids                   = coalesce(each.value.subnet_ids, var.private_subnets)
   security_group_ingress_rules = each.value.security_group_ingress_rules_resolved
   security_group_egress_rules  = each.value.security_group_egress_rules_resolved
@@ -631,21 +623,13 @@ module "ecs_service_multiples" {
   # tasks_iam_role_policies = {
   #   ReadOnlyAccess = "arn:aws:iam::aws:policy/ReadOnlyAccess"
   # }
-  #tasks_iam_role_statements = [each.value.tasks_iam_role_statements]
   tasks_iam_role_statements = length(each.value.tasks_iam_role_statements) > 0 ? [
     for v in values(each.value.tasks_iam_role_statements) : {
-      resources  = v.resources
-      actions    = v.actions
-      conditions = v.conditions != null ? v.conditions : []
+      resources = v.resources
+      actions   = v.actions
+      condition = v.conditions != null ? v.conditions : []
     }
   ] : null
-  # tasks_iam_role_statements = { 
-  #   for k, v in each.value.tasks_iam_role_statements: k => {
-  #     resources = v.resources
-  #     actions   = v.actions
-  #     conditions = v.conditions != null ? v.conditions : []
-  #   }
-  # }
   subnet_ids = try(each.value.subnet_ids, var.private_subnets)
   security_group_ingress_rules = merge({
     "ingress_${each.value.container_port}" = {

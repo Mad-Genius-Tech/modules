@@ -124,6 +124,11 @@ run "runtime_control_overrides" {
     condition     = length(regexall("tasks_iam_role_statements\\s*=\\s*length\\(each\\.value\\.tasks_iam_role_statements\\)\\s*>\\s*0\\s*\\?\\s*\\[", file("${path.module}/main.tf"))) == 2
     error_message = "Empty task-policy statements must be passed upstream as null for both single- and multi-container ECS services."
   }
+
+  assert {
+    condition     = length(regexall("condition\\s*=\\s*v\\.conditions", file("${path.module}/main.tf"))) == 2 && length(regexall("conditions\\s*=\\s*v\\.conditions", file("${path.module}/main.tf"))) == 0
+    error_message = "Task-policy conditions must use the upstream singular condition field for both single- and multi-container ECS services."
+  }
 }
 
 run "reject_single_container_control_for_multi_container_service" {
