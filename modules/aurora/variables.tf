@@ -26,6 +26,8 @@ variable "aurora" {
     backup_retention_period         = optional(number)
     performance_insights_enabled    = optional(bool)
     monitoring_interval             = optional(number)
+    preferred_maintenance_window    = optional(string)
+    apply_immediately               = optional(bool)
     instances                       = optional(map(any))
     instances_count                 = optional(number)
     enable_proxy                    = optional(bool)

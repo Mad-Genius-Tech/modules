@@ -14,8 +14,9 @@ No requirements.
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_aurora_postgresql_v2"></a> [aurora\_postgresql\_v2](#module\_aurora\_postgresql\_v2) | terraform-aws-modules/rds-aurora/aws | ~> 8.3.1 |
+| <a name="module_aurora_postgresql_v2"></a> [aurora\_postgresql\_v2](#module\_aurora\_postgresql\_v2) | terraform-aws-modules/rds-aurora/aws | ~> 9.13.0 |
 | <a name="module_context"></a> [context](#module\_context) | cloudposse/label/null | ~> 0.25.0 |
+| <a name="module_rds_proxy"></a> [rds\_proxy](#module\_rds\_proxy) | terraform-aws-modules/rds-proxy/aws | ~> v3.1.0 |
 
 ## Resources
 
@@ -37,7 +38,7 @@ No requirements.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_aurora"></a> [aurora](#input\_aurora) | n/a | <pre>map(object({<br>    create                       = optional(bool)<br>    version                      = optional(string)<br>    min_capacity                 = optional(number)<br>    max_capacity                 = optional(number)<br>    master_username              = optional(string)<br>    database_name                = optional(string)<br>    skip_final_snapshot          = optional(bool)<br>    backup_retention_period      = optional(number)<br>    performance_insights_enabled = optional(bool)<br>    monitoring_interval          = optional(number)<br>    instances                    = optional(map(any))<br>    instances_count              = optional(number)<br>    enable_cloudwatch_alarm      = optional(bool)<br>    alarms = optional(map(object({<br>      metric_name             = string<br>      comparison_operator     = optional(string)<br>      dimensions              = optional(map(string), {})<br>      threshold               = number<br>      evaluation_periods      = number<br>      period                  = number<br>      statistic               = optional(string)<br>      namespace               = optional(string)<br>      cloudwatch_alarm_action = optional(string)<br>    })))<br>  }))</pre> | `{}` | no |
+| <a name="input_aurora"></a> [aurora](#input\_aurora) | n/a | <pre>map(object({<br>    create                          = optional(bool)<br>    version                         = optional(string)<br>    min_capacity                    = optional(number)<br>    max_capacity                    = optional(number)<br>    master_username                 = optional(string)<br>    database_name                   = optional(string)<br>    skip_final_snapshot             = optional(bool)<br>    backup_retention_period         = optional(number)<br>    performance_insights_enabled    = optional(bool)<br>    monitoring_interval             = optional(number)<br>    preferred_maintenance_window    = optional(string)<br>    apply_immediately               = optional(bool)<br>    instances                       = optional(map(any))<br>    instances_count                 = optional(number)<br>    enable_proxy                    = optional(bool)<br>    enable_cloudwatch_alarm         = optional(bool)<br>    enabled_cloudwatch_logs_exports = optional(list(string))<br>    alarms = optional(map(object({<br>      metric_name             = string<br>      comparison_operator     = optional(string)<br>      dimensions              = optional(map(string), {})<br>      threshold               = number<br>      evaluation_periods      = number<br>      period                  = number<br>      statistic               = optional(string)<br>      namespace               = optional(string)<br>      cloudwatch_alarm_action = optional(string)<br>    })))<br>  }))</pre> | `{}` | no |
 | <a name="input_ingress_cidr_blocks"></a> [ingress\_cidr\_blocks](#input\_ingress\_cidr\_blocks) | n/a | `list(string)` | `[]` | no |
 | <a name="input_org_name"></a> [org\_name](#input\_org\_name) | n/a | `string` | n/a | yes |
 | <a name="input_security_group_rules"></a> [security\_group\_rules](#input\_security\_group\_rules) | n/a | `map(any)` | `{}` | no |
@@ -54,4 +55,5 @@ No requirements.
 | Name | Description |
 |------|-------------|
 | <a name="output_aurora_info"></a> [aurora\_info](#output\_aurora\_info) | n/a |
+| <a name="output_rds_proxy"></a> [rds\_proxy](#output\_rds\_proxy) | n/a |
 <!-- END_TF_DOCS -->
