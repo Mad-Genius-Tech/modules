@@ -9,14 +9,21 @@ locals {
     backup_retention_period      = 1
     performance_insights_enabled = false
     monitoring_interval          = 0
-    database_name                = null
-    deletion_protection          = false
-    lambda_functions             = []
-    instances_count              = 1
-    instances                    = {}
-    enable_proxy                 = false
-    log_group_retention_in_days  = 1
-    enable_cloudwatch_alarm      = false
+    # Same value the upstream rds-aurora module defaults to, so adding the
+    # setting here does not move any existing cluster's window. The point is
+    # that callers can now declare it, and it stops drifting on a module bump.
+    preferred_maintenance_window = "sun:05:00-sun:06:00"
+    # Modifications wait for that window. Callers that genuinely need an
+    # immediate change opt in per cluster.
+    apply_immediately           = false
+    database_name               = null
+    deletion_protection         = false
+    lambda_functions            = []
+    instances_count             = 1
+    instances                   = {}
+    enable_proxy                = false
+    log_group_retention_in_days = 1
+    enable_cloudwatch_alarm     = false
     alarms = {
       "statistic"               = "Average"
       "namespace"               = "AWS/RDS"
@@ -56,6 +63,8 @@ locals {
       "backup_retention_period"         = try(coalesce(lookup(v, "backup_retention_period", null), local.merged_default_settings.backup_retention_period), local.merged_default_settings.backup_retention_period)
       "performance_insights_enabled"    = try(coalesce(lookup(v, "performance_insights_enabled", null), local.merged_default_settings.performance_insights_enabled), local.merged_default_settings.performance_insights_enabled)
       "monitoring_interval"             = try(coalesce(lookup(v, "monitoring_interval", null), local.merged_default_settings.monitoring_interval), local.merged_default_settings.monitoring_interval)
+      "preferred_maintenance_window"    = try(coalesce(lookup(v, "preferred_maintenance_window", null), local.merged_default_settings.preferred_maintenance_window), local.merged_default_settings.preferred_maintenance_window)
+      "apply_immediately"               = try(coalesce(lookup(v, "apply_immediately", null), local.merged_default_settings.apply_immediately), local.merged_default_settings.apply_immediately)
       "database_name"                   = try(coalesce(lookup(v, "database_name", null), local.merged_default_settings.database_name), local.merged_default_settings.database_name)
       "deletion_protection"             = try(coalesce(lookup(v, "deletion_protection", null), local.merged_default_settings.deletion_protection), local.merged_default_settings.deletion_protection)
       "lambda_functions"                = coalesce(lookup(v, "lambda_functions", null), local.merged_default_settings.lambda_functions)
@@ -165,11 +174,14 @@ module "aurora_postgresql_v2" {
   create_cloudwatch_log_group                   = length(each.value.enabled_cloudwatch_logs_exports) > 0
   enabled_cloudwatch_logs_exports               = each.value.enabled_cloudwatch_logs_exports
   backup_retention_period                       = each.value.backup_retention_period
-  apply_immediately                             = true
-  skip_final_snapshot                           = each.value.skip_final_snapshot
-  instances                                     = { for i in range(1, each.value.instances_count + 1) : i => try(each.value.instances[i], {}) }
-  copy_tags_to_snapshot                         = true
-  tags                                          = local.tags
+  apply_immediately                             = each.value.apply_immediately
+  # Upstream applies this to the cluster and lets each instance inherit it, so
+  # setting it once covers both.
+  preferred_maintenance_window = each.value.preferred_maintenance_window
+  skip_final_snapshot          = each.value.skip_final_snapshot
+  instances                    = { for i in range(1, each.value.instances_count + 1) : i => try(each.value.instances[i], {}) }
+  copy_tags_to_snapshot        = true
+  tags                         = local.tags
 }
 
 data "aws_caller_identity" "current" {}
