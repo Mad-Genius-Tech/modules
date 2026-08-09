@@ -107,7 +107,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_service_running_tasks_below_desired"
   period              = 60
   evaluation_periods  = 2
   datapoints_to_alarm = 2
-  treat_missing_data  = "breaching"
+  treat_missing_data  = each.value.desired_count == 0 ? "notBreaching" : "breaching"
   dimensions = {
     ClusterName = module.ecs_cluster.name
     ServiceName = each.value.identifier
