@@ -503,7 +503,9 @@ resource "aws_cloudwatch_log_delivery" "standard_v2" {
 
   s3_delivery_configuration {
     enable_hive_compatible_path = true
-    suffix_path                 = "distribution={distributionid}/year={yyyy}/month={MM}/day={dd}/hour={HH}"
+    # Hive mode generates the key= partition names itself; CreateDelivery
+    # rejects explicit key=value text in the suffix ("Provided suffixPath is invalid").
+    suffix_path                 = "{DistributionId}/{yyyy}/{MM}/{dd}/{HH}"
   }
 
   tags = local.tags
