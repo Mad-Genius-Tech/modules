@@ -220,5 +220,38 @@ run "reject_alarm_without_route" {
     }
   }
 
-  expect_failures = [var.cloudfront]
+  expect_failures = [aws_cloudwatch_metric_alarm.cloudfront_error_rate]
+}
+
+run "module_topic_backs_alarms_without_explicit_actions" {
+  command = plan
+
+  variables {
+    org_name     = "mgb"
+    stage_name   = "test"
+    service_name = "cloudfront"
+    team_name    = "platform"
+    tags         = {}
+
+    alarm_topic_email_subscriptions = ["edge-alerts@example.com"]
+
+    cloudfront = {
+      routed = {
+        use_acm_cert             = false
+        domain_name              = "example.com"
+        origin_domain_name       = "origin.example.com"
+        enable_cloudwatch_alarms = true
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_sns_topic.cloudfront_alarm) == 1 && length(aws_sns_topic_subscription.cloudfront_alarm_email) == 1
+    error_message = "A module-owned us-east-1 topic and its email subscription must back alarms that set no explicit actions."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.cloudfront_error_rate) == 2
+    error_message = "Alarms without explicit actions must still be created when the module-owned topic exists."
+  }
 }

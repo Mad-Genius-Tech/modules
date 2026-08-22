@@ -98,15 +98,6 @@ variable "cloudfront" {
   validation {
     condition = alltrue([
       for config in values(var.cloudfront) :
-      !coalesce(config.enable_cloudwatch_alarms, false) ||
-      length(coalesce(config.cloudwatch_alarm_actions, [])) > 0
-    ])
-    error_message = "cloudwatch_alarm_actions must contain at least one target when enable_cloudwatch_alarms is true."
-  }
-
-  validation {
-    condition = alltrue([
-      for config in values(var.cloudfront) :
       coalesce(config.cloudwatch_alarm_period, 300) >= 60 &&
       floor(coalesce(config.cloudwatch_alarm_period, 300)) == coalesce(config.cloudwatch_alarm_period, 300) &&
       coalesce(config.cloudwatch_alarm_period, 300) % 60 == 0 &&
@@ -129,6 +120,12 @@ variable "cloudfront" {
     ])
     error_message = "CloudFront 4xx and 5xx error-rate thresholds must be percentages between 0 and 100."
   }
+}
+
+variable "alarm_topic_email_subscriptions" {
+  description = "Email endpoints for a module-owned us-east-1 SNS topic that becomes the notification route for alarms with no explicit cloudwatch_alarm_actions."
+  type        = list(string)
+  default     = []
 }
 
 variable "output_keyfile" {

@@ -446,6 +446,24 @@ resource "aws_cloudfront_monitoring_subscription" "additional_metrics" {
   }
 }
 
+# CloudFront alarms are us-east-1 resources and PutMetricAlarm rejects SNS
+# actions in any other Region, so their notification topic must live beside
+# them instead of routing through a default-Region account topic.
+resource "aws_sns_topic" "cloudfront_alarm" {
+  provider = aws.us-east-1
+  count    = length(var.alarm_topic_email_subscriptions) > 0 ? 1 : 0
+  name     = "${module.context.id}-alarm"
+  tags     = local.tags
+}
+
+resource "aws_sns_topic_subscription" "cloudfront_alarm_email" {
+  provider  = aws.us-east-1
+  for_each  = toset(var.alarm_topic_email_subscriptions)
+  topic_arn = aws_sns_topic.cloudfront_alarm[0].arn
+  protocol  = "email"
+  endpoint  = each.value
+}
+
 resource "aws_cloudwatch_metric_alarm" "cloudfront_error_rate" {
   provider = aws.us-east-1
   for_each = local.cloudfront_error_alarms
@@ -467,9 +485,16 @@ resource "aws_cloudwatch_metric_alarm" "cloudfront_error_rate" {
     Region         = "Global"
   }
 
-  alarm_actions = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_actions
-  ok_actions    = local.cloudfront_map[each.value.distribution_key].cloudwatch_ok_actions
+  alarm_actions = length(local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_actions) > 0 ? local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_actions : aws_sns_topic.cloudfront_alarm[*].arn
+  ok_actions    = length(local.cloudfront_map[each.value.distribution_key].cloudwatch_ok_actions) > 0 ? local.cloudfront_map[each.value.distribution_key].cloudwatch_ok_actions : aws_sns_topic.cloudfront_alarm[*].arn
   tags          = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = length(local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_actions) > 0 || length(var.alarm_topic_email_subscriptions) > 0
+      error_message = "Alarms need a notification route: set cloudwatch_alarm_actions with us-east-1 targets or alarm_topic_email_subscriptions for the module-owned topic."
+    }
+  }
 }
 
 resource "aws_cloudwatch_log_delivery_source" "standard_v2" {
@@ -505,7 +530,7 @@ resource "aws_cloudwatch_log_delivery" "standard_v2" {
     enable_hive_compatible_path = true
     # Hive mode generates the key= partition names itself; CreateDelivery
     # rejects explicit key=value text in the suffix ("Provided suffixPath is invalid").
-    suffix_path                 = "{DistributionId}/{yyyy}/{MM}/{dd}/{HH}"
+    suffix_path = "{DistributionId}/{yyyy}/{MM}/{dd}/{HH}"
   }
 
   tags = local.tags
