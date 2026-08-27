@@ -157,17 +157,37 @@ run "task_definition_retention_is_opt_in" {
         require_repository_credentials = false
         skip_destroy                   = true
       }
+      retained_multi = {
+        container_image                = "123456789012.dkr.ecr.us-east-1.amazonaws.com/retained-multi:test"
+        require_repository_credentials = false
+        multiple_containers            = true
+        skip_destroy                   = true
+        subnet_ids                     = ["subnet-private"]
+        container_definitions = {
+          app = {
+            essential = true
+            cpu       = 256
+            memory    = 512
+            image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/retained-multi:test"
+          }
+        }
+      }
     }
   }
 
   assert {
-    condition     = output.ecs_map.default.skip_destroy == null
-    error_message = "Omitting skip_destroy must preserve the upstream null default."
+    condition     = !can(output.ecs_map.default.skip_destroy)
+    error_message = "Omitting skip_destroy must not widen the legacy ecs_map output schema."
   }
 
   assert {
     condition     = output.ecs_map.retained.skip_destroy == true
     error_message = "An explicit skip_destroy=true must survive wrapper normalization."
+  }
+
+  assert {
+    condition     = output.ecs_map.retained_multi.skip_destroy == true
+    error_message = "An explicit skip_destroy=true must survive multi-container wrapper normalization."
   }
 
   assert {

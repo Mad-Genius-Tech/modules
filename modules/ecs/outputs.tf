@@ -52,7 +52,8 @@ output "ecs_map" {
   value = {
     for service_key, service in local.ecs_map : service_key => {
       for attribute, attribute_value in service : attribute => attribute_value
-      if attribute != "internal_alb_hostnames"
+      if attribute != "internal_alb_hostnames" &&
+      (attribute != "skip_destroy" || attribute_value != null)
     }
   }
 }
