@@ -47,12 +47,13 @@ output "ecs_cluster_arn" {
 }
 
 output "ecs_map" {
-  # Preserve the legacy diagnostic output shape for consumers that do not use
-  # shared host routing. This routing-only field is consumed inside the module.
+  # Preserve the legacy diagnostic output shape by omitting routing-only fields
+  # and optional compatibility fields that callers did not explicitly set.
   value = {
     for service_key, service in local.ecs_map : service_key => {
       for attribute, attribute_value in service : attribute => attribute_value
-      if attribute != "internal_alb_hostnames"
+      if attribute != "internal_alb_hostnames" &&
+      (attribute != "skip_destroy" || attribute_value != null)
     }
   }
 }
