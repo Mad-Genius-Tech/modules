@@ -110,6 +110,7 @@ variable "ecs_services" {
     domain_name                            = optional(string)
     task_exec_secret_arns                  = optional(list(string))
     task_definition_family                 = optional(string)
+    skip_destroy                           = optional(bool)
     task_exec_iam_role_name                = optional(string)
     task_exec_iam_role_use_name_prefix     = optional(bool, true)
     tasks_iam_role_name                    = optional(string)
