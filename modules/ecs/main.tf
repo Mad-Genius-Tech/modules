@@ -178,6 +178,7 @@ locals {
       "domain_name"                            = try(coalesce(lookup(v, "domain_name", null), local.merged_default_settings.domain_name), local.merged_default_settings.domain_name)
       "task_exec_secret_arns"                  = try(coalesce(lookup(v, "task_exec_secret_arns", null), local.merged_default_settings.task_exec_secret_arns), local.merged_default_settings.task_exec_secret_arns)
       "task_definition_family"                 = lookup(v, "task_definition_family", null)
+      "skip_destroy"                           = lookup(v, "skip_destroy", null)
       "task_exec_iam_role_name"                = lookup(v, "task_exec_iam_role_name", null)
       "task_exec_iam_role_use_name_prefix"     = try(coalesce(lookup(v, "task_exec_iam_role_use_name_prefix", null), local.merged_default_settings.task_exec_iam_role_use_name_prefix), local.merged_default_settings.task_exec_iam_role_use_name_prefix)
       "tasks_iam_role_name"                    = lookup(v, "tasks_iam_role_name", null)
@@ -348,6 +349,7 @@ module "ecs_service" {
   autoscaling_scheduled_actions      = each.value.autoscaling_scheduled_actions
   cluster_arn                        = module.ecs_cluster.arn
   family                             = coalesce(each.value.task_definition_family, each.value.identifier)
+  skip_destroy                       = each.value.skip_destroy
   cpu                                = max(ceil(each.value.container_cpu / 256) * 256, 256)
   memory                             = max(ceil(each.value.container_memory / 512) * 512, 512)
   deployment_minimum_healthy_percent = each.value.deployment_minimum_healthy_percent
@@ -541,6 +543,7 @@ module "ecs_service_multiples" {
   autoscaling_scheduled_actions = each.value.autoscaling_scheduled_actions
   cluster_arn                   = module.ecs_cluster.arn
   family                        = coalesce(each.value.task_definition_family, each.value.identifier)
+  skip_destroy                  = each.value.skip_destroy
   cpu                           = max(ceil(each.value.container_cpu / 256) * 256, 256)
   memory                        = max(ceil(each.value.container_memory / 512) * 512, 512)
   deployment_circuit_breaker    = each.value.deployment_circuit_breaker

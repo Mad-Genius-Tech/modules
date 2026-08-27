@@ -131,6 +131,51 @@ run "runtime_control_overrides" {
   }
 }
 
+run "task_definition_retention_is_opt_in" {
+  command = plan
+
+  variables {
+    org_name            = "mgb"
+    stage_name          = "test"
+    service_name        = "rt"
+    team_name           = "platform"
+    tags                = {}
+    private_subnets     = ["subnet-private"]
+    public_subnets      = ["subnet-public"]
+    ingress_cidr_blocks = ["10.0.0.0/16"]
+    vpc_id              = "vpc-test"
+    vpc_cidr            = "10.0.0.0/16"
+    create_internal_alb = false
+
+    ecs_services = {
+      default = {
+        container_image                = "123456789012.dkr.ecr.us-east-1.amazonaws.com/default:test"
+        require_repository_credentials = false
+      }
+      retained = {
+        container_image                = "123456789012.dkr.ecr.us-east-1.amazonaws.com/retained:test"
+        require_repository_credentials = false
+        skip_destroy                   = true
+      }
+    }
+  }
+
+  assert {
+    condition     = output.ecs_map.default.skip_destroy == null
+    error_message = "Omitting skip_destroy must preserve the upstream null default."
+  }
+
+  assert {
+    condition     = output.ecs_map.retained.skip_destroy == true
+    error_message = "An explicit skip_destroy=true must survive wrapper normalization."
+  }
+
+  assert {
+    condition     = length(regexall("skip_destroy\\s*=\\s*each\\.value\\.skip_destroy", file("${path.module}/main.tf"))) == 2
+    error_message = "Normalized skip_destroy must be forwarded to both single- and multi-container ECS service paths."
+  }
+}
+
 run "reject_single_container_control_for_multi_container_service" {
   command = plan
 
