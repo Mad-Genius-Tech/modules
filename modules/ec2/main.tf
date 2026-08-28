@@ -340,7 +340,7 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
   namespace           = "AWS/EC2"
   period              = 60
   statistic           = "Maximum"
-  threshold           = 3
+  threshold           = 1
   dimensions = {
     InstanceId = module.ec2[each.key].id
   }
