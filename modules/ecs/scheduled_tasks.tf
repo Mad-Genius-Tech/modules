@@ -45,32 +45,48 @@ locals {
 
   ecs_service_task_resource_keys_hint = join(", ", sort(local.ecs_service_task_resource_keys))
 
-  # Resolve only the one ECS module instance selected by each scheduled task.
-  # Building a fleet-wide map from module outputs makes Terraform treat every
-  # service as an implicit dependency of every schedule target.
-  scheduled_task_ecs_service_resources = {
-    for k, v in local.scheduled_task_map : k => (
-      local.ecs_map[local.scheduled_task_ecs_service_key[k]].multiple_containers
-      ? {
-        task_definition_arn     = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].task_definition_arn
-        task_definition_family  = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].task_definition_family
-        security_group_id       = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].security_group_id
-        task_exec_iam_role_name = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_name
-        task_exec_iam_role_arn  = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_arn
-        tasks_iam_role_name     = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_name
-        tasks_iam_role_arn      = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_arn
-      }
-      : {
-        task_definition_arn     = module.ecs_service[local.scheduled_task_ecs_service_key[k]].task_definition_arn
-        task_definition_family  = module.ecs_service[local.scheduled_task_ecs_service_key[k]].task_definition_family
-        security_group_id       = module.ecs_service[local.scheduled_task_ecs_service_key[k]].security_group_id
-        task_exec_iam_role_name = module.ecs_service[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_name
-        task_exec_iam_role_arn  = module.ecs_service[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_arn
-        tasks_iam_role_name     = module.ecs_service[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_name
-        tasks_iam_role_arn      = module.ecs_service[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_arn
-      }
-    )
+  scheduled_task_reused_service_map = {
+    for k, v in local.scheduled_task_map : k => v
+    if length(try(trimspace(v.scheduled.reuse_task_definition_key), "")) > 0
   }
+
+  scheduled_task_owned_service_map = {
+    for k, v in local.scheduled_task_map : k => v
+    if length(try(trimspace(v.scheduled.reuse_task_definition_key), "")) == 0
+  }
+
+  # Standalone scheduled tasks own one exact task-definition module instance.
+  scheduled_task_owned_resources = {
+    for k, v in local.scheduled_task_owned_service_map : k => {
+      task_definition_arn     = module.ecs_service[k].task_definition_arn
+      task_definition_family  = module.ecs_service[k].task_definition_family
+      security_group_ids      = compact([module.ecs_service[k].security_group_id])
+      task_exec_iam_role_name = module.ecs_service[k].task_exec_iam_role_name
+      task_exec_iam_role_arn  = module.ecs_service[k].task_exec_iam_role_arn
+      tasks_iam_role_name     = module.ecs_service[k].tasks_iam_role_name
+      tasks_iam_role_arn      = module.ecs_service[k].tasks_iam_role_arn
+    }
+  }
+
+  # Reused scheduled tasks bind to the already-deployed ECS service. This
+  # keeps a schedule-only plan independent from the managed service module
+  # collection while preserving the service's exact task revision and roles.
+  scheduled_task_reused_resources = {
+    for k, v in local.scheduled_task_reused_service_map : k => {
+      task_definition_arn     = data.aws_ecs_task_definition.scheduled_task_reuse[k].arn
+      task_definition_family  = data.aws_ecs_task_definition.scheduled_task_reuse[k].family
+      security_group_ids      = data.aws_ecs_service.scheduled_task_reuse[k].network_configuration[0].security_groups
+      task_exec_iam_role_name = basename(data.aws_ecs_task_definition.scheduled_task_reuse[k].execution_role_arn)
+      task_exec_iam_role_arn  = data.aws_ecs_task_definition.scheduled_task_reuse[k].execution_role_arn
+      tasks_iam_role_name     = basename(data.aws_ecs_task_definition.scheduled_task_reuse[k].task_role_arn)
+      tasks_iam_role_arn      = data.aws_ecs_task_definition.scheduled_task_reuse[k].task_role_arn
+    }
+  }
+
+  scheduled_task_ecs_service_resources = merge(
+    local.scheduled_task_owned_resources,
+    local.scheduled_task_reused_resources
+  )
 
   scheduled_task_container_override_name = {
     for k, v in local.scheduled_task_map : k => coalesce(
@@ -163,6 +179,19 @@ locals {
   }
 }
 
+data "aws_ecs_service" "scheduled_task_reuse" {
+  for_each = local.scheduled_task_reused_service_map
+
+  cluster_arn  = module.ecs_cluster.arn
+  service_name = local.ecs_map[local.scheduled_task_ecs_service_key[each.key]].identifier
+}
+
+data "aws_ecs_task_definition" "scheduled_task_reuse" {
+  for_each = local.scheduled_task_reused_service_map
+
+  task_definition = data.aws_ecs_service.scheduled_task_reuse[each.key].task_definition
+}
+
 resource "aws_sqs_queue" "scheduled_task_dlq" {
   for_each = local.scheduled_task_dlq_create_map
 
@@ -239,7 +268,7 @@ resource "aws_scheduler_schedule" "ecs_scheduled_task" {
         subnets = coalesce(each.value.scheduled.subnet_ids, each.value.subnet_ids, var.private_subnets)
         security_groups = coalesce(
           each.value.scheduled.security_group_ids,
-          compact([local.scheduled_task_ecs_service_resources[each.key].security_group_id])
+          local.scheduled_task_ecs_service_resources[each.key].security_group_ids
         )
         assign_public_ip = each.value.scheduled.assign_public_ip
       }
