@@ -26,6 +26,26 @@ mock_provider "aws" {
       json = "{}"
     }
   }
+
+  mock_data "aws_ecs_service" {
+    defaults = {
+      task_definition = "arn:aws:ecs:us-west-2:123456789012:task-definition/mgb-dev-fabric-auth:52"
+      network_configuration = [{
+        assign_public_ip = false
+        security_groups  = ["sg-auth-live"]
+        subnets          = ["subnet-private"]
+      }]
+    }
+  }
+
+  mock_data "aws_ecs_task_definition" {
+    defaults = {
+      arn                = "arn:aws:ecs:us-west-2:123456789012:task-definition/mgb-dev-fabric-auth:52"
+      family             = "mgb-dev-fabric-auth"
+      execution_role_arn = "arn:aws:iam::123456789012:role/mgb-dev-fabric-auth-execution"
+      task_role_arn      = "arn:aws:iam::123456789012:role/mgb-dev-fabric-auth-task"
+    }
+  }
 }
 
 run "service_defaults_remain_backward_compatible" {
@@ -344,9 +364,76 @@ run "scheduler_task_contract" {
       length(regexall("resource \"aws_cloudwatch_event_rule\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 0 &&
       length(regexall("resource \"aws_cloudwatch_event_target\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 0 &&
       length(regexall("ecs_service_task_resources", file("${path.module}/scheduled_tasks.tf"))) == 0 &&
+      length(regexall("data \"aws_ecs_service\" \"scheduled_task_reuse\"", file("${path.module}/scheduled_tasks.tf"))) == 1 &&
+      length(regexall("data \"aws_ecs_task_definition\" \"scheduled_task_reuse\"", file("${path.module}/scheduled_tasks.tf"))) == 1 &&
       length(regexall("module\\.ecs_service(_multiples)?", regex("resource \\\"aws_scheduler_schedule\\\" \\\"ecs_scheduled_task\\\"[\\s\\S]*?\\n}", file("${path.module}/scheduled_tasks.tf")))) == 0
     )
     error_message = "The scheduling path must use aws_scheduler_schedule without a collection-wide ECS module dependency or a legacy rule/target pair."
+  }
+}
+
+run "reused_scheduler_reads_deployed_service" {
+  command = plan
+
+  override_module {
+    target          = module.ecs_cluster
+    override_during = plan
+    outputs = {
+      arn  = "arn:aws:ecs:us-west-2:123456789012:cluster/mgb-dev-fabric"
+      id   = "arn:aws:ecs:us-west-2:123456789012:cluster/mgb-dev-fabric"
+      name = "mgb-dev-fabric"
+    }
+  }
+
+  override_resource {
+    target          = aws_iam_role.scheduler["retry_events"]
+    override_during = plan
+    values = {
+      arn = "arn:aws:iam::123456789012:role/mgb-dev-fabric-retry-events-scheduler"
+    }
+  }
+
+  variables {
+    org_name            = "mgb"
+    stage_name          = "dev"
+    service_name        = "fabric"
+    team_name           = "platform"
+    tags                = {}
+    private_subnets     = ["subnet-private"]
+    public_subnets      = ["subnet-public"]
+    ingress_cidr_blocks = ["10.0.0.0/16"]
+    vpc_id              = "vpc-test"
+    vpc_cidr            = "10.0.0.0/16"
+    create_internal_alb = false
+
+    ecs_services = {
+      auth = {
+        container_image                = "123456789012.dkr.ecr.us-west-2.amazonaws.com/fabric-auth:live"
+        require_repository_credentials = false
+      }
+      retry_events = {
+        type                           = "scheduled_task"
+        require_repository_credentials = false
+        scheduled = {
+          enabled                   = true
+          schedule_expression       = "rate(2 minutes)"
+          command                   = ["python", "manage.py", "retry_failed_events"]
+          reuse_task_definition_key = "auth"
+        }
+      }
+    }
+  }
+
+  assert {
+    condition = (
+      length(module.ecs_service) == 1 &&
+      data.aws_ecs_service.scheduled_task_reuse["retry_events"].service_name == "mgb-dev-fabric-auth" &&
+      aws_scheduler_schedule.ecs_scheduled_task["retry_events"].target[0].ecs_parameters[0].task_definition_arn == "arn:aws:ecs:us-west-2:123456789012:task-definition/mgb-dev-fabric-auth:52" &&
+      toset(aws_scheduler_schedule.ecs_scheduled_task["retry_events"].target[0].ecs_parameters[0].network_configuration[0].security_groups) == toset(["sg-auth-live"]) &&
+      output.ecs_scheduled_tasks["retry_events"].task_exec_iam_role_name == "mgb-dev-fabric-auth-execution" &&
+      output.ecs_scheduled_tasks["retry_events"].task_runtime_iam_role_name == "mgb-dev-fabric-auth-task"
+    )
+    error_message = "A reused schedule must read the deployed service revision, network, and task roles without creating another task definition."
   }
 }
 
