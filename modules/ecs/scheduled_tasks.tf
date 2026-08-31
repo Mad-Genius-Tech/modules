@@ -238,11 +238,10 @@ resource "aws_scheduler_schedule" "ecs_scheduled_task" {
     }
   }
 
-  depends_on = [
-    aws_iam_role_policy.scheduler_run_task,
-    module.ecs_service,
-    module.ecs_service_multiples
-  ]
+  # The target and role ARN expressions already establish the exact implicit
+  # dependencies for this schedule instance. A collection-wide depends_on here
+  # makes a targeted schedule rebind traverse every ECS service and can turn
+  # unrelated task-definition drift into deployable changes.
 
   lifecycle {
     precondition {

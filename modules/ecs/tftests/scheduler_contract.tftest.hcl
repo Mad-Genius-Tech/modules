@@ -342,9 +342,10 @@ run "scheduler_task_contract" {
       aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].name != "" &&
       length(regexall("resource \"aws_scheduler_schedule\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 1 &&
       length(regexall("resource \"aws_cloudwatch_event_rule\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 0 &&
-      length(regexall("resource \"aws_cloudwatch_event_target\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 0
+      length(regexall("resource \"aws_cloudwatch_event_target\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 0 &&
+      length(regexall("module\\.ecs_service(_multiples)?", regex("resource \\\"aws_scheduler_schedule\\\" \\\"ecs_scheduled_task\\\"[\\s\\S]*?\\n}", file("${path.module}/scheduled_tasks.tf")))) == 0
     )
-    error_message = "The scheduling path must use aws_scheduler_schedule and must not substitute the legacy rule/target pair."
+    error_message = "The scheduling path must use aws_scheduler_schedule without a collection-wide ECS module dependency or a legacy rule/target pair."
   }
 }
 
