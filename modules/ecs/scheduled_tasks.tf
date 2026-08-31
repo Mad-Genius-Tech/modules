@@ -139,15 +139,15 @@ locals {
     }]
   })
 
-  scheduler_run_task_policy = {
-    for k, v in local.scheduled_task_map : k => jsonencode({
+  scheduler_run_task_policy_reused = {
+    for k, v in local.scheduled_task_reused_service_map : k => jsonencode({
       Version = "2012-10-17"
       Statement = concat([
         {
           Sid      = "RunExactTaskDefinition"
           Effect   = "Allow"
           Action   = ["ecs:RunTask"]
-          Resource = [local.scheduled_task_ecs_service_resources[k].task_definition_arn]
+          Resource = [local.scheduled_task_reused_resources[k].task_definition_arn]
           Condition = {
             ArnEquals = {
               "ecs:cluster" = module.ecs_cluster.arn
@@ -159,8 +159,47 @@ locals {
           Effect = "Allow"
           Action = ["iam:PassRole"]
           Resource = distinct(compact([
-            local.scheduled_task_ecs_service_resources[k].tasks_iam_role_arn,
-            local.scheduled_task_ecs_service_resources[k].task_exec_iam_role_arn
+            local.scheduled_task_reused_resources[k].tasks_iam_role_arn,
+            local.scheduled_task_reused_resources[k].task_exec_iam_role_arn
+          ]))
+          Condition = {
+            StringEquals = {
+              "iam:PassedToService" = "ecs-tasks.amazonaws.com"
+            }
+          }
+        }
+        ], local.scheduled_task_dlq_arn[k] != null ? [{
+          Sid      = "SendToExactDeadLetterQueue"
+          Effect   = "Allow"
+          Action   = ["sqs:SendMessage"]
+          Resource = [local.scheduled_task_dlq_arn[k]]
+        }] : []
+      )
+    })
+  }
+
+  scheduler_run_task_policy_owned = {
+    for k, v in local.scheduled_task_owned_service_map : k => jsonencode({
+      Version = "2012-10-17"
+      Statement = concat([
+        {
+          Sid      = "RunExactTaskDefinition"
+          Effect   = "Allow"
+          Action   = ["ecs:RunTask"]
+          Resource = [local.scheduled_task_owned_resources[k].task_definition_arn]
+          Condition = {
+            ArnEquals = {
+              "ecs:cluster" = module.ecs_cluster.arn
+            }
+          }
+        },
+        {
+          Sid    = "PassExactEcsTaskRoles"
+          Effect = "Allow"
+          Action = ["iam:PassRole"]
+          Resource = distinct(compact([
+            local.scheduled_task_owned_resources[k].tasks_iam_role_arn,
+            local.scheduled_task_owned_resources[k].task_exec_iam_role_arn
           ]))
           Condition = {
             StringEquals = {
@@ -218,11 +257,19 @@ resource "aws_iam_role" "scheduler" {
 }
 
 resource "aws_iam_role_policy" "scheduler_run_task" {
-  for_each = local.scheduled_task_map
+  for_each = local.scheduled_task_reused_service_map
 
   name   = "${each.value.identifier}-scheduler-run-task"
   role   = aws_iam_role.scheduler[each.key].id
-  policy = local.scheduler_run_task_policy[each.key]
+  policy = local.scheduler_run_task_policy_reused[each.key]
+}
+
+resource "aws_iam_role_policy" "scheduler_run_task_owned" {
+  for_each = local.scheduled_task_owned_service_map
+
+  name   = "${each.value.identifier}-scheduler-run-task"
+  role   = aws_iam_role.scheduler[each.key].id
+  policy = local.scheduler_run_task_policy_owned[each.key]
 }
 
 resource "aws_scheduler_schedule_group" "scheduled_task" {
@@ -233,7 +280,7 @@ resource "aws_scheduler_schedule_group" "scheduled_task" {
 }
 
 resource "aws_scheduler_schedule" "ecs_scheduled_task" {
-  for_each = local.scheduled_task_map
+  for_each = local.scheduled_task_reused_service_map
 
   name                         = "${each.value.identifier}-schedule"
   group_name                   = aws_scheduler_schedule_group.scheduled_task[each.key].name
@@ -259,7 +306,7 @@ resource "aws_scheduler_schedule" "ecs_scheduled_task" {
     }
 
     ecs_parameters {
-      task_definition_arn = local.scheduled_task_ecs_service_resources[each.key].task_definition_arn
+      task_definition_arn = local.scheduled_task_reused_resources[each.key].task_definition_arn
       launch_type         = "FARGATE"
       platform_version    = each.value.scheduled.platform_version
       task_count          = each.value.scheduled.task_count
@@ -268,7 +315,7 @@ resource "aws_scheduler_schedule" "ecs_scheduled_task" {
         subnets = coalesce(each.value.scheduled.subnet_ids, each.value.subnet_ids, var.private_subnets)
         security_groups = coalesce(
           each.value.scheduled.security_group_ids,
-          local.scheduled_task_ecs_service_resources[each.key].security_group_ids
+          local.scheduled_task_reused_resources[each.key].security_group_ids
         )
         assign_public_ip = each.value.scheduled.assign_public_ip
       }
@@ -284,6 +331,62 @@ resource "aws_scheduler_schedule" "ecs_scheduled_task" {
   # dependencies for this schedule instance. A collection-wide depends_on here
   # makes a targeted schedule rebind traverse every ECS service and can turn
   # unrelated task-definition drift into deployable changes.
+
+  lifecycle {
+    precondition {
+      condition     = contains(local.ecs_service_task_resource_keys, local.scheduled_task_ecs_service_key[each.key])
+      error_message = "Scheduled task ${each.key}: set scheduled.reuse_task_definition_key to a key from this list: ${local.ecs_service_task_resource_keys_hint} — or pass the service full identifier string."
+    }
+  }
+}
+
+resource "aws_scheduler_schedule" "ecs_scheduled_task_owned" {
+  for_each = local.scheduled_task_owned_service_map
+
+  name                         = "${each.value.identifier}-schedule"
+  group_name                   = aws_scheduler_schedule_group.scheduled_task[each.key].name
+  description                  = "Run ${each.value.identifier} as an ECS one-shot task"
+  schedule_expression          = each.value.scheduled.schedule_expression
+  schedule_expression_timezone = each.value.scheduled.schedule_expression_timezone
+  state                        = each.value.scheduled.enabled ? "ENABLED" : "DISABLED"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = module.ecs_cluster.arn
+    role_arn = aws_iam_role.scheduler[each.key].arn
+    input    = local.scheduled_task_inputs[each.key]
+
+    dynamic "dead_letter_config" {
+      for_each = local.scheduled_task_dlq_arn[each.key] != null ? [local.scheduled_task_dlq_arn[each.key]] : []
+      content {
+        arn = dead_letter_config.value
+      }
+    }
+
+    ecs_parameters {
+      task_definition_arn = local.scheduled_task_owned_resources[each.key].task_definition_arn
+      launch_type         = "FARGATE"
+      platform_version    = each.value.scheduled.platform_version
+      task_count          = each.value.scheduled.task_count
+
+      network_configuration {
+        subnets = coalesce(each.value.scheduled.subnet_ids, each.value.subnet_ids, var.private_subnets)
+        security_groups = coalesce(
+          each.value.scheduled.security_group_ids,
+          local.scheduled_task_owned_resources[each.key].security_group_ids
+        )
+        assign_public_ip = each.value.scheduled.assign_public_ip
+      }
+    }
+
+    retry_policy {
+      maximum_retry_attempts       = each.value.scheduled.maximum_retry_attempts
+      maximum_event_age_in_seconds = each.value.scheduled.maximum_event_age_in_seconds
+    }
+  }
 
   lifecycle {
     precondition {

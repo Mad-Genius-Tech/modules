@@ -73,7 +73,10 @@ output "ecs_services" {
 
 output "ecs_scheduled_tasks" {
   value = {
-    for k, v in aws_scheduler_schedule.ecs_scheduled_task : k => {
+    for k, v in merge(
+      aws_scheduler_schedule.ecs_scheduled_task,
+      aws_scheduler_schedule.ecs_scheduled_task_owned
+      ) : k => {
       schedule_arn                 = v.arn
       schedule_name                = v.name
       schedule_expression          = v.schedule_expression

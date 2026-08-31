@@ -100,7 +100,10 @@ run "service_defaults_remain_backward_compatible" {
   }
 
   assert {
-    condition     = length(aws_scheduler_schedule.ecs_scheduled_task) == 0
+    condition = (
+      length(aws_scheduler_schedule.ecs_scheduled_task) == 0 &&
+      length(aws_scheduler_schedule.ecs_scheduled_task_owned) == 0
+    )
     error_message = "Ordinary ECS services must not create Scheduler resources."
   }
 }
@@ -239,22 +242,22 @@ run "scheduler_task_contract" {
 
   assert {
     condition = (
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].state == "DISABLED" &&
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].schedule_expression_timezone == "UTC" &&
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].group_name == aws_scheduler_schedule_group.scheduled_task["migration-snapshot"].name &&
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].flexible_time_window[0].mode == "OFF" &&
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].target[0].ecs_parameters[0].launch_type == "FARGATE" &&
-      toset(aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].target[0].ecs_parameters[0].network_configuration[0].subnets) == toset(["subnet-private-a", "subnet-private-b"]) &&
-      !aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].target[0].ecs_parameters[0].network_configuration[0].assign_public_ip
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].state == "DISABLED" &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].schedule_expression_timezone == "UTC" &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].group_name == aws_scheduler_schedule_group.scheduled_task["migration-snapshot"].name &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].flexible_time_window[0].mode == "OFF" &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].target[0].ecs_parameters[0].launch_type == "FARGATE" &&
+      toset(aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].target[0].ecs_parameters[0].network_configuration[0].subnets) == toset(["subnet-private-a", "subnet-private-b"]) &&
+      !aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].target[0].ecs_parameters[0].network_configuration[0].assign_public_ip
     )
     error_message = "The Scheduler target must be disabled-first, UTC, flexible-window-off, private, and Fargate."
   }
 
   assert {
     condition = (
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].target[0].retry_policy[0].maximum_retry_attempts == 2 &&
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].target[0].retry_policy[0].maximum_event_age_in_seconds == 600 &&
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].target[0].dead_letter_config[0].arn == aws_sqs_queue.scheduled_task_dlq["migration-snapshot"].arn &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].target[0].retry_policy[0].maximum_retry_attempts == 2 &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].target[0].retry_policy[0].maximum_event_age_in_seconds == 600 &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].target[0].dead_letter_config[0].arn == aws_sqs_queue.scheduled_task_dlq["migration-snapshot"].arn &&
       output.ecs_scheduled_tasks["migration-snapshot"].dead_letter_queue_arn == aws_sqs_queue.scheduled_task_dlq["migration-snapshot"].arn
     )
     error_message = "Retry policy and the exact optional DLQ ARN must reach the Scheduler target and outputs."
@@ -304,22 +307,22 @@ run "scheduler_task_contract" {
 
   assert {
     condition = (
-      jsondecode(aws_iam_role_policy.scheduler_run_task["migration-snapshot"].policy).Statement[0].Resource == [output.ecs_scheduled_tasks["migration-snapshot"].task_definition_arn] &&
-      jsondecode(aws_iam_role_policy.scheduler_run_task["migration-snapshot"].policy).Statement[0].Condition.ArnEquals["ecs:cluster"] == output.ecs_cluster_arn &&
-      toset(jsondecode(aws_iam_role_policy.scheduler_run_task["migration-snapshot"].policy).Statement[1].Resource) == toset([
+      jsondecode(aws_iam_role_policy.scheduler_run_task_owned["migration-snapshot"].policy).Statement[0].Resource == [output.ecs_scheduled_tasks["migration-snapshot"].task_definition_arn] &&
+      jsondecode(aws_iam_role_policy.scheduler_run_task_owned["migration-snapshot"].policy).Statement[0].Condition.ArnEquals["ecs:cluster"] == output.ecs_cluster_arn &&
+      toset(jsondecode(aws_iam_role_policy.scheduler_run_task_owned["migration-snapshot"].policy).Statement[1].Resource) == toset([
         output.ecs_scheduled_tasks["migration-snapshot"].task_runtime_iam_role_arn,
         output.ecs_scheduled_tasks["migration-snapshot"].task_exec_iam_role_arn
       ]) &&
-      jsondecode(aws_iam_role_policy.scheduler_run_task["migration-snapshot"].policy).Statement[1].Condition.StringEquals["iam:PassedToService"] == "ecs-tasks.amazonaws.com" &&
-      !contains(jsondecode(aws_iam_role_policy.scheduler_run_task["migration-snapshot"].policy).Statement[1].Resource, output.ecs_scheduled_tasks["migration-snapshot"].scheduler_iam_role_arn)
+      jsondecode(aws_iam_role_policy.scheduler_run_task_owned["migration-snapshot"].policy).Statement[1].Condition.StringEquals["iam:PassedToService"] == "ecs-tasks.amazonaws.com" &&
+      !contains(jsondecode(aws_iam_role_policy.scheduler_run_task_owned["migration-snapshot"].policy).Statement[1].Resource, output.ecs_scheduled_tasks["migration-snapshot"].scheduler_iam_role_arn)
     )
     error_message = "Scheduler RunTask and PassRole must be exact, cluster-bound, service-conditioned, and exclude the Scheduler role itself."
   }
 
   assert {
     condition = (
-      jsondecode(aws_iam_role_policy.scheduler_run_task["migration-snapshot"].policy).Statement[2].Action == ["sqs:SendMessage"] &&
-      jsondecode(aws_iam_role_policy.scheduler_run_task["migration-snapshot"].policy).Statement[2].Resource == [output.ecs_scheduled_tasks["migration-snapshot"].dead_letter_queue_arn]
+      jsondecode(aws_iam_role_policy.scheduler_run_task_owned["migration-snapshot"].policy).Statement[2].Action == ["sqs:SendMessage"] &&
+      jsondecode(aws_iam_role_policy.scheduler_run_task_owned["migration-snapshot"].policy).Statement[2].Resource == [output.ecs_scheduled_tasks["migration-snapshot"].dead_letter_queue_arn]
     )
     error_message = "DLQ delivery permission must be bounded to the exact queue ARN."
   }
@@ -359,7 +362,7 @@ run "scheduler_task_contract" {
 
   assert {
     condition = (
-      aws_scheduler_schedule.ecs_scheduled_task["migration-snapshot"].name != "" &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["migration-snapshot"].name != "" &&
       length(regexall("resource \"aws_scheduler_schedule\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 1 &&
       length(regexall("resource \"aws_cloudwatch_event_rule\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 0 &&
       length(regexall("resource \"aws_cloudwatch_event_target\" \"ecs_scheduled_task\"", file("${path.module}/scheduled_tasks.tf"))) == 0 &&
@@ -467,7 +470,7 @@ run "scheduled_observability_is_opt_in" {
 
   assert {
     condition = (
-      aws_scheduler_schedule.ecs_scheduled_task["nightly"].state == "DISABLED" &&
+      aws_scheduler_schedule.ecs_scheduled_task_owned["nightly"].state == "DISABLED" &&
       length(aws_cloudwatch_metric_alarm.scheduled_task_launch_failure) == 0 &&
       length(aws_cloudwatch_metric_alarm.scheduled_task_nonzero_exit) == 0 &&
       length(aws_cloudwatch_metric_alarm.scheduled_task_freshness) == 0 &&
