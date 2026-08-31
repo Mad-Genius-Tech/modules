@@ -16,39 +16,25 @@ locals {
     )
   }
 
-  ecs_service_task_resources = merge(
-    {
-      for key, m in module.ecs_service : key => {
-        task_definition_arn     = m.task_definition_arn
-        task_definition_family  = m.task_definition_family
-        security_group_id       = m.security_group_id
-        task_exec_iam_role_name = m.task_exec_iam_role_name
-        task_exec_iam_role_arn  = m.task_exec_iam_role_arn
-        tasks_iam_role_name     = m.tasks_iam_role_name
-        tasks_iam_role_arn      = m.tasks_iam_role_arn
-      }
-    },
-    {
-      for key, m in module.ecs_service_multiples : key => {
-        task_definition_arn     = m.task_definition_arn
-        task_definition_family  = m.task_definition_family
-        security_group_id       = m.security_group_id
-        task_exec_iam_role_name = m.task_exec_iam_role_name
-        task_exec_iam_role_arn  = m.task_exec_iam_role_arn
-        tasks_iam_role_name     = m.tasks_iam_role_name
-        tasks_iam_role_arn      = m.tasks_iam_role_arn
-      }
-    }
+  ecs_service_task_resource_keys = concat(
+    [
+      for k, v in local.ecs_map : k
+      if v.create && !v.multiple_containers && !(v.type == "scheduled_task" && try(v.scheduled.reuse_task_definition_key, null) != null)
+    ],
+    [
+      for k, v in local.ecs_map : k
+      if v.create && v.multiple_containers && v.type == "service"
+    ]
   )
 
   ecs_task_key_by_service_identifier = {
     for k, v in local.ecs_map : v.identifier => k
-    if contains(keys(local.ecs_service_task_resources), k)
+    if contains(local.ecs_service_task_resource_keys, k)
   }
 
   scheduled_task_ecs_service_key = {
     for k, v in local.scheduled_task_map : k => (
-      contains(keys(local.ecs_service_task_resources), local.scheduled_task_reuse_input[k])
+      contains(local.ecs_service_task_resource_keys, local.scheduled_task_reuse_input[k])
       ? local.scheduled_task_reuse_input[k]
       : try(
         local.ecs_task_key_by_service_identifier[local.scheduled_task_reuse_input[k]],
@@ -57,7 +43,34 @@ locals {
     )
   }
 
-  ecs_service_task_resource_keys_hint = join(", ", sort(keys(local.ecs_service_task_resources)))
+  ecs_service_task_resource_keys_hint = join(", ", sort(local.ecs_service_task_resource_keys))
+
+  # Resolve only the one ECS module instance selected by each scheduled task.
+  # Building a fleet-wide map from module outputs makes Terraform treat every
+  # service as an implicit dependency of every schedule target.
+  scheduled_task_ecs_service_resources = {
+    for k, v in local.scheduled_task_map : k => (
+      local.ecs_map[local.scheduled_task_ecs_service_key[k]].multiple_containers
+      ? {
+        task_definition_arn     = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].task_definition_arn
+        task_definition_family  = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].task_definition_family
+        security_group_id       = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].security_group_id
+        task_exec_iam_role_name = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_name
+        task_exec_iam_role_arn  = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_arn
+        tasks_iam_role_name     = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_name
+        tasks_iam_role_arn      = module.ecs_service_multiples[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_arn
+      }
+      : {
+        task_definition_arn     = module.ecs_service[local.scheduled_task_ecs_service_key[k]].task_definition_arn
+        task_definition_family  = module.ecs_service[local.scheduled_task_ecs_service_key[k]].task_definition_family
+        security_group_id       = module.ecs_service[local.scheduled_task_ecs_service_key[k]].security_group_id
+        task_exec_iam_role_name = module.ecs_service[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_name
+        task_exec_iam_role_arn  = module.ecs_service[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_arn
+        tasks_iam_role_name     = module.ecs_service[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_name
+        tasks_iam_role_arn      = module.ecs_service[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_arn
+      }
+    )
+  }
 
   scheduled_task_container_override_name = {
     for k, v in local.scheduled_task_map : k => coalesce(
@@ -118,7 +131,7 @@ locals {
           Sid      = "RunExactTaskDefinition"
           Effect   = "Allow"
           Action   = ["ecs:RunTask"]
-          Resource = [local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_definition_arn]
+          Resource = [local.scheduled_task_ecs_service_resources[k].task_definition_arn]
           Condition = {
             ArnEquals = {
               "ecs:cluster" = module.ecs_cluster.arn
@@ -130,8 +143,8 @@ locals {
           Effect = "Allow"
           Action = ["iam:PassRole"]
           Resource = distinct(compact([
-            local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].tasks_iam_role_arn,
-            local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[k]].task_exec_iam_role_arn
+            local.scheduled_task_ecs_service_resources[k].tasks_iam_role_arn,
+            local.scheduled_task_ecs_service_resources[k].task_exec_iam_role_arn
           ]))
           Condition = {
             StringEquals = {
@@ -217,7 +230,7 @@ resource "aws_scheduler_schedule" "ecs_scheduled_task" {
     }
 
     ecs_parameters {
-      task_definition_arn = local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[each.key]].task_definition_arn
+      task_definition_arn = local.scheduled_task_ecs_service_resources[each.key].task_definition_arn
       launch_type         = "FARGATE"
       platform_version    = each.value.scheduled.platform_version
       task_count          = each.value.scheduled.task_count
@@ -226,7 +239,7 @@ resource "aws_scheduler_schedule" "ecs_scheduled_task" {
         subnets = coalesce(each.value.scheduled.subnet_ids, each.value.subnet_ids, var.private_subnets)
         security_groups = coalesce(
           each.value.scheduled.security_group_ids,
-          compact([local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[each.key]].security_group_id])
+          compact([local.scheduled_task_ecs_service_resources[each.key].security_group_id])
         )
         assign_public_ip = each.value.scheduled.assign_public_ip
       }
@@ -245,7 +258,7 @@ resource "aws_scheduler_schedule" "ecs_scheduled_task" {
 
   lifecycle {
     precondition {
-      condition     = contains(keys(local.ecs_service_task_resources), local.scheduled_task_ecs_service_key[each.key])
+      condition     = contains(local.ecs_service_task_resource_keys, local.scheduled_task_ecs_service_key[each.key])
       error_message = "Scheduled task ${each.key}: set scheduled.reuse_task_definition_key to a key from this list: ${local.ecs_service_task_resource_keys_hint} — or pass the service full identifier string."
     }
   }
@@ -262,7 +275,7 @@ resource "aws_cloudwatch_event_rule" "scheduled_task_nonzero_exit" {
     detail = {
       lastStatus        = ["STOPPED"]
       clusterArn        = [module.ecs_cluster.arn]
-      taskDefinitionArn = [local.ecs_service_task_resources[local.scheduled_task_ecs_service_key[each.key]].task_definition_arn]
+      taskDefinitionArn = [local.scheduled_task_ecs_service_resources[each.key].task_definition_arn]
       containers = {
         name = [local.scheduled_task_container_override_name[each.key]]
         exitCode = [{
