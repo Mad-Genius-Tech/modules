@@ -338,7 +338,7 @@ locals {
 # }
 
 module "ecs_service" {
-  source                             = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v6.0.5"
+  source                             = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=1553f58d5c9d71afd1b87ebf99ab8d150108e1d5"
   for_each                           = { for k, v in local.ecs_map : k => v if v.create && !v.multiple_containers && !(v.type == "scheduled_task" && try(v.scheduled.reuse_task_definition_key, null) != null) }
   create_service                     = each.value.type == "service"
   name                               = each.value.identifier
@@ -533,7 +533,7 @@ module "ecs_service" {
 }
 
 module "ecs_service_multiples" {
-  source                        = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v6.0.5"
+  source                        = "github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=1553f58d5c9d71afd1b87ebf99ab8d150108e1d5"
   for_each                      = { for k, v in local.ecs_map : k => v if v.create && v.multiple_containers && v.type == "service" }
   name                          = each.value.identifier
   desired_count                 = each.value.desired_count

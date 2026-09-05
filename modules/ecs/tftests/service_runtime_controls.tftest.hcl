@@ -45,6 +45,11 @@ run "runtime_control_defaults" {
   }
 
   assert {
+    condition     = !can(module.ecs_service["defaults"].container_definitions["defaults"].container_definition.restartPolicy.ignoredExitCodes)
+    error_message = "Default restart policy must omit the empty ignoredExitCodes list so plans match ECS API responses without replacing task definitions."
+  }
+
+  assert {
     condition     = output.ecs_map.defaults.enable_execute_command
     error_message = "ECS Exec must remain enabled by default for backward compatibility."
   }
