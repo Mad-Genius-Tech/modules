@@ -176,11 +176,12 @@ variable "ecs_services" {
       secret_key  = string
     })))
     security_group_rules = optional(map(object({
-      from_port   = number
-      to_port     = number
-      ip_protocol = optional(string, "tcp")
-      description = optional(string)
-      cidr_ipv4   = string
+      from_port                    = number
+      to_port                      = number
+      ip_protocol                  = optional(string, "tcp")
+      description                  = optional(string)
+      cidr_ipv4                    = optional(string)
+      referenced_security_group_id = optional(string)
     })))
     security_group_egress_rules = optional(map(object({
       name                         = optional(string)
@@ -289,6 +290,22 @@ variable "ecs_services" {
       reuse_container_name = optional(string)
     }))
   }))
+
+  validation {
+    condition = alltrue([
+      for service in values(var.ecs_services) : alltrue([
+        for rule in values(coalesce(service.security_group_rules, {})) :
+        (
+          rule.referenced_security_group_id == null &&
+          try(trimspace(rule.cidr_ipv4) != "", false)
+          ) || (
+          rule.cidr_ipv4 == null &&
+          try(trimspace(rule.referenced_security_group_id) != "", false)
+        )
+      ])
+    ])
+    error_message = "ecs_services security_group_rules must set exactly one non-empty cidr_ipv4 or referenced_security_group_id."
+  }
 
   validation {
     condition = alltrue([
