@@ -79,10 +79,38 @@ run "privacy_safe_observability_defaults" {
     condition     = !local.cloudfront_map.default.enable_cloudwatch_alarms
     error_message = "CloudFront error-rate alarms must remain opt-in."
   }
+
+  assert {
+    condition     = local.cloudfront_map.default.cloudwatch_4xx_minimum_requests == 0
+    error_message = "Existing consumers must retain the direct 4xx error-rate alarm by default."
+  }
 }
 
 run "opted_in_observability_controls" {
-  command = plan
+  command = apply
+
+  override_module {
+    target = module.cloudfront
+    outputs = {
+      cloudfront_distribution_id  = "EDFDVBD6EXAMPLE"
+      cloudfront_distribution_arn = "arn:aws:cloudfront::123456789012:distribution/EDFDVBD6EXAMPLE"
+    }
+  }
+
+  override_module {
+    target = module.s3_bucket
+    outputs = {
+      s3_bucket_arn                = "arn:aws:s3:::example-site-logs"
+      s3_bucket_bucket_domain_name = "example-site-logs.s3.amazonaws.com"
+    }
+  }
+
+  override_resource {
+    target = aws_cloudwatch_log_delivery_destination.standard_v2
+    values = {
+      arn = "arn:aws:logs:us-east-1:123456789012:delivery-destination:example-site-logs"
+    }
+  }
 
   variables {
     org_name     = "mgb"
@@ -93,16 +121,17 @@ run "opted_in_observability_controls" {
 
     cloudfront = {
       observed = {
-        use_acm_cert               = false
-        domain_name                = "example.com"
-        s3_bucket                  = "example-site"
-        enable_standard_logging_v2 = true
-        logging_include_cookies    = false
-        logging_retention_days     = 14
-        enable_additional_metrics  = true
-        enable_cloudwatch_alarms   = true
-        cloudwatch_alarm_actions   = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
-        cloudwatch_ok_actions      = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
+        use_acm_cert                    = false
+        domain_name                     = "example.com"
+        s3_bucket                       = "example-site"
+        enable_standard_logging_v2      = true
+        logging_include_cookies         = false
+        logging_retention_days          = 14
+        enable_additional_metrics       = true
+        enable_cloudwatch_alarms        = true
+        cloudwatch_4xx_minimum_requests = 25
+        cloudwatch_alarm_actions        = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
+        cloudwatch_ok_actions           = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
       }
     }
   }
@@ -140,6 +169,76 @@ run "opted_in_observability_controls" {
   assert {
     condition     = aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].treat_missing_data == "notBreaching"
     error_message = "Idle CloudFront traffic must not create false alarms."
+  }
+
+  assert {
+    condition     = local.cloudfront_map.observed.cloudwatch_4xx_minimum_requests == 25
+    error_message = "The configured minimum request count must survive normalization."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query) == 3
+    error_message = "A configured minimum request count must emit three metric-math queries for the 4xx alarm."
+  }
+
+  assert {
+    condition = one([
+      for query in aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query : query
+      if query.id == "gated_error_rate"
+    ]).expression == "IF(request_count >= 25, error_rate, 0)"
+    error_message = "The 4xx alarm must gate its reviewed rate on the configured request count."
+  }
+
+  assert {
+    condition = one([
+      for query in aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query : query
+      if query.id == "gated_error_rate"
+      ]).return_data && alltrue([
+      for query in aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query : !query.return_data
+      if query.id != "gated_error_rate"
+    ])
+    error_message = "Only the gated expression may return data to the 4xx alarm."
+  }
+
+  assert {
+    condition = one(one([
+      for query in aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query : query.metric
+      if query.id == "request_count"
+      ])).metric_name == "Requests" && one(one([
+      for query in aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query : query.metric
+      if query.id == "request_count"
+    ])).stat == "Sum"
+    error_message = "The request-count query must sum CloudFront Requests."
+  }
+
+  assert {
+    condition = one(one([
+      for query in aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query : query.metric
+      if query.id == "error_rate"
+      ])).metric_name == "4xxErrorRate" && one(one([
+      for query in aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query : query.metric
+      if query.id == "error_rate"
+    ])).stat == "Average"
+    error_message = "The error-rate query must average CloudFront 4xxErrorRate."
+  }
+
+  assert {
+    condition = alltrue([
+      for query in aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_query :
+      one(query.metric).period == 300 && one(query.metric).dimensions["Region"] == "Global"
+      if query.id != "gated_error_rate"
+    ])
+    error_message = "Both source metrics must use the reviewed period and global CloudFront dimension."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].metric_name == null && aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].dimensions == null
+    error_message = "A metric-math 4xx alarm must not also configure top-level metric fields."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-5xxErrorRate"].metric_name == "5xxErrorRate" && length(aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-5xxErrorRate"].metric_query) == 0
+    error_message = "The minimum request guard must not change the 5xx alarm."
   }
 
   assert {
@@ -193,6 +292,29 @@ run "reject_unbounded_log_retention" {
         origin_domain_name     = "origin.example.com"
         enable_logs            = true
         logging_retention_days = 0
+      }
+    }
+  }
+
+  expect_failures = [var.cloudfront]
+}
+
+run "reject_fractional_minimum_request_count" {
+  command = plan
+
+  variables {
+    org_name     = "mgb"
+    stage_name   = "test"
+    service_name = "cloudfront"
+    team_name    = "platform"
+    tags         = {}
+
+    cloudfront = {
+      invalid = {
+        use_acm_cert                    = false
+        domain_name                     = "example.com"
+        origin_domain_name              = "origin.example.com"
+        cloudwatch_4xx_minimum_requests = 2.5
       }
     }
   }
