@@ -111,8 +111,8 @@ No requirements.
 | <a name="module_alb_internal_dedicated"></a> [alb\_internal\_dedicated](#module\_alb\_internal\_dedicated) | terraform-aws-modules/alb/aws | ~> 9.1.0 |
 | <a name="module_context"></a> [context](#module\_context) | cloudposse/label/null | ~> 0.25.0 |
 | <a name="module_ecs_cluster"></a> [ecs\_cluster](#module\_ecs\_cluster) | github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/cluster | v5.5.0 |
-| <a name="module_ecs_service"></a> [ecs\_service](#module\_ecs\_service) | github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service | v6.0.5 |
-| <a name="module_ecs_service_multiples"></a> [ecs\_service\_multiples](#module\_ecs\_service\_multiples) | github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service | v6.0.5 |
+| <a name="module_ecs_service"></a> [ecs\_service](#module\_ecs\_service) | github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service | 1553f58d5c9d71afd1b87ebf99ab8d150108e1d5 |
+| <a name="module_ecs_service_multiples"></a> [ecs\_service\_multiples](#module\_ecs\_service\_multiples) | github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service | 1553f58d5c9d71afd1b87ebf99ab8d150108e1d5 |
 | <a name="module_log_bucket"></a> [log\_bucket](#module\_log\_bucket) | terraform-aws-modules/s3-bucket/aws | ~> 3.15.1 |
 | <a name="module_nlb"></a> [nlb](#module\_nlb) | terraform-aws-modules/alb/aws | ~> 9.1.0 |
 
