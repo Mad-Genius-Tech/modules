@@ -12,6 +12,7 @@ variable "cloudfront" {
     cloudwatch_alarm_period                = optional(number)
     cloudwatch_alarm_evaluation_periods    = optional(number)
     cloudwatch_alarm_datapoints_to_alarm   = optional(number)
+    cloudwatch_4xx_minimum_requests        = optional(number)
     cloudwatch_4xx_error_rate_threshold    = optional(number)
     cloudwatch_5xx_error_rate_threshold    = optional(number)
     aliases                                = optional(list(string))
@@ -84,6 +85,15 @@ variable "cloudfront" {
       origin_read_timeout    = optional(number)
     }))
   }))
+
+  validation {
+    condition = alltrue([
+      for config in values(var.cloudfront) :
+      coalesce(config.cloudwatch_4xx_minimum_requests, 0) >= 0 &&
+      floor(coalesce(config.cloudwatch_4xx_minimum_requests, 0)) == coalesce(config.cloudwatch_4xx_minimum_requests, 0)
+    ])
+    error_message = "cloudwatch_4xx_minimum_requests must be a non-negative whole number."
+  }
 
   validation {
     condition = alltrue([

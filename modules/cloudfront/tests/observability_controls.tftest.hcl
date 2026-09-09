@@ -79,6 +79,11 @@ run "privacy_safe_observability_defaults" {
     condition     = !local.cloudfront_map.default.enable_cloudwatch_alarms
     error_message = "CloudFront error-rate alarms must remain opt-in."
   }
+
+  assert {
+    condition     = local.cloudfront_map.default.cloudwatch_4xx_minimum_requests == 0
+    error_message = "Existing consumers must retain the direct 4xx error-rate alarm by default."
+  }
 }
 
 run "opted_in_observability_controls" {
@@ -93,16 +98,17 @@ run "opted_in_observability_controls" {
 
     cloudfront = {
       observed = {
-        use_acm_cert               = false
-        domain_name                = "example.com"
-        s3_bucket                  = "example-site"
-        enable_standard_logging_v2 = true
-        logging_include_cookies    = false
-        logging_retention_days     = 14
-        enable_additional_metrics  = true
-        enable_cloudwatch_alarms   = true
-        cloudwatch_alarm_actions   = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
-        cloudwatch_ok_actions      = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
+        use_acm_cert                    = false
+        domain_name                     = "example.com"
+        s3_bucket                       = "example-site"
+        enable_standard_logging_v2      = true
+        logging_include_cookies         = false
+        logging_retention_days          = 14
+        enable_additional_metrics       = true
+        enable_cloudwatch_alarms        = true
+        cloudwatch_4xx_minimum_requests = 25
+        cloudwatch_alarm_actions        = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
+        cloudwatch_ok_actions           = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
       }
     }
   }
@@ -140,6 +146,21 @@ run "opted_in_observability_controls" {
   assert {
     condition     = aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-4xxErrorRate"].treat_missing_data == "notBreaching"
     error_message = "Idle CloudFront traffic must not create false alarms."
+  }
+
+  assert {
+    condition     = local.cloudfront_map.observed.cloudwatch_4xx_minimum_requests == 25
+    error_message = "The configured minimum request count must survive normalization."
+  }
+
+  assert {
+    condition     = length(regexall("expression\\s*=\\s*\"IF\\(request_count >=", file("${path.module}/main.tf"))) == 1
+    error_message = "The 4xx alarm must gate its reviewed rate on the normalized request count."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-5xxErrorRate"].metric_name == "5xxErrorRate" && length(aws_cloudwatch_metric_alarm.cloudfront_error_rate["observed-5xxErrorRate"].metric_query) == 0
+    error_message = "The minimum request guard must not change the 5xx alarm."
   }
 
   assert {
@@ -193,6 +214,29 @@ run "reject_unbounded_log_retention" {
         origin_domain_name     = "origin.example.com"
         enable_logs            = true
         logging_retention_days = 0
+      }
+    }
+  }
+
+  expect_failures = [var.cloudfront]
+}
+
+run "reject_fractional_minimum_request_count" {
+  command = plan
+
+  variables {
+    org_name     = "mgb"
+    stage_name   = "test"
+    service_name = "cloudfront"
+    team_name    = "platform"
+    tags         = {}
+
+    cloudfront = {
+      invalid = {
+        use_acm_cert                    = false
+        domain_name                     = "example.com"
+        origin_domain_name              = "origin.example.com"
+        cloudwatch_4xx_minimum_requests = 2.5
       }
     }
   }

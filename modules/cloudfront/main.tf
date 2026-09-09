@@ -14,6 +14,7 @@ locals {
     cloudwatch_alarm_period                = 300
     cloudwatch_alarm_evaluation_periods    = 2
     cloudwatch_alarm_datapoints_to_alarm   = 2
+    cloudwatch_4xx_minimum_requests        = 0
     cloudwatch_4xx_error_rate_threshold    = 10
     cloudwatch_5xx_error_rate_threshold    = 5
     price_class                            = "PriceClass_100"
@@ -114,6 +115,7 @@ locals {
       "cloudwatch_alarm_period"                = try(coalesce(lookup(v, "cloudwatch_alarm_period", null), local.merged_default_settings.cloudwatch_alarm_period), local.merged_default_settings.cloudwatch_alarm_period)
       "cloudwatch_alarm_evaluation_periods"    = try(coalesce(lookup(v, "cloudwatch_alarm_evaluation_periods", null), local.merged_default_settings.cloudwatch_alarm_evaluation_periods), local.merged_default_settings.cloudwatch_alarm_evaluation_periods)
       "cloudwatch_alarm_datapoints_to_alarm"   = try(coalesce(lookup(v, "cloudwatch_alarm_datapoints_to_alarm", null), local.merged_default_settings.cloudwatch_alarm_datapoints_to_alarm), local.merged_default_settings.cloudwatch_alarm_datapoints_to_alarm)
+      "cloudwatch_4xx_minimum_requests"        = try(coalesce(lookup(v, "cloudwatch_4xx_minimum_requests", null), local.merged_default_settings.cloudwatch_4xx_minimum_requests), local.merged_default_settings.cloudwatch_4xx_minimum_requests)
       "cloudwatch_4xx_error_rate_threshold"    = try(coalesce(lookup(v, "cloudwatch_4xx_error_rate_threshold", null), local.merged_default_settings.cloudwatch_4xx_error_rate_threshold), local.merged_default_settings.cloudwatch_4xx_error_rate_threshold)
       "cloudwatch_5xx_error_rate_threshold"    = try(coalesce(lookup(v, "cloudwatch_5xx_error_rate_threshold", null), local.merged_default_settings.cloudwatch_5xx_error_rate_threshold), local.merged_default_settings.cloudwatch_5xx_error_rate_threshold)
       "s3_bucket"                              = try(coalesce(lookup(v, "s3_bucket", null), local.merged_default_settings.s3_bucket), local.merged_default_settings.s3_bucket)
@@ -469,20 +471,66 @@ resource "aws_cloudwatch_metric_alarm" "cloudfront_error_rate" {
   for_each = local.cloudfront_error_alarms
 
   alarm_name          = "${local.cloudfront_map[each.value.distribution_key].identifier}-${lower(each.value.metric_name)}"
-  alarm_description   = "CloudFront ${each.value.metric_name} exceeded the reviewed error-rate threshold."
-  namespace           = "AWS/CloudFront"
-  metric_name         = each.value.metric_name
-  statistic           = "Average"
+  alarm_description   = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? "CloudFront ${each.value.metric_name} exceeded the reviewed error-rate threshold at or above the minimum request count." : "CloudFront ${each.value.metric_name} exceeded the reviewed error-rate threshold."
+  namespace           = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? null : "AWS/CloudFront"
+  metric_name         = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? null : each.value.metric_name
+  statistic           = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? null : "Average"
   comparison_operator = "GreaterThanThreshold"
   threshold           = each.value.threshold
-  period              = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_period
+  period              = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? null : local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_period
   evaluation_periods  = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_evaluation_periods
   datapoints_to_alarm = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_datapoints_to_alarm
   treat_missing_data  = "notBreaching"
 
-  dimensions = {
+  dimensions = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? null : {
     DistributionId = module.cloudfront[each.value.distribution_key].cloudfront_distribution_id
     Region         = "Global"
+  }
+
+  dynamic "metric_query" {
+    for_each = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? [1] : []
+    content {
+      id          = "gated_error_rate"
+      expression  = "IF(request_count >= ${local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests}, error_rate, 0)"
+      label       = "4xx error rate above minimum request count"
+      return_data = true
+    }
+  }
+
+  dynamic "metric_query" {
+    for_each = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? [1] : []
+    content {
+      id          = "error_rate"
+      return_data = false
+      metric {
+        namespace   = "AWS/CloudFront"
+        metric_name = "4xxErrorRate"
+        period      = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_period
+        stat        = "Average"
+        dimensions = {
+          DistributionId = module.cloudfront[each.value.distribution_key].cloudfront_distribution_id
+          Region         = "Global"
+        }
+      }
+    }
+  }
+
+  dynamic "metric_query" {
+    for_each = each.value.metric_name == "4xxErrorRate" && local.cloudfront_map[each.value.distribution_key].cloudwatch_4xx_minimum_requests > 0 ? [1] : []
+    content {
+      id          = "request_count"
+      return_data = false
+      metric {
+        namespace   = "AWS/CloudFront"
+        metric_name = "Requests"
+        period      = local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_period
+        stat        = "Sum"
+        dimensions = {
+          DistributionId = module.cloudfront[each.value.distribution_key].cloudfront_distribution_id
+          Region         = "Global"
+        }
+      }
+    }
   }
 
   alarm_actions = length(local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_actions) > 0 ? local.cloudfront_map[each.value.distribution_key].cloudwatch_alarm_actions : aws_sns_topic.cloudfront_alarm[*].arn

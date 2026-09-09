@@ -25,7 +25,11 @@ and explicitly review thresholds. AWS supports alarms from multiple Regions
 targeting a common SNS topic, so an existing account-owned route can be reused;
 verify its topic policy and delivery during runtime acceptance. Missing traffic
 is non-breaching; successful recovery can route through
-`cloudwatch_ok_actions`.
+`cloudwatch_ok_actions`. Low-traffic sites can set
+`cloudwatch_4xx_minimum_requests` to require that many requests in the same
+period before the 4xx rate can breach. The default is `0`, which preserves the
+direct error-rate alarm for existing consumers. This guard does not change the
+5xx alarm.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
