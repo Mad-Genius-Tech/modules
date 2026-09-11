@@ -35,9 +35,7 @@
             "properties": {
                 "metrics": [
                     %{ for task_template in ecs_tasks_templates ~}
-                    [ "ECS/ContainerInsights", "CpuReserved", "TaskDefinitionFamily", "${task_template}", "ClusterName", "${ecs_cluster_name}", { "region": "${ecs_region}" } ],
-                    %{ endfor ~}%{ for task_template in ecs_tasks_templates ~}
-                    [ "ECS/ContainerInsights", "CpuUtilized", "TaskDefinitionFamily", "${task_template}", "ClusterName", "${ecs_cluster_name}", { "region": "${ecs_region}" } ]%{if index(ecs_tasks_templates, task_template) != length(ecs_tasks_templates) - 1},%{endif}
+                    [ "AWS/ECS", "CPUUtilization", "ServiceName", "${task_template}", "ClusterName", "${ecs_cluster_name}", { "region": "${ecs_region}" } ]%{if index(ecs_tasks_templates, task_template) != length(ecs_tasks_templates) - 1},%{endif}
                     %{ endfor ~}
                 ],
                 "view": "timeSeries",
@@ -47,7 +45,7 @@
                 "stat": "Average",
                 "yAxis": {
                     "left": {
-                        "label": "mCPU"
+                        "label": "CPU %"
                     }
                 }
             }
@@ -63,9 +61,7 @@
                 "stacked": false,
                 "metrics": [
                     %{ for task_template in ecs_tasks_templates ~}
-                    [ "ECS/ContainerInsights", "MemoryReserved", "TaskDefinitionFamily", "${task_template}", "ClusterName", "${ecs_cluster_name}", { "region": "${ecs_region}" } ],
-                    %{ endfor ~}%{ for task_template in ecs_tasks_templates ~}
-                    [ "ECS/ContainerInsights", "MemoryUtilized", "TaskDefinitionFamily", "${task_template}", "ClusterName", "${ecs_cluster_name}", { "region": "${ecs_region}" } ]%{if index(ecs_tasks_templates, task_template) != length(ecs_tasks_templates) - 1},%{endif}
+                    [ "AWS/ECS", "MemoryUtilization", "ServiceName", "${task_template}", "ClusterName", "${ecs_cluster_name}", { "region": "${ecs_region}" } ]%{if index(ecs_tasks_templates, task_template) != length(ecs_tasks_templates) - 1},%{endif}
                     %{ endfor ~}
                 ],
                 "region": "${ecs_region}"

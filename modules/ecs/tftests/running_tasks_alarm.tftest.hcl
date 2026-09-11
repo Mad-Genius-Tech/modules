@@ -52,7 +52,7 @@ run "stopped_service_missing_running_count_is_not_breaching" {
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["capture"].threshold == 0 &&
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["capture"].treat_missing_data == "notBreaching"
     )
-    error_message = "An intentionally stopped ECS service must not alarm solely because RunningTaskCount is absent."
+    error_message = "An intentionally stopped ECS service must not alarm solely because no task sample is published."
   }
 }
 
@@ -88,15 +88,15 @@ run "running_service_missing_count_remains_breaching" {
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].threshold == 2 &&
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].treat_missing_data == "breaching"
     )
-    error_message = "A running ECS service must still alarm when RunningTaskCount is missing or below its positive desired count."
+    error_message = "A running ECS service must still alarm when the per-task sample count is missing or below its positive desired count."
   }
 
   assert {
     condition = (
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].comparison_operator == "LessThanThreshold" &&
-      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].namespace == "ECS/ContainerInsights" &&
-      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].metric_name == "RunningTaskCount" &&
-      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].statistic == "Minimum" &&
+      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].namespace == "AWS/ECS" &&
+      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].metric_name == "CPUUtilization" &&
+      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].statistic == "SampleCount" &&
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].period == 60 &&
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].evaluation_periods == 2 &&
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].datapoints_to_alarm == 2 &&
@@ -106,6 +106,43 @@ run "running_service_missing_count_remains_breaching" {
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].dimensions["ClusterName"] == module.ecs_cluster.name &&
       aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].dimensions["ServiceName"] == output.ecs_map.api.identifier
     )
-    error_message = "The running-task alarm must preserve its existing metric, threshold window, actions, and ECS dimensions."
+    error_message = "The running-task alarm must read the free AWS/ECS per-task sample count and preserve its threshold window, actions, and ECS dimensions."
+  }
+}
+
+run "alarm_exists_without_container_insights" {
+  command = plan
+
+  variables {
+    org_name                       = "mgb"
+    stage_name                     = "test"
+    service_name                   = "fabric"
+    team_name                      = "platform"
+    tags                           = {}
+    private_subnets                = ["subnet-private"]
+    public_subnets                 = ["subnet-public"]
+    ingress_cidr_blocks            = ["10.0.0.0/16"]
+    vpc_id                         = "vpc-test"
+    vpc_cidr                       = "10.0.0.0/16"
+    create_internal_alb            = false
+    container_insights             = "disabled"
+    sns_topic_cloudwatch_alarm_arn = "arn:aws:sns:us-east-1:123456789012:alarms"
+
+    ecs_services = {
+      api = {
+        container_image                = "123456789012.dkr.ecr.us-east-1.amazonaws.com/api:test"
+        require_repository_credentials = false
+        desired_count                  = 1
+      }
+    }
+  }
+
+  assert {
+    condition = (
+      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].namespace == "AWS/ECS" &&
+      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].statistic == "SampleCount" &&
+      aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired["api"].threshold == 1
+    )
+    error_message = "Disabling Container Insights must not remove the running-task alarm; it reads the free AWS/ECS namespace."
   }
 }
