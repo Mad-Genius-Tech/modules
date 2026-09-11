@@ -86,24 +86,26 @@ resource "aws_cloudwatch_metric_alarm" "ecs_low_mem_reservation" {
   ]
 }
 
-# RunningTaskCount only exists in ECS/ContainerInsights, so this alarm is
-# gated on Container Insights being enabled in addition to the SNS topic;
-# callers with insights disabled see no diff.
+# Running-task liveness from the free AWS/ECS namespace: every running task
+# publishes one CPUUtilization sample per minute per service, so SampleCount
+# over a 60 s period equals the running task count. This no longer depends
+# on ECS/ContainerInsights (billed as ~30 custom metrics per service), so the
+# alarm exists whenever an SNS topic is configured, with insights on or off.
 resource "aws_cloudwatch_metric_alarm" "ecs_service_running_tasks_below_desired" {
   # Single for-expression (no conditional) so Terraform <= 1.8 does not
   # reject the heterogeneous object type against the empty-map fallback.
   for_each = {
     for k, v in local.ecs_map : k => v
-    if var.sns_topic_cloudwatch_alarm_arn != "" && contains(["enabled", "enhanced"], var.container_insights) && v.create && v.type == "service"
+    if var.sns_topic_cloudwatch_alarm_arn != "" && v.create && v.type == "service"
   }
 
   alarm_name          = "${each.value.identifier}-running-tasks-below-desired"
   alarm_description   = "ECS service ${each.value.identifier} has fewer running tasks than desired"
   comparison_operator = "LessThanThreshold"
   threshold           = each.value.desired_count
-  metric_name         = "RunningTaskCount"
-  namespace           = "ECS/ContainerInsights"
-  statistic           = "Minimum"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  statistic           = "SampleCount"
   period              = 60
   evaluation_periods  = 2
   datapoints_to_alarm = 2
