@@ -9,6 +9,7 @@ locals {
     logging_retention_days                 = 30
     enable_additional_metrics              = false
     enable_cloudwatch_alarms               = false
+    enable_cloudwatch_4xx_alarm            = true
     cloudwatch_alarm_actions               = []
     cloudwatch_ok_actions                  = []
     cloudwatch_alarm_period                = 300
@@ -110,6 +111,7 @@ locals {
       "logging_retention_days"                 = try(coalesce(lookup(v, "logging_retention_days", null), local.merged_default_settings.logging_retention_days), local.merged_default_settings.logging_retention_days)
       "enable_additional_metrics"              = try(coalesce(lookup(v, "enable_additional_metrics", null), local.merged_default_settings.enable_additional_metrics), local.merged_default_settings.enable_additional_metrics)
       "enable_cloudwatch_alarms"               = try(coalesce(lookup(v, "enable_cloudwatch_alarms", null), local.merged_default_settings.enable_cloudwatch_alarms), local.merged_default_settings.enable_cloudwatch_alarms)
+      "enable_cloudwatch_4xx_alarm"            = try(coalesce(lookup(v, "enable_cloudwatch_4xx_alarm", null), local.merged_default_settings.enable_cloudwatch_4xx_alarm), local.merged_default_settings.enable_cloudwatch_4xx_alarm)
       "cloudwatch_alarm_actions"               = try(coalesce(lookup(v, "cloudwatch_alarm_actions", null), local.merged_default_settings.cloudwatch_alarm_actions), local.merged_default_settings.cloudwatch_alarm_actions)
       "cloudwatch_ok_actions"                  = try(coalesce(lookup(v, "cloudwatch_ok_actions", null), local.merged_default_settings.cloudwatch_ok_actions), local.merged_default_settings.cloudwatch_ok_actions)
       "cloudwatch_alarm_period"                = try(coalesce(lookup(v, "cloudwatch_alarm_period", null), local.merged_default_settings.cloudwatch_alarm_period), local.merged_default_settings.cloudwatch_alarm_period)
@@ -167,7 +169,7 @@ locals {
         distribution_key = distribution_key
         metric_name      = metric_name
         threshold        = threshold
-      }
+      } if metric_name != "4xxErrorRate" || config.enable_cloudwatch_4xx_alarm
     } if config.enable_cloudwatch_alarms
   ]...)
 }

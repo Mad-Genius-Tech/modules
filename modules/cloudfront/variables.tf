@@ -7,6 +7,7 @@ variable "cloudfront" {
     logging_retention_days                 = optional(number)
     enable_additional_metrics              = optional(bool)
     enable_cloudwatch_alarms               = optional(bool)
+    enable_cloudwatch_4xx_alarm            = optional(bool)
     cloudwatch_alarm_actions               = optional(list(string))
     cloudwatch_ok_actions                  = optional(list(string))
     cloudwatch_alarm_period                = optional(number)

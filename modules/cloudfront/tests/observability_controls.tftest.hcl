@@ -377,3 +377,64 @@ run "module_topic_backs_alarms_without_explicit_actions" {
     error_message = "Alarms without explicit actions must still be created when the module-owned topic exists."
   }
 }
+
+run "disable_4xx_preserves_5xx_and_logging" {
+  command = plan
+
+  variables {
+    org_name     = "mgb"
+    stage_name   = "test"
+    service_name = "cloudfront"
+    team_name    = "platform"
+    tags         = {}
+
+    alarm_topic_email_subscriptions = ["edge-alerts@example.com"]
+
+    cloudfront = {
+      routed = {
+        use_acm_cert                        = false
+        domain_name                         = "example.com"
+        s3_bucket                           = "example-site"
+        enable_cloudwatch_alarms            = true
+        enable_cloudwatch_4xx_alarm         = false
+        enable_standard_logging_v2          = true
+        logging_retention_days              = 30
+        enable_additional_metrics           = true
+        cloudwatch_5xx_error_rate_threshold = 5
+        cloudwatch_alarm_actions            = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
+        cloudwatch_ok_actions               = ["arn:aws:sns:us-east-1:123456789012:edge-alerts"]
+      }
+    }
+  }
+
+  assert {
+    condition     = toset(keys(aws_cloudwatch_metric_alarm.cloudfront_error_rate)) == toset(["routed-5xxErrorRate"])
+    error_message = "Disabling 4xx paging must remove only that alarm and preserve the existing 5xx resource address."
+  }
+
+  assert {
+    condition = (
+      aws_cloudwatch_metric_alarm.cloudfront_error_rate["routed-5xxErrorRate"].metric_name == "5xxErrorRate" &&
+      aws_cloudwatch_metric_alarm.cloudfront_error_rate["routed-5xxErrorRate"].threshold == 5 &&
+      aws_cloudwatch_metric_alarm.cloudfront_error_rate["routed-5xxErrorRate"].period == 300 &&
+      aws_cloudwatch_metric_alarm.cloudfront_error_rate["routed-5xxErrorRate"].evaluation_periods == 2 &&
+      aws_cloudwatch_metric_alarm.cloudfront_error_rate["routed-5xxErrorRate"].datapoints_to_alarm == 2 &&
+      aws_cloudwatch_metric_alarm.cloudfront_error_rate["routed-5xxErrorRate"].treat_missing_data == "notBreaching" &&
+      aws_cloudwatch_metric_alarm.cloudfront_error_rate["routed-5xxErrorRate"].alarm_actions == toset(["arn:aws:sns:us-east-1:123456789012:edge-alerts"]) &&
+      aws_cloudwatch_metric_alarm.cloudfront_error_rate["routed-5xxErrorRate"].ok_actions == toset(["arn:aws:sns:us-east-1:123456789012:edge-alerts"])
+    )
+    error_message = "The existing 5xx threshold, evaluation settings and notification actions must remain unchanged."
+  }
+
+  assert {
+    condition = (
+      length(aws_sns_topic.cloudfront_alarm) == 1 &&
+      length(aws_sns_topic_subscription.cloudfront_alarm_email) == 1 &&
+      length(aws_cloudwatch_log_delivery.standard_v2) == 1 &&
+      length(module.s3_bucket) == 1 &&
+      length(aws_cloudfront_monitoring_subscription.additional_metrics) == 1 &&
+      local.cloudfront_map.routed.logging_retention_days == 30
+    )
+    error_message = "Retiring 4xx paging must preserve the notification route, access logging, retention and additional metrics."
+  }
+}
