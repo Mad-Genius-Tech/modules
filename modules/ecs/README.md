@@ -13,6 +13,15 @@ roles, queue, logs, or prior immutable artifacts. The Scheduler target always
 uses Fargate, a disabled flexible time window, private subnet defaults, and no
 public IP unless a caller explicitly overrides the network fields.
 
+The cluster task-failure rule excludes successful standalone tasks that stop
+with `EssentialContainerExited` and exit code 0. It retains nonzero exits,
+startup and infrastructure failures, and unexpected ECS service-task stops;
+the existing scaling exclusion still applies. Validate the mock-rendered
+patterns with Terraform's notification-delivery tests, then run
+`python3 tests/test_failure_patterns.py <terraform-test-jsonl> --profile <profile>`
+from this module. The script uses only AWS's read-only `TestEventPattern` API
+and never publishes an event or notification.
+
 ### Stable identities and one-shot containers
 
 Callers that need exact IAM identities can set:

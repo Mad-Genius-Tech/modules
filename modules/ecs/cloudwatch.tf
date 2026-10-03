@@ -234,6 +234,13 @@ resource "aws_cloudwatch_event_rule" "ecs_task_failure" {
           "prefix" = "Scaling activity initiated by"
         }
       }]
+      # A standalone command exiting 0 is expected; service-task exits and
+      # startup/infrastructure failures still need operator attention.
+      "$or" = [
+        { stopCode = [{ "anything-but" = "EssentialContainerExited" }] },
+        { group = [{ prefix = "service:" }] },
+        { containers = { exitCode = [{ "anything-but" = 0 }] } },
+      ]
     }
   })
 }
