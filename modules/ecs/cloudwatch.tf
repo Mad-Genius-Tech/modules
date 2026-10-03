@@ -239,7 +239,7 @@ resource "aws_cloudwatch_event_rule" "ecs_task_failure" {
       "$or" = [
         { stopCode = [{ "anything-but" = "EssentialContainerExited" }] },
         { group = [{ prefix = "service:" }] },
-        { containers = { exitCode = [{ "anything-but" = 0 }] } },
+        { containers = { exitCode = [{ "anything-but" = 0 }, { exists = false }] } },
       ]
     }
   })

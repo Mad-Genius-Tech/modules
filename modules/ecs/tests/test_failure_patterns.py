@@ -42,6 +42,8 @@ cases = [
     ('scheduled nonzero exit', {'containers': [{'name': 'auth', 'exitCode': 1}]}, (True, True)),
     ('nonzero exit among multiple containers', {'containers': [{'name': 'auth', 'exitCode': 0},
                                                               {'name': 'worker', 'exitCode': 137}]}, (True, True)),
+    ('essential exit with unknown exit code', {'containers': [{'name': 'auth'}]}, (True, False)),
+    ('essential exit without container metadata', {'containers': []}, (True, False)),
     ('startup failure without exit code', {'stopCode': 'TaskFailedToStart',
                                          'stoppedReason': 'ResourceInitializationError', 'containers': []}, (True, False)),
     ('unexpected service stop with exit zero', {'group': 'service:mgb-test-fabric-auth'}, (True, False)),
@@ -66,4 +68,4 @@ for label, changes, expected in cases:
         assert result.returncode == 0, f'AWS matcher request failed for {label}/{name}'
         assert json.loads(result.stdout)['Result'] is match, f'wrong match for {label}/{name}'
     print(f'PASS: {label}')
-print('20 native EventBridge pattern checks passed; no event published.')
+print('24 native EventBridge pattern checks passed; no event published.')

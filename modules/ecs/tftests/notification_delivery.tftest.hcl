@@ -101,7 +101,7 @@ run "successful_standalone_tasks_are_not_failures" {
     condition = try(jsondecode(aws_cloudwatch_event_rule.ecs_task_failure.event_pattern).detail["$or"], null) == jsondecode(jsonencode([
       { stopCode = [{ "anything-but" = "EssentialContainerExited" }] },
       { group = [{ prefix = "service:" }] },
-      { containers = { exitCode = [{ "anything-but" = 0 }] } },
+      { containers = { exitCode = [{ "anything-but" = 0 }, { exists = false }] } },
     ]))
     error_message = "STOPPED standalone tasks must have a failure stop code or nonzero exit; service-task stops remain monitored."
   }
