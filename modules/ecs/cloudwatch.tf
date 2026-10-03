@@ -141,10 +141,58 @@ resource "aws_cloudwatch_event_rule" "ecs_deployment_failure" {
   event_pattern = jsonencode({
     "source"      = ["aws.ecs"],
     "detail-type" = ["ECS Deployment State Change"],
+    "resources"   = [{ "prefix" = "${replace(module.ecs_cluster.arn, ":cluster/", ":service/")}/" }],
     "detail" = {
       "eventType" = ["ERROR"],
       "eventName" = ["SERVICE_DEPLOYMENT_FAILED"]
     }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "ecs_deployment_failure" {
+  count      = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
+  rule       = aws_cloudwatch_event_rule.ecs_deployment_failure.name
+  arn        = var.sns_topic_cloudwatch_alarm_arn
+  role_arn   = aws_iam_role.ecs_alert_publisher[0].arn
+  depends_on = [aws_iam_role_policy.ecs_alert_publisher]
+}
+
+# An execution role bounds publication to this topic and these three rules.
+resource "aws_iam_role" "ecs_alert_publisher" {
+  count = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
+  name  = "${module.ecs_cluster.name}-alert-publisher"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+      Condition = {
+        StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
+        ArnEquals = {
+          "aws:SourceArn" = [
+            aws_cloudwatch_event_rule.ecs_deployment_failure.arn,
+            aws_cloudwatch_event_rule.ecs_task_failure.arn,
+            aws_cloudwatch_event_rule.ecs_task_stopped.arn,
+          ]
+        }
+      }
+    }]
+  })
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy" "ecs_alert_publisher" {
+  count = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
+  name  = "PublishECSAlerts"
+  role  = aws_iam_role.ecs_alert_publisher[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "sns:Publish"
+      Resource = var.sns_topic_cloudwatch_alarm_arn
+    }]
   })
 }
 
@@ -179,6 +227,7 @@ resource "aws_cloudwatch_event_rule" "ecs_task_failure" {
     "source"      = ["aws.ecs"],
     "detail-type" = ["ECS Task State Change"],
     "detail" = {
+      "clusterArn" = [module.ecs_cluster.arn],
       "lastStatus" = ["STOPPED"],
       "stoppedReason" = [{
         "anything-but" = {
@@ -209,17 +258,21 @@ resource "aws_cloudwatch_event_rule" "ecs_task_stopped" {
 }
 
 resource "aws_cloudwatch_event_target" "ecs_task_stopped" {
-  count = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
-  rule  = aws_cloudwatch_event_rule.ecs_task_stopped.name
-  arn   = var.sns_topic_cloudwatch_alarm_arn
-  input = "{ \"message\": \"Essential container in task exited\", \"account_id\": \"${data.aws_caller_identity.current.account_id}\", \"cluster\": \"${module.ecs_cluster.name}\"}"
+  count      = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
+  rule       = aws_cloudwatch_event_rule.ecs_task_stopped.name
+  arn        = var.sns_topic_cloudwatch_alarm_arn
+  role_arn   = aws_iam_role.ecs_alert_publisher[0].arn
+  depends_on = [aws_iam_role_policy.ecs_alert_publisher]
+  input      = "{ \"message\": \"Essential container in task exited\", \"account_id\": \"${data.aws_caller_identity.current.account_id}\", \"cluster\": \"${module.ecs_cluster.name}\"}"
 }
 
 
 resource "aws_cloudwatch_event_target" "ecs_task_failure" {
-  count = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
-  rule  = aws_cloudwatch_event_rule.ecs_task_failure.name
-  arn   = var.sns_topic_cloudwatch_alarm_arn
+  count      = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
+  rule       = aws_cloudwatch_event_rule.ecs_task_failure.name
+  arn        = var.sns_topic_cloudwatch_alarm_arn
+  role_arn   = aws_iam_role.ecs_alert_publisher[0].arn
+  depends_on = [aws_iam_role_policy.ecs_alert_publisher]
   input_transformer {
     input_paths = {
       "AZ"              = "$.detail.availabilityZone"

@@ -20,29 +20,33 @@ resource "aws_sns_topic_subscription" "subscription" {
   endpoint  = each.value
 }
 
-data "aws_region" "current" {}
-
-locals {
-  lambda_layer = {
-    "us-east-1"  = "arn:aws:lambda:us-east-1:668099181075:layer:AWSLambda-Python-AWS-SDK:4"
-    "us-west-2"  = "arn:aws:lambda:us-west-2:420165488524:layer:AWSLambda-Python-AWS-SDK:5"
-    "eu-north-1" = "arn:aws:lambda:eu-north-1:642425348156:layer:AWSLambda-Python-AWS-SDK:4"
-  }
+module "sns" {
+  source               = "./slack"
+  create               = var.create && var.webhook_url != ""
+  lambda_function_name = "${module.context.id}-slack"
+  sns_topic_arn        = try(aws_sns_topic.topic[0].arn, "")
+  webhook_url          = var.webhook_url
+  tags                 = local.tags
 }
 
-module "sns" {
-  #source                                 = "ganexcloud/lambda-notifications/aws"
-  #version                                = "~> 1.0.8"
-  source                                 = "git::https://github.com/debu99/terraform-aws-lambda-notifications.git"
-  create                                 = var.create && var.webhook_url != ""
-  create_sns_topic                       = false
-  lambda_function_name                   = "${module.context.id}-slack"
-  sns_topic_name                         = aws_sns_topic.topic[0].name
-  messenger                              = "slack"
-  webhook_url                            = var.webhook_url
-  lambda_layers                          = [local.lambda_layer[data.aws_region.current.name]]
-  cloudwatch_log_group_retention_in_days = 1
-  tags                                   = local.tags
+resource "aws_cloudwatch_metric_alarm" "slack_delivery_errors" {
+  count               = var.create && var.webhook_url != "" ? 1 : 0
+  alarm_name          = "${module.context.id}-slack-errors"
+  alarm_description   = "Slack notification delivery failed. Inspect the forwarder logs; the SNS email subscription provides an independent notification path."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  dimensions          = { FunctionName = "${module.context.id}-slack" }
+  alarm_actions       = [aws_sns_topic.topic[0].arn]
+  ok_actions          = []
+  # Do not send OK actions to the failing forwarder: its own error alert can
+  # fail delivery and otherwise generate an ALARM/OK notification loop.
+  tags = local.tags
 }
 
 data "aws_caller_identity" "current" {}
@@ -70,7 +74,21 @@ resource "aws_sns_topic_policy" "aws_budget" {
         }
         Action   = "SNS:Publish"
         Resource = module.sns.sns_topic_arn
-      }
+      },
+      {
+        Sid    = "AWSAnomalyDetectionSNSPublishingPermissions"
+        Effect = "Allow"
+        Principal = {
+          Service = "costalerts.amazonaws.com"
+        }
+        Action   = "SNS:Publish"
+        Resource = module.sns.sns_topic_arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
     ]
   })
 }
