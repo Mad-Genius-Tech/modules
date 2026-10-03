@@ -94,6 +94,19 @@ run "failures_reach_sns_with_cluster_and_topic_scoped_permissions" {
   }
 }
 
+run "successful_standalone_tasks_are_not_failures" {
+  command = plan
+
+  assert {
+    condition = try(jsondecode(aws_cloudwatch_event_rule.ecs_task_failure.event_pattern).detail["$or"], null) == jsondecode(jsonencode([
+      { stopCode = [{ "anything-but" = "EssentialContainerExited" }] },
+      { group = [{ prefix = "service:" }] },
+      { containers = { exitCode = [{ "anything-but" = 0 }, { exists = false }] } },
+    ]))
+    error_message = "STOPPED standalone tasks must have a failure stop code or nonzero exit; service-task stops remain monitored."
+  }
+}
+
 run "notifications_disabled_creates_no_publish_role_or_failure_targets" {
   command = plan
   variables { sns_topic_cloudwatch_alarm_arn = "" }
