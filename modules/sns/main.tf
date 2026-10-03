@@ -75,6 +75,20 @@ resource "aws_sns_topic_policy" "aws_budget" {
         Action   = "SNS:Publish"
         Resource = module.sns.sns_topic_arn
       },
+      {
+        Sid    = "AWSAnomalyDetectionSNSPublishingPermissions"
+        Effect = "Allow"
+        Principal = {
+          Service = "costalerts.amazonaws.com"
+        }
+        Action   = "SNS:Publish"
+        Resource = module.sns.sns_topic_arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
     ]
   })
 }

@@ -82,3 +82,30 @@ run "adapter_preserves_existing_resource_names_and_retains_diagnostics" {
     error_message = "The replacement adapter must retain existing Lambda, role, log group and subscription identities while retaining diagnostics for 30 days."
   }
 }
+
+run "cost_anomalies_can_publish_for_the_owning_account" {
+  command = apply
+  variables { webhook_url = "" }
+
+  assert {
+    condition = length([
+      for statement in jsondecode(aws_sns_topic_policy.aws_budget.policy).Statement : statement
+      if try(
+        statement.Effect == "Allow" &&
+        statement.Principal.Service == "costalerts.amazonaws.com" &&
+        statement.Action == "SNS:Publish" &&
+        statement.Resource == aws_sns_topic.topic[0].arn &&
+        statement.Condition.StringEquals["aws:SourceAccount"] == "123456789012",
+        false
+      )
+    ]) == 1
+    error_message = "Cost Anomaly Detection must be allowed to publish to the topic only on behalf of the owning account."
+  }
+
+  assert {
+    condition = toset([
+      for statement in jsondecode(aws_sns_topic_policy.aws_budget.policy).Statement : statement.Principal.Service
+    ]) == toset(["budgets.amazonaws.com", "cloudwatch.amazonaws.com", "costalerts.amazonaws.com"])
+    error_message = "The cost-anomaly grant must retain the existing Budgets and CloudWatch publishers."
+  }
+}

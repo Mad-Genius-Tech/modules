@@ -5,6 +5,10 @@ configured, the Python standard-library adapter in `slack/`. The adapter accepts
 SNS text, including CloudWatch alarm JSON and ECS event JSON, and raises
 sanitized errors when Slack rejects delivery. It uses no Lambda SDK layer.
 
+The topic policy permits Budgets, CloudWatch and Cost Anomaly Detection to
+publish. Cost Anomaly Detection is restricted to the account that owns the
+topic, including topics with email delivery and no Slack forwarder.
+
 The forwarder retains logs for 30 days. Its error alarm publishes to the same
 topic; configure a confirmed email subscription as an independent route. The
 alarm has no recovery action, which prevents its own failed notification from
