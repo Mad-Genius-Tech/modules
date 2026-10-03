@@ -15,12 +15,17 @@ public IP unless a caller explicitly overrides the network fields.
 
 The cluster task-failure rule excludes successful standalone tasks that stop
 with `EssentialContainerExited` and exit code 0. It retains nonzero exits,
-unknown exit outcomes, startup and infrastructure failures, and unexpected ECS service-task stops;
+events with no reported exit codes, startup and infrastructure failures, and
+unexpected ECS service-task stops;
 the existing scaling exclusion still applies. Validate the mock-rendered
 patterns with Terraform's notification-delivery tests, then run
 `python3 tests/test_failure_patterns.py <terraform-test-jsonl> --profile <profile>`
 from this module. The script uses only AWS's read-only `TestEventPattern` API
 and never publishes an event or notification.
+EventBridge checks field existence across the container array: a standalone
+completion mixing an unreported exit with a reported zero is suppressed.
+A reported nonzero exit still matches. Service-task stops and startup failures
+remain monitored independently of container exit metadata.
 
 ### Stable identities and one-shot containers
 
