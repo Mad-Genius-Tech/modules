@@ -42,7 +42,8 @@ run "forwarder_failures_have_an_independent_notification_route" {
       aws_cloudwatch_metric_alarm.slack_delivery_errors[0].treat_missing_data == "notBreaching" &&
       toset(aws_cloudwatch_metric_alarm.slack_delivery_errors[0].alarm_actions) == toset([aws_sns_topic.topic[0].arn]) &&
       length(aws_cloudwatch_metric_alarm.slack_delivery_errors[0].ok_actions) == 0 &&
-      aws_sns_topic_subscription.subscription["monitoring@example.invalid"].protocol == "email"
+      aws_sns_topic_subscription.subscription["monitoring@example.invalid"].protocol == "email" &&
+      aws_sns_topic_subscription.subscription["monitoring@example.invalid"].filter_policy == null
     )
     error_message = "Forwarder errors must notify the same SNS topic with an independent email route and no recovery-notification loop."
   }
@@ -56,6 +57,39 @@ run "email_only_topic_does_not_monitor_a_disabled_forwarder" {
     condition     = length(aws_cloudwatch_metric_alarm.slack_delivery_errors) == 0
     error_message = "An email-only topic must not create a Slack forwarder error alarm."
   }
+}
+
+run "email_fallback_receives_only_forwarder_failures" {
+  command = apply
+
+  variables {
+    sns_email_message_body_filter_policy = jsonencode({
+      AlarmName = ["mgb-test-sns-slack-errors"]
+    })
+  }
+
+  assert {
+    condition = (
+      aws_sns_topic_subscription.subscription["monitoring@example.invalid"].filter_policy_scope == "MessageBody" &&
+      jsondecode(aws_sns_topic_subscription.subscription["monitoring@example.invalid"].filter_policy).AlarmName ==
+      [aws_cloudwatch_metric_alarm.slack_delivery_errors[0].alarm_name] &&
+      aws_sns_topic_subscription.subscription["monitoring@example.invalid"].endpoint == "monitoring@example.invalid" &&
+      module.sns.sns_topic_arn == aws_sns_topic.topic[0].arn
+    )
+    error_message = "Keep the email identity and match the forwarder error alarm in the message body without filtering the Slack route."
+  }
+}
+
+run "email_message_body_filter_rejects_non_object_json" {
+  command = plan
+  variables { sns_email_message_body_filter_policy = "[]" }
+  expect_failures = [var.sns_email_message_body_filter_policy]
+}
+
+run "email_message_body_filter_rejects_invalid_json" {
+  command = plan
+  variables { sns_email_message_body_filter_policy = "invalid" }
+  expect_failures = [var.sns_email_message_body_filter_policy]
 }
 
 run "adapter_preserves_existing_resource_names_and_retains_diagnostics" {

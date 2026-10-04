@@ -14,10 +14,12 @@ resource "aws_sns_topic" "topic" {
 }
 
 resource "aws_sns_topic_subscription" "subscription" {
-  for_each  = local.sns_email_subscriptions
-  topic_arn = aws_sns_topic.topic[0].arn
-  protocol  = "email"
-  endpoint  = each.value
+  for_each            = local.sns_email_subscriptions
+  topic_arn           = aws_sns_topic.topic[0].arn
+  protocol            = "email"
+  endpoint            = each.value
+  filter_policy       = var.sns_email_message_body_filter_policy
+  filter_policy_scope = var.sns_email_message_body_filter_policy != null ? "MessageBody" : null
 }
 
 module "sns" {
