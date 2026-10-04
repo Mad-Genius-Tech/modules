@@ -14,6 +14,12 @@ topic; configure a confirmed email subscription as an independent route. The
 alarm has no recovery action, which prevents its own failed notification from
 starting an ALARM/OK notification loop.
 
+Use `sns_email_message_body_filter_policy` to narrow email delivery with a JSON
+message-body policy. For example, `jsonencode({ AlarmName = ["mgb-dev-sns-slack-errors"] })`
+retains email for the forwarder's own failure alarm while ordinary notifications
+use Slack. The default is null, which preserves unfiltered email delivery.
+The filter does not change the Lambda subscription or its notification path.
+
 Run `python3 tests/test_slack.py` and `terraform test -test-directory=tftests`
 from this directory. Terraform tests mock AWS and do not send notifications.
 Runtime regression tests can also run in the AWS Lambda Python 3.10 image with
@@ -58,6 +64,7 @@ No requirements.
 | <a name="input_create"></a> [create](#input\_create) | n/a | `bool` | `true` | no |
 | <a name="input_org_name"></a> [org\_name](#input\_org\_name) | n/a | `string` | n/a | yes |
 | <a name="input_service_name"></a> [service\_name](#input\_service\_name) | n/a | `string` | n/a | yes |
+| <a name="input_sns_email_message_body_filter_policy"></a> [sns\_email\_message\_body\_filter\_policy](#input\_sns\_email\_message\_body\_filter\_policy) | Optional SNS message-body filter policy as a JSON object for email subscriptions. Null preserves unfiltered email delivery. | `string` | `null` | no |
 | <a name="input_sns_email_subscriptions"></a> [sns\_email\_subscriptions](#input\_sns\_email\_subscriptions) | n/a | `list(string)` | `[]` | no |
 | <a name="input_stage_name"></a> [stage\_name](#input\_stage\_name) | n/a | `string` | n/a | yes |
 | <a name="input_tags"></a> [tags](#input\_tags) | n/a | `map(any)` | `{}` | no |
