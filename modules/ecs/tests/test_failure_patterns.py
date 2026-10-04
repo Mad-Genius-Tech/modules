@@ -16,17 +16,20 @@ parser.add_argument('terraform_test_jsonl')
 parser.add_argument('--profile', required=True)
 parser.add_argument('--region', default='us-west-2')
 args = parser.parse_args()
+addresses = {
+    'aws_cloudwatch_event_rule.ecs_service_task_failure["auth"]': 'service_task_failure',
+    'aws_cloudwatch_event_rule.ecs_standalone_task_failure[0]': 'standalone_task_failure',
+}
 patterns = {}
 with open(args.terraform_test_jsonl) as source:
     for line in source:
         record = json.loads(line)
         if record.get('type') == 'test_state':
             for resource in record['test_state']['root_module']['resources']:
-                for name in ('task_failure', 'task_stopped'):
-                    if resource['address'] == f'aws_cloudwatch_event_rule.ecs_{name}':
-                        patterns[name] = json.loads(resource['values']['event_pattern'])
-assert set(patterns) == {'task_failure', 'task_stopped'}, 'mock-applied notification patterns required'
-cluster = patterns['task_failure']['detail']['clusterArn'][0]
+                if resource['address'] in addresses:
+                    patterns[addresses[resource['address']]] = json.loads(resource['values']['event_pattern'])
+assert set(patterns) == {'service_task_failure', 'standalone_task_failure'}, 'mock-applied notification patterns required'
+cluster = patterns['service_task_failure']['detail']['clusterArn'][0]
 base = {
     'version': '0', 'id': '11111111-1111-1111-1111-111111111111',
     'detail-type': 'ECS Task State Change', 'source': 'aws.ecs',
@@ -39,31 +42,40 @@ base = {
 }
 cases = [
     ('successful scheduled command', {}, (False, False)),
-    ('scheduled nonzero exit', {'containers': [{'name': 'auth', 'exitCode': 1}]}, (True, True)),
+    ('scheduled nonzero exit', {'containers': [{'name': 'auth', 'exitCode': 1}]}, (False, True)),
     ('nonzero exit among multiple containers', {'containers': [{'name': 'auth', 'exitCode': 0},
-                                                              {'name': 'worker', 'exitCode': 137}]}, (True, True)),
-    ('essential exit with unknown exit code', {'containers': [{'name': 'auth'}]}, (True, False)),
-    ('essential exit without container metadata', {'containers': []}, (True, False)),
+                                                              {'name': 'worker', 'exitCode': 137}]}, (False, True)),
+    ('essential exit with unknown exit code', {'containers': [{'name': 'auth'}]}, (False, True)),
+    ('essential exit without container metadata', {'containers': []}, (False, True)),
     # EventBridge exists:false applies across the array, not to each element.
     ('mixed unknown and zero native matching limit', {'containers': [{'name': 'auth'},
                                                                     {'name': 'worker', 'exitCode': 0}]}, (False, False)),
     ('startup failure without exit code', {'stopCode': 'TaskFailedToStart',
-                                         'stoppedReason': 'ResourceInitializationError', 'containers': []}, (True, False)),
+                                         'stoppedReason': 'ResourceInitializationError', 'containers': []}, (False, True)),
     ('unexpected service stop with exit zero', {'group': 'service:mgb-test-fabric-auth'}, (True, False)),
     ('unexpected service nonzero exit', {'group': 'service:mgb-test-fabric-auth',
-                                       'containers': [{'name': 'auth', 'exitCode': 1}]}, (True, True)),
+                                       'containers': [{'name': 'auth', 'exitCode': 1}]}, (True, False)),
     ('infrastructure termination', {'stopCode': 'SpotInterruption',
-                                   'stoppedReason': 'Your Spot Task was interrupted', 'containers': []}, (True, False)),
+                                   'stoppedReason': 'Your Spot Task was interrupted', 'containers': []}, (False, False)),
     ('routine scaling', {'group': 'service:mgb-test-fabric-auth', 'stopCode': 'ServiceSchedulerInitiated',
                         'stoppedReason': 'Scaling activity initiated by deployment ecs-svc/123'}, (False, False)),
+    ('service Spot interruption', {'group': 'service:mgb-test-fabric-auth', 'stopCode': 'SpotInterruption'}, (False, False)),
+    ('another service', {'group': 'service:mgb-test-fabric-other'}, (False, False)),
+    ('service health replacement', {'group': 'service:mgb-test-fabric-auth', 'stopCode': 'ServiceSchedulerInitiated', 'stoppedReason': 'Task failed ELB health checks'}, (True, False)),
     ('other cluster failure', {'clusterArn': cluster + '-other',
                                'containers': [{'name': 'auth', 'exitCode': 1}]}, (False, False)),
+    ('service missing stopCode', {'group': 'service:mgb-test-fabric-auth', 'stopCode': None}, (False, False)),
+    ('standalone missing stopCode', {'stopCode': None, 'containers': [{'exitCode': 1}]}, (False, False)),
+    ('missing group', {'group': None, 'containers': [{'exitCode': 1}]}, (False, False)),
     ('running task', {'lastStatus': 'RUNNING', 'containers': [{'name': 'auth', 'exitCode': 1}]}, (False, False)),
 ]
 for label, changes, expected in cases:
     event = copy.deepcopy(base)
     event['detail'].update(changes)
-    for name, match in zip(('task_failure', 'task_stopped'), expected):
+    for key, value in changes.items():
+        if value is None:
+            del event['detail'][key]
+    for name, match in zip(('service_task_failure', 'standalone_task_failure'), expected):
         result = subprocess.run([
             'aws', '--profile', args.profile, '--region', args.region, 'events', 'test-event-pattern',
             '--event-pattern', json.dumps(patterns[name]), '--event', json.dumps(event),
@@ -71,4 +83,4 @@ for label, changes, expected in cases:
         assert result.returncode == 0, f'AWS matcher request failed for {label}/{name}'
         assert json.loads(result.stdout)['Result'] is match, f'wrong match for {label}/{name}'
     print(f'PASS: {label}')
-print('26 native EventBridge pattern checks passed; no event published.')
+print(f'{len(cases) * 2} native EventBridge pattern checks passed; no event published.')
