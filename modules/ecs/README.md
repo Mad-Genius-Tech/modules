@@ -132,7 +132,9 @@ artifact traffic stays on the environment's gateway endpoint.
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
-No requirements.
+| Name | Version |
+|------|---------|
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.36.0 |
 
 ## Providers
 

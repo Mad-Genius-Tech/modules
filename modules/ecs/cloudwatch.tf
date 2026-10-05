@@ -359,10 +359,11 @@ resource "aws_cloudwatch_event_rule" "ecs_events" {
 }
 
 # CloudWatch Logs targets use a resource policy, not an EventBridge role.
+# Attach it to this group to avoid consuming the account policy quota.
 # Grant delivery only to this cluster's existing event-log group streams.
 # https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
 resource "aws_cloudwatch_log_resource_policy" "ecs_events" {
-  policy_name = "${module.ecs_cluster.name}-events-to-logs"
+  resource_arn = trimsuffix(aws_cloudwatch_log_group.ecs_events.arn, ":*")
   policy_document = jsonencode({
     Version = "2012-10-17"
     Statement = [{

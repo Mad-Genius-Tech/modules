@@ -60,7 +60,8 @@ run "event_delivery_is_scoped_to_one_log_group" {
 
   assert {
     condition = (
-      aws_cloudwatch_log_resource_policy.ecs_events.policy_name == "mgb-test-fabric-events-to-logs" &&
+      aws_cloudwatch_log_resource_policy.ecs_events.policy_name == null &&
+      aws_cloudwatch_log_resource_policy.ecs_events.resource_arn == "arn:aws:logs:us-west-2:123456789012:log-group:/ecs/events/mgb-test-fabric" &&
       aws_cloudwatch_event_target.ecs_events.role_arn == null &&
       aws_cloudwatch_event_target.ecs_events.arn == aws_cloudwatch_log_group.ecs_events.arn &&
       aws_cloudwatch_event_target.ecs_events.rule == aws_cloudwatch_event_rule.ecs_events.name &&
@@ -77,6 +78,8 @@ run "event_logging_is_independent_of_sns" {
   assert {
     condition = (
       length(aws_iam_role.ecs_alert_publisher) == 0 &&
+      aws_cloudwatch_log_resource_policy.ecs_events.policy_name == null &&
+      aws_cloudwatch_log_resource_policy.ecs_events.resource_arn == "arn:aws:logs:us-west-2:123456789012:log-group:/ecs/events/mgb-test-fabric" &&
       jsondecode(aws_cloudwatch_log_resource_policy.ecs_events.policy_document).Statement[0].Resource ==
       "arn:aws:logs:us-west-2:123456789012:log-group:/ecs/events/mgb-test-fabric:*" &&
       aws_cloudwatch_event_target.ecs_events.role_arn == null
