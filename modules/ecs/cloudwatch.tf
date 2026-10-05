@@ -157,7 +157,7 @@ resource "aws_cloudwatch_event_target" "ecs_deployment_failure" {
   depends_on = [aws_iam_role_policy.ecs_alert_publisher]
 }
 
-# An execution role bounds publication to this topic and these three rules.
+# EventBridge may publish deployment failures only; task-failure alarms use CloudWatch.
 resource "aws_iam_role" "ecs_alert_publisher" {
   count = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
   name  = "${module.ecs_cluster.name}-alert-publisher"
@@ -172,8 +172,6 @@ resource "aws_iam_role" "ecs_alert_publisher" {
         ArnEquals = {
           "aws:SourceArn" = [
             aws_cloudwatch_event_rule.ecs_deployment_failure.arn,
-            aws_cloudwatch_event_rule.ecs_task_failure.arn,
-            aws_cloudwatch_event_rule.ecs_task_stopped.arn,
           ]
         }
       }
@@ -220,92 +218,133 @@ resource "aws_iam_role_policy" "ecs_alert_publisher" {
 # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs_cwe_events.html#ecs_service_deployment_events
 
 
-resource "aws_cloudwatch_event_rule" "ecs_task_failure" {
-  name        = "${module.ecs_cluster.name}-task-failure"
-  description = "ECS ${module.ecs_cluster.name} Task Failure"
-  event_pattern = jsonencode({
-    "source"      = ["aws.ecs"],
-    "detail-type" = ["ECS Task State Change"],
-    "detail" = {
-      "clusterArn" = [module.ecs_cluster.arn],
-      "lastStatus" = ["STOPPED"],
-      "stoppedReason" = [{
-        "anything-but" = {
-          "prefix" = "Scaling activity initiated by"
-        }
-      }]
-      # A standalone command exiting 0 is expected; service-task exits and
-      # startup/infrastructure failures still need operator attention.
-      "$or" = [
-        { stopCode = [{ "anything-but" = "EssentialContainerExited" }] },
-        { group = [{ prefix = "service:" }] },
-        { containers = { exitCode = [{ "anything-but" = 0 }, { exists = false }] } },
-      ]
-    }
-  })
+# Task failures: alert on the first failure, then group repeats.
+#
+# The rule/alarm pair replaces the former ecs_task_failure and ecs_task_stopped
+# EventBridge -> SNS targets. Those published one SNS message per stopped task,
+# and every non-zero essential-container exit matched BOTH rules, so one crash
+# produced two publishes (and each publish fanned out to every subscription).
+#
+# Each rule below has no target. Consumers must observe RuleName-scoped
+# TriggeredRules datapoints before retiring their direct event route. Metrics
+# are best effort; an OK state means a quiet observed failure window, not
+# service recovery. Independent running-task alarms remain enabled.
+locals {
+  ecs_task_failure_services = {
+    for k, v in local.ecs_map : k => v
+    if var.sns_topic_cloudwatch_alarm_arn != "" && v.create && v.type == "service"
+  }
+
+  # Deployment replacement and scale-in stops are not failures. Fargate Spot
+  # interruptions (stopCode SpotInterruption) are expected capacity reclaims:
+  # they never page here. If the replacement task does not come back, the
+  # stateful ecs_service_running_tasks_below_desired alarm (running < desired
+  # for 2 x 60s) pages instead.
+  ecs_task_failure_stopped = {
+    clusterArn = [module.ecs_cluster.arn]
+    lastStatus = ["STOPPED"]
+    stoppedReason = [{
+      "anything-but" = {
+        "prefix" = "Scaling activity initiated by"
+      }
+    }]
+  }
 }
 
-resource "aws_cloudwatch_event_rule" "ecs_task_stopped" {
-  name        = "${module.ecs_cluster.name}-task-stopped"
-  description = "${module.ecs_cluster.name} Essential container exited"
+# Any stop of a long-running service task other than scale-in/deployment
+# replacement or a Spot interruption is a failure, including a container that
+# exits 0, ELB health-check replacement and startup failures.
+resource "aws_cloudwatch_event_rule" "ecs_service_task_failure" {
+  for_each    = local.ecs_task_failure_services
+  name        = "${each.value.identifier}-task-failure"
+  description = "ECS ${each.value.identifier} stopped task (grouped by alarm)"
   event_pattern = jsonencode({
     "source"      = ["aws.ecs"]
     "detail-type" = ["ECS Task State Change"]
-    "detail" = {
-      "lastStatus"    = ["STOPPED"]
-      "clusterArn"    = [module.ecs_cluster.arn]
-      "stoppedReason" = ["Essential container in task exited"]
-      "containers" = {
-        "exitCode" = [{
-          "anything-but" = 0
-        }]
-      }
-    }
+    "detail" = merge(local.ecs_task_failure_stopped, {
+      "group"    = ["service:${each.value.identifier}"]
+      "stopCode" = [{ "anything-but" = ["SpotInterruption"] }]
+    })
   })
+  tags = local.tags
 }
 
-resource "aws_cloudwatch_event_target" "ecs_task_stopped" {
-  count      = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
-  rule       = aws_cloudwatch_event_rule.ecs_task_stopped.name
-  arn        = var.sns_topic_cloudwatch_alarm_arn
-  role_arn   = aws_iam_role.ecs_alert_publisher[0].arn
-  depends_on = [aws_iam_role_policy.ecs_alert_publisher]
-  input      = "{ \"message\": \"Essential container in task exited\", \"account_id\": \"${data.aws_caller_identity.current.account_id}\", \"cluster\": \"${module.ecs_cluster.name}\"}"
+# Standalone and scheduled one-shot tasks: a command that exits 0 is success.
+# Alert only on a non-zero/missing exit code or a non-exit stop (for example
+# image pull, secret resolution, capacity or startup failures).
+resource "aws_cloudwatch_event_rule" "ecs_standalone_task_failure" {
+  count       = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
+  name        = "${module.ecs_cluster.name}-standalone-task-failure"
+  description = "ECS ${module.ecs_cluster.name} failed standalone/scheduled task (grouped by alarm)"
+  event_pattern = jsonencode({
+    "source"      = ["aws.ecs"]
+    "detail-type" = ["ECS Task State Change"]
+    "detail" = merge(local.ecs_task_failure_stopped, {
+      "group" = [{
+        "anything-but" = {
+          "prefix" = "service:"
+        }
+      }]
+      # Keep stopCode entirely inside each branch: EventBridge does not
+      # combine a repeated field outside $or with that field inside a branch.
+      "$or" = [
+        { stopCode = [{ "anything-but" = ["EssentialContainerExited", "SpotInterruption"] }] },
+        {
+          stopCode   = [{ "anything-but" = ["SpotInterruption"] }]
+          containers = { exitCode = [{ "anything-but" = 0 }, { exists = false }] }
+        },
+      ]
+    })
+  })
+  tags = local.tags
 }
 
-
-resource "aws_cloudwatch_event_target" "ecs_task_failure" {
-  count      = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
-  rule       = aws_cloudwatch_event_rule.ecs_task_failure.name
-  arn        = var.sns_topic_cloudwatch_alarm_arn
-  role_arn   = aws_iam_role.ecs_alert_publisher[0].arn
-  depends_on = [aws_iam_role_policy.ecs_alert_publisher]
-  input_transformer {
-    input_paths = {
-      "AZ"              = "$.detail.availabilityZone"
-      "ECS_CLUSTER_ARN" = "$.detail.clusterArn"
-      "PROBLEM"         = "$.detail-type"
-      "REGION"          = "$.region"
-      "SERVICE"         = "$.detail.group"
-      "STOPPED_REASON"  = "$.detail.stoppedReason"
-      "STOPPED_TIME"    = "$.detail.stoppedAt"
-      "STOP_CODE"       = "$.detail.stopCode"
-      "TASK_ARN"        = "$.detail.taskArn"
-    }
-    input_template = <<EOT
-                "ECS ${module.ecs_cluster.name} TASK FAILURE ALERT"
-                "Problem: <PROBLEM>"
-                "Region: <REGION>"
-                "Availability Zone: <AZ>"
-                "ECS Cluster Arn: <ECS_CLUSTER_ARN>"
-                "Service Name: <SERVICE>"
-                "Task Arn: <TASK_ARN>"
-                "Stopped Reason: <STOPPED_REASON>"
-                "Stop Code: <STOP_CODE>"
-                "Stopped Time: <STOPPED_TIME>"
-    EOT
+resource "aws_cloudwatch_metric_alarm" "ecs_service_task_failure" {
+  for_each            = local.ecs_task_failure_services
+  alarm_name          = "${each.value.identifier}-task-failure"
+  alarm_description   = "ECS service ${each.value.identifier} stopped a task outside scale-in, deployment replacement or Spot interruption (Spot loss pages only via running-below-desired). Failures are grouped over ${var.task_failure_alarm_window_minutes} evaluation periods of 60 seconds. OK means no recent observed matching failures, not verified service recovery. Task detail: CloudWatch Logs /ecs/events/${module.ecs_cluster.name}, filter detail.group = service:${each.value.identifier}."
+  namespace           = "AWS/Events"
+  metric_name         = "TriggeredRules"
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = var.task_failure_alarm_window_minutes
+  datapoints_to_alarm = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  dimensions = {
+    RuleName = aws_cloudwatch_event_rule.ecs_service_task_failure[each.key].name
   }
+  actions_enabled           = true
+  insufficient_data_actions = []
+  alarm_actions             = [var.sns_topic_cloudwatch_alarm_arn]
+  ok_actions                = var.task_failure_ok_notifications ? [var.sns_topic_cloudwatch_alarm_arn] : []
+  tags                      = local.tags
 }
+
+resource "aws_cloudwatch_metric_alarm" "ecs_standalone_task_failure" {
+  count               = var.sns_topic_cloudwatch_alarm_arn != "" ? 1 : 0
+  alarm_name          = "${module.ecs_cluster.name}-standalone-task-failure"
+  alarm_description   = "A standalone or scheduled ECS task in ${module.ecs_cluster.name} failed (non-zero exit or failed start). Successful exit-0 runs and Spot interruptions never match. Failures are grouped over ${var.task_failure_alarm_window_minutes} evaluation periods of 60 seconds. OK means no recent observed matching failures, not successful job completion. Task detail: CloudWatch Logs /ecs/events/${module.ecs_cluster.name}."
+  namespace           = "AWS/Events"
+  metric_name         = "TriggeredRules"
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = var.task_failure_alarm_window_minutes
+  datapoints_to_alarm = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  dimensions = {
+    RuleName = aws_cloudwatch_event_rule.ecs_standalone_task_failure[0].name
+  }
+  actions_enabled           = true
+  insufficient_data_actions = []
+  alarm_actions             = [var.sns_topic_cloudwatch_alarm_arn]
+  ok_actions                = var.task_failure_ok_notifications ? [var.sns_topic_cloudwatch_alarm_arn] : []
+  tags                      = local.tags
+}
+
 
 resource "aws_cloudwatch_event_rule" "ecs_events" {
   name        = "${module.ecs_cluster.name}-events"

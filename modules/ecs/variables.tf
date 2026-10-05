@@ -421,3 +421,20 @@ variable "low_reservation_alert" {
   type    = bool
   default = false
 }
+
+variable "task_failure_alarm_window_minutes" {
+  description = "Number of 60-second evaluation periods for 1-of-N task-failure alarms. Metrics are best effort; CloudWatch may evaluate older samples when data is missing. OK indicates a quiet observed window, not service recovery."
+  type        = number
+  default     = 15
+
+  validation {
+    condition     = var.task_failure_alarm_window_minutes >= 1 && var.task_failure_alarm_window_minutes <= 60 && floor(var.task_failure_alarm_window_minutes) == var.task_failure_alarm_window_minutes
+    error_message = "task_failure_alarm_window_minutes must be a whole number of minutes from 1 to 60."
+  }
+}
+
+variable "task_failure_ok_notifications" {
+  description = "Send an OK notification when a grouped task-failure alarm enters a quiet observed window. This does not prove service recovery and can also occur at alarm initialization."
+  type        = bool
+  default     = true
+}

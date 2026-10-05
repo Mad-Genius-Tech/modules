@@ -13,19 +13,44 @@ roles, queue, logs, or prior immutable artifacts. The Scheduler target always
 uses Fargate, a disabled flexible time window, private subnet defaults, and no
 public IP unless a caller explicitly overrides the network fields.
 
-The cluster task-failure rule excludes successful standalone tasks that stop
-with `EssentialContainerExited` and exit code 0. It retains nonzero exits,
-events with no reported exit codes, startup and infrastructure failures, and
-unexpected ECS service-task stops;
-the existing scaling exclusion still applies. Validate the mock-rendered
-patterns with Terraform's notification-delivery tests, then run
-`python3 tests/test_failure_patterns.py <terraform-test-jsonl> --profile <profile>`
-from this module. The script uses only AWS's read-only `TestEventPattern` API
-and never publishes an event or notification.
-EventBridge checks field existence across the container array: a standalone
-completion mixing an unreported exit with a reported zero is suppressed.
-A reported nonzero exit still matches. Service-task stops and startup failures
-remain monitored independently of container exit metadata.
+### Grouped task-failure alerts
+
+With an SNS alarm topic configured, each created service gets a target-less
+EventBridge rule and a CloudWatch `AWS/Events` `TriggeredRules` alarm. One
+additional rule/alarm covers standalone and scheduled tasks. Each alarm uses
+its exact `RuleName` dimension, Sum over 60 seconds, and one breaching datapoint
+in `task_failure_alarm_window_minutes` periods (default 15; integer 1–60).
+Further failures keep the alarm in ALARM without publishing for every task.
+Metrics and alarm evaluation can be delayed; neither immediate delivery nor
+clearing after exactly 15 quiet minutes is guaranteed.
+
+Service rules match unexpected STOPPED events, including exit 0 and health-check
+replacement. The standalone rule excludes successful `EssentialContainerExited`
+exit-0 completions. It retains nonzero/missing exit codes and startup failures.
+Both exclude `SpotInterruption` and reasons beginning `Scaling activity initiated by`.
+Events missing `stopCode`, `stoppedReason`, or `group` do not match. EventBridge
+checks field existence across the container array: a standalone completion mixing
+an unreported exit with a reported zero is suppressed; a reported nonzero still matches.
+
+Missing metric data is nonbreaching. An OK notification means no recent observed
+matching failures, not service recovery or successful job completion. OK actions
+are enabled by default and can also fire on alarm initialization; set
+`task_failure_ok_notifications = false` to disable them. The independent
+running-below-desired alarms, deployment-failure notifications, and
+`/ecs/events/<cluster>` logs are preserved. Use those logs for individual task details.
+
+Consumers migrating from `ecs_task_failure` and `ecs_task_stopped` must create
+and verify the replacement rules/alarms before retiring the old rules and targets
+and narrowing publisher trust. Use the consumer's reviewed saved-plan workflow
+for each stage. Observe real RuleName-scoped `TriggeredRules` datapoints from the
+new target-less rules before retirement; an OK alarm alone is not delivery proof.
+If matching events produce no metric, keep the direct route and investigate or
+review a log-target fallback before cutover. This module does not apply consumers.
+
+Validate the mock-rendered patterns with Terraform's notification-delivery tests,
+then run `python3 tests/test_failure_patterns.py <terraform-test-jsonl> --profile <profile>`
+from this module. The script uses only AWS's read-only `TestEventPattern` API and
+never publishes an event or notification.
 
 ### Stable identities and one-shot containers
 
@@ -137,19 +162,19 @@ No requirements.
 | [aws_cloudwatch_dashboard.ecs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_dashboard) | resource |
 | [aws_cloudwatch_event_rule.ecs_deployment_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_rule.ecs_events](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
-| [aws_cloudwatch_event_rule.ecs_task_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
-| [aws_cloudwatch_event_rule.ecs_task_stopped](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
+| [aws_cloudwatch_event_rule.ecs_service_task_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
+| [aws_cloudwatch_event_rule.ecs_standalone_task_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_rule.scheduled_task_nonzero_exit](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_rule) | resource |
 | [aws_cloudwatch_event_target.ecs_deployment_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
 | [aws_cloudwatch_event_target.ecs_events](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
-| [aws_cloudwatch_event_target.ecs_task_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
-| [aws_cloudwatch_event_target.ecs_task_stopped](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_event_target) | resource |
 | [aws_cloudwatch_log_group.ecs_events](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
 | [aws_cloudwatch_metric_alarm.ecs_high_cpu_reservation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_cloudwatch_metric_alarm.ecs_high_mem_reservation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_cloudwatch_metric_alarm.ecs_low_cpu_reservation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_cloudwatch_metric_alarm.ecs_low_mem_reservation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_cloudwatch_metric_alarm.ecs_service_running_tasks_below_desired](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
+| [aws_cloudwatch_metric_alarm.ecs_service_task_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
+| [aws_cloudwatch_metric_alarm.ecs_standalone_task_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_cloudwatch_metric_alarm.scheduled_task_freshness](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_cloudwatch_metric_alarm.scheduled_task_launch_failure](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_cloudwatch_metric_alarm.scheduled_task_nonzero_exit](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
@@ -200,6 +225,8 @@ No requirements.
 | <a name="input_sns_topic_cloudwatch_alarm_arn"></a> [sns\_topic\_cloudwatch\_alarm\_arn](#input\_sns\_topic\_cloudwatch\_alarm\_arn) | n/a | `string` | `""` | no |
 | <a name="input_stage_name"></a> [stage\_name](#input\_stage\_name) | n/a | `string` | n/a | yes |
 | <a name="input_tags"></a> [tags](#input\_tags) | n/a | `map(any)` | `{}` | no |
+| <a name="input_task_failure_alarm_window_minutes"></a> [task\_failure\_alarm\_window\_minutes](#input\_task\_failure\_alarm\_window\_minutes) | Number of 60-second evaluation periods for 1-of-N task-failure alarms. Metrics are best effort; CloudWatch may evaluate older samples when data is missing. OK indicates a quiet observed window, not service recovery. | `number` | `15` | no |
+| <a name="input_task_failure_ok_notifications"></a> [task\_failure\_ok\_notifications](#input\_task\_failure\_ok\_notifications) | Send an OK notification when a grouped task-failure alarm enters a quiet observed window. This does not prove service recovery and can also occur at alarm initialization. | `bool` | `true` | no |
 | <a name="input_team_name"></a> [team\_name](#input\_team\_name) | n/a | `string` | n/a | yes |
 | <a name="input_vpc_cidr"></a> [vpc\_cidr](#input\_vpc\_cidr) | n/a | `string` | n/a | yes |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | n/a | `string` | n/a | yes |
