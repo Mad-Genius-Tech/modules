@@ -41,6 +41,9 @@ base = {
     },
 }
 cases = [
+    ('documented ECS maintenance reason', {'group': 'service:mgb-test-fabric-auth',
+                                         'stopCode': 'ServiceSchedulerInitiated',
+                                         'stoppedReason': 'ECS is performing maintenance on the underlying infrastructure hosting the task'}, (False, False)),
     ('successful scheduled command', {}, (False, False)),
     ('scheduled nonzero exit', {'containers': [{'name': 'auth', 'exitCode': 1}]}, (False, True)),
     ('nonzero exit among multiple containers', {'containers': [{'name': 'auth', 'exitCode': 0},
