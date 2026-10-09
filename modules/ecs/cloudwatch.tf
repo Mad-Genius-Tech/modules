@@ -252,7 +252,7 @@ locals {
 }
 
 # Any stop of a long-running service task other than scale-in/deployment
-# replacement or a Spot interruption is a failure, including a container that
+# replacement, scheduled host maintenance or a Spot interruption is a failure, including a container that
 # exits 0, ELB health-check replacement and startup failures.
 resource "aws_cloudwatch_event_rule" "ecs_service_task_failure" {
   for_each    = local.ecs_task_failure_services
@@ -262,6 +262,17 @@ resource "aws_cloudwatch_event_rule" "ecs_service_task_failure" {
     "source"      = ["aws.ecs"]
     "detail-type" = ["ECS Task State Change"]
     "detail" = merge(local.ecs_task_failure_stopped, {
+      # Scheduled ECS host maintenance is an expected replacement. Keep
+      # unexpected exits and health-check stops, and let running-below-desired
+      # alarms catch a replacement that fails to return.
+      "stoppedReason" = [{
+        "anything-but" = {
+          "prefix" = [
+            "Scaling activity initiated by",
+            "Service ${each.value.identifier}: ECS is performing maintenance on the underlying infrastructure hosting the task",
+          ]
+        }
+      }]
       "group"    = ["service:${each.value.identifier}"]
       "stopCode" = [{ "anything-but" = ["SpotInterruption"] }]
     })
@@ -302,7 +313,7 @@ resource "aws_cloudwatch_event_rule" "ecs_standalone_task_failure" {
 resource "aws_cloudwatch_metric_alarm" "ecs_service_task_failure" {
   for_each            = local.ecs_task_failure_services
   alarm_name          = "${each.value.identifier}-task-failure"
-  alarm_description   = "ECS service ${each.value.identifier} stopped a task outside scale-in, deployment replacement or Spot interruption (Spot loss pages only via running-below-desired). Failures are grouped over ${var.task_failure_alarm_window_minutes} evaluation periods of 60 seconds. OK means no recent observed matching failures, not verified service recovery. Task detail: CloudWatch Logs /ecs/events/${module.ecs_cluster.name}, filter detail.group = service:${each.value.identifier}."
+  alarm_description   = "ECS service ${each.value.identifier} stopped a task outside scale-in, deployment replacement, scheduled ECS host maintenance or Spot interruption (capacity loss pages via running-below-desired). Failures are grouped over ${var.task_failure_alarm_window_minutes} evaluation periods of 60 seconds. OK means no recent observed matching failures, not verified service recovery. Task detail: CloudWatch Logs /ecs/events/${module.ecs_cluster.name}, filter detail.group = service:${each.value.identifier}."
   namespace           = "AWS/Events"
   metric_name         = "TriggeredRules"
   statistic           = "Sum"

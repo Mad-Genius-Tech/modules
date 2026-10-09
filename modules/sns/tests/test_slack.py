@@ -63,6 +63,25 @@ class SlackDeliveryTests(unittest.TestCase):
         for value in alarm.values():
             self.assertIn(value, bodies[0]["text"])
 
+    def test_cloudwatch_alarm_renders_a_readable_card_without_interpreting_mentions(self):
+        alarm = {"AlarmName": "mgb-dev-fabric-dao-task-failure", "NewStateValue": "ALARM",
+                 "NewStateReason": "Task stopped <@U123>", "AlarmDescription": "Inspect task logs",
+                 "StateChangeTime": "2026-10-08T16:37:14Z", "Region": "US West (Oregon)"}
+        _, bodies = self.deliver(event(json.dumps(alarm)))
+        card = bodies[0]["blocks"]
+        self.assertEqual(card[0]["text"], {"type": "plain_text", "text": "ALARM: mgb-dev-fabric-dao-task-failure"})
+        self.assertEqual(card[1]["text"], {"type": "plain_text", "text": "Task stopped <@U123>"})
+        self.assertTrue(all(block["text"]["type"] == "plain_text" for block in card if "text" in block))
+        self.assertIn("2026-10-08T16:37:14Z", json.dumps(card))
+        self.assertIn("Inspect task logs", json.dumps(card))
+        self.assertIn(json.dumps(alarm), bodies[0]["text"])
+
+    def test_task_failure_ok_card_does_not_claim_service_recovery(self):
+        alarm = {"AlarmName": "mgb-dev-fabric-dao-task-failure", "NewStateValue": "OK",
+                 "NewStateReason": "No datapoints in 15 periods", "Trigger": {"Namespace": "AWS/Events", "MetricName": "TriggeredRules"}}
+        _, bodies = self.deliver(event(json.dumps(alarm)))
+        self.assertIn("No recent matching failures; service recovery is not verified.", json.dumps(bodies[0]["blocks"]))
+
     def test_ecs_event_retains_failure_reason_and_resource(self):
         failure = {"source": "aws.ecs", "detail-type": "ECS Deployment State Change",
                    "detail": {"reason": "deployment failed", "deploymentId": "ecs-svc/test"}}
