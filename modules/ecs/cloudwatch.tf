@@ -269,6 +269,7 @@ resource "aws_cloudwatch_event_rule" "ecs_service_task_failure" {
         "anything-but" = {
           "prefix" = [
             "Scaling activity initiated by",
+            "ECS is performing maintenance on the underlying infrastructure hosting the task",
             "Service ${each.value.identifier}: ECS is performing maintenance on the underlying infrastructure hosting the task",
           ]
         }
