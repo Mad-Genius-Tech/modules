@@ -7,6 +7,37 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 
+def alarm_card(message):
+    """Show known CloudWatch alarms as plain-text blocks; retain the SNS fallback."""
+    try:
+        alarm = json.loads(message)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(alarm, dict):
+        return None
+    name, state = alarm.get("AlarmName"), alarm.get("NewStateValue")
+    if not isinstance(name, str) or not name or state not in ("ALARM", "OK", "INSUFFICIENT_DATA"):
+        return None
+    blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"{state}: {name}"[:150]}}]
+    for key in ("NewStateReason", "AlarmDescription"):
+        value = alarm.get(key)
+        if isinstance(value, str) and value:
+            blocks.append({"type": "section", "text": {"type": "plain_text", "text": value[:3000]}})
+    trigger = alarm.get("Trigger")
+    if (state == "OK" and name.endswith("-task-failure") and isinstance(trigger, dict)
+            and trigger.get("Namespace") == "AWS/Events" and trigger.get("MetricName") == "TriggeredRules"):
+        blocks.append({"type": "section", "text": {"type": "plain_text",
+                       "text": "No recent matching failures; service recovery is not verified."}})
+    fields = []
+    for label, key in (("Region", "Region"), ("Changed at", "StateChangeTime")):
+        value = alarm.get(key)
+        if isinstance(value, str) and value:
+            fields.append({"type": "plain_text", "text": f"{label}: {value}"[:2000]})
+    if fields:
+        blocks.append({"type": "section", "fields": fields})
+    return blocks
+
+
 def lambda_handler(event, context):
     webhook = os.environ.get("WEBHOOK_URL", "")
     try:
@@ -37,11 +68,13 @@ def lambda_handler(event, context):
             raise ValueError("SNS Subject must be text")
         # Plain text preserves every AWS diagnostic field without interpreting
         # notification text as Slack markup, mentions, or another provider's API.
-        messages.append(f"{subject}\n{message}")
+        messages.append((f"{subject}\n{message}", alarm_card(message)))
 
-    for message in messages:
+    for message, card in messages:
         for offset in range(0, len(message), 3900):
             payload = {"text": message[offset:offset + 3900], "mrkdwn": False}
+            if card and offset == 0:
+                payload["blocks"] = card
             request = Request(webhook, json.dumps(payload).encode("utf-8"),
                               {"Content-Type": "application/json"}, method="POST")
             try:

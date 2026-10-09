@@ -5,6 +5,12 @@ configured, the Python standard-library adapter in `slack/`. The adapter accepts
 SNS text, including CloudWatch alarm JSON and ECS event JSON, and raises
 sanitized errors when Slack rejects delivery. It uses no Lambda SDK layer.
 
+Recognized CloudWatch alarms also render a plain-text Slack card with the alarm
+name, state, reason, description, region and change time. The original SNS text
+remains the diagnostic fallback. Task-failure OK cards say that a quiet failure
+window does not verify service recovery. Unknown notifications keep their
+existing plain-text delivery; card text cannot interpret Slack mentions.
+
 The topic policy permits Budgets, CloudWatch and Cost Anomaly Detection to
 publish. Cost Anomaly Detection is restricted to the account that owns the
 topic, including topics with email delivery and no Slack forwarder.
